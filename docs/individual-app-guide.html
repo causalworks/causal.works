@@ -141,7 +141,7 @@
   </header>
 
   <section class="lede">
-    <p>Agency is the first instance built on Causal's platform tooling, for grassroots advocacy and climate action. It connects individual decision-making to expert-validated leverage points. A person can sign petitions, attend events, volunteer, move money out of fossil-fuel banks, weigh in on regulatory comment periods, and see how their elected representatives connect to it all. Five sections: <b>Home</b>, <b>Moves</b> (the action feed), <b>Proxies</b> (elected reps, advocates, financial tracking), <b>Ledger</b>, and <b>Systems/Framework</b> (planetary boundaries).</p>
+    <p>Agency is the first instance built on Causal's platform tooling, for grassroots advocacy and climate action. It connects individual decision-making to leverage points grounded in planetary boundaries science and Earth4All research. A person can sign petitions, attend events, volunteer, move money out of fossil-fuel banks, weigh in on regulatory comment periods, and see how their elected representatives connect to it all. Five sections: <b>Home</b>, <b>Action</b> (the action feed), <b>Proxies</b> (elected reps, advocates, financial tracking), <b>Ledger</b>, and <b>Systems/Framework</b> (planetary boundaries).</p>
     <p>A person chooses which organizations to follow, and the feed pulls actions from those organizations. There is no single shared feed that looks the same to everyone.</p>
   </section>
 
@@ -152,7 +152,7 @@
       <div class="flow">
 
         <div class="flow-group">
-          <div class="flow-group-title">Moves feed</div>
+          <div class="flow-group-title">Action feed</div>
           <div class="flow-row">
             <span class="node">GET /api/actions<span class="sub">DB-ranked feed</span></span>
             <span class="flow-note" style="padding:0;">← ranked using the classifier and rep matches below</span>
@@ -190,12 +190,12 @@
           </div>
           <div class="flow-row">
             <span class="node ai">E4A turnaround classifier</span>
-            <span class="arrow">──▶ feeds Moves feed above</span>
+            <span class="arrow">──▶ feeds Action feed above</span>
           </div>
         </div>
 
         <div class="flow-group">
-          <div class="flow-group-title">Moves feed · Comments tab</div>
+          <div class="flow-group-title">Action feed · Comments tab</div>
           <div class="flow-row">
             <span class="node">Federal Register API<span class="sub">open public-comment periods</span></span>
             <span class="node">EIP Oil &amp; Gas Watch<span class="sub">state permitting alerts from a daily Excel export (no public API)</span></span>
@@ -217,7 +217,7 @@
     </div>
 
     <ul class="toc">
-      <li><a href="#moves">Moves</a></li>
+      <li><a href="#moves">Action</a></li>
       <li><a href="#proxies">Proxies</a></li>
       <li><a href="#follows">Following organizations</a></li>
       <li><a href="#ledger">Ledger</a></li>
@@ -233,7 +233,7 @@
     <h2><span class="num">Areas</span>Section by section</h2>
 
     <div class="area" id="moves">
-      <div class="area-head"><h3 class="area-title">Moves: the action feed</h3></div>
+      <div class="area-head"><h3 class="area-title">Action: the unified feed</h3></div>
       <p>Every item is a "move" pulled from one <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">actions</code> feed and bucketed by type:</p>
       <ul>
         <li><b>sign</b>: petitions</li>
@@ -277,13 +277,13 @@
       <p><b>Advocates</b> tab: orgs the user follows/gives to. <b>Financial</b> tab: read-only summary of where money exerts pressure, managed from Vest instead.</p>
       <div class="spec">
         <div class="spec-label">Fiduciary pledges (Financial tab)</div>
-        A separate pledge system alongside the bank pledges below: users can pledge to press a pension/fund board (mapped via the same committee table above) to act by a date, with <code>committed</code>/<code>acted</code>/<code>withdrawn</code> status and reminder cards feeding back into Moves.
+        A separate pledge system alongside the bank pledges below: users can pledge to press a pension/fund board (mapped via the same committee table above) to act by a date, with <code>committed</code>/<code>acted</code>/<code>withdrawn</code> status and reminder cards feeding back into Action.
       </div>
     </div>
 
     <div class="area" id="follows">
       <div class="area-head"><h3 class="area-title">Following organizations</h3></div>
-      <p>A follow is a per-person choice. It decides which actions appear in Moves, which organizations show as Advocates and in the Give list, and which forwarded emails are let through.</p>
+      <p>A follow is a per-person choice. It decides which actions appear in Action, which organizations show as Advocates and in the Give list, and which forwarded emails are let through.</p>
       <div class="spec">
         <div class="spec-label">How an email becomes a card</div>
         Each person has a forwarding address for subscribing to organizations' email lists. Incoming mail is matched to an organization by sender domain (a domain belongs to one organization). Mail to a person's forwarding address goes through only when it comes from an organization they follow; otherwise it is archived. Mail that passes is classified by Gemini and becomes an entry in the <code>actions</code> feed.
@@ -304,7 +304,7 @@
       <p>The nine Stockholm Resilience Centre planetary boundaries (climate, biodiversity, freshwater, etc.), each carrying a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">status</code> (safe/transgressed), a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">trend</code>, and a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">transgression_severity</code> score (0–3). Each maps to one or more of Causal's five <b>E4A turnarounds</b>, hand-maintained and refreshed annually after each Stockholm health check.</p>
       <div class="spec">
         <div class="spec-label">The one live computation</div>
-        <code>boundaryUrgencyScore</code> = max severity across an action's tagged boundaries. Feeds straight into the Moves feed ranking above.
+        <code>boundaryUrgencyScore</code> = max severity across an action's tagged boundaries. Feeds straight into the Action feed ranking above.
       </div>
     </div>
   </section>
@@ -327,7 +327,7 @@
 
     <div class="ai-block">
       <h3>E4A turnaround / policy-parameter classifier <span class="model-tag">gemini-2.5-flash, JSON mode</span></h3>
-      <p>Reads inbound content (forwarded emails, submitted actions) and classifies it against the five E4A turnarounds and 19 underlying policy parameters. This is the pipeline that populates the <code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">turnaround_category</code> tag used everywhere in Moves and Proxies. Feed ranking and rep-relevance badges both depend on this having already run.</p>
+      <p>Reads inbound content (forwarded emails, submitted actions) and classifies it against the five E4A turnarounds and 19 underlying policy parameters. This is the pipeline that populates the <code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">turnaround_category</code> tag used everywhere in Action and Proxies. Feed ranking and rep-relevance badges both depend on this having already run.</p>
       <span class="status">Live · upstream of most of the app</span>
     </div>
 

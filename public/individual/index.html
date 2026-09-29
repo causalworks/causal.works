@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>causalworks</title>
+    <meta name="theme-color" content="#0f2318">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/tokens.css">
+    <link rel="stylesheet" href="/individual/css/individual.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script>window.__GA_MEASUREMENT_ID__ = 'G-N6HEYXJP0W';</script>
+    <script defer src="/individual/js/gtag.js"></script>
+    <script src="/individual/js/strings.js"></script>
+</head>
+<body class="individual-app">
+<div id="individual-header"></div>
+
+<div class="individual-workspace">
+    <!-- Sidebar Navigation -->
+    <aside class="individual-sidebar">
+        <nav class="individual-sidebar-nav">
+            <!-- Flat Nav Items -->
+            <a class="individual-nav-item" data-moves-tab="home" data-nav-key="home" href="#home">
+                <svg class="individual-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                <span class="individual-nav-label"></span>
+            </a>
+            <a class="individual-nav-item" data-moves-tab="feed" data-nav-key="moves" href="#moves/feed" onclick="movesCurrentTab='vest';">
+                <svg class="individual-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="individual-nav-label"></span>
+            </a>
+            <a class="individual-nav-item" data-section="proxies" data-nav-key="proxies" href="#proxies/elected">
+                <svg class="individual-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>
+                <span class="individual-nav-label"></span>
+            </a>
+            <a class="individual-nav-item" data-section="ledger" data-nav-key="ledger" href="#ledger">
+                <svg class="individual-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                <span class="individual-nav-label"></span>
+            </a>
+            <a class="individual-nav-item" data-section="turnarounds" data-nav-key="turnarounds" href="#turnarounds">
+                <svg class="individual-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20z"/><path d="M12 2c0 5 2 8 5 10-3 2-5 5-5 10"/></svg>
+                <span class="individual-nav-label"></span>
+            </a>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="individual-sidebar-footer">
+            <div class="individual-nav-divider"></div>
+            <a class="individual-nav-item" href="/privacy" target="_blank" rel="noopener noreferrer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span class="individual-nav-label">Privacy policy</span>
+            </a>
+            <div class="individual-sidebar-profile">
+                <div class="individual-profile-trigger" onclick="toggleAccountMenu(event)" role="button" tabindex="0" aria-expanded="false" aria-haspopup="true" title="Account">
+                    <div class="individual-profile-avatar" id="account-menu-trigger" style="background: var(--accent); font-weight: 700; font-size: 12px; color: white; display: flex; align-items: center; justify-content: center;">GY</div>
+                    <div class="individual-profile-info">
+                        <div class="individual-profile-name" id="ws-profile-name">My account</div>
+                    </div>
+                </div>
+                <div id="account-dropdown" class="individual-account-dropdown" hidden aria-hidden="true">
+                    <div class="individual-account-dropdown-email" id="account-dropdown-email"></div>
+                    <hr class="individual-account-dropdown-divider">
+                    <button type="button" class="individual-account-dropdown-item" onclick="event.stopPropagation(); accountMenuOpenSettings()">Settings</button>
+                    <a class="individual-account-dropdown-item" id="switch-to-cooperative" style="display:none;" href="/organizational/">Switch to Cooperative</a>
+                    <hr class="individual-account-dropdown-divider">
+                    <button type="button" class="individual-account-dropdown-item" onclick="event.stopPropagation(); settingsSignOut()">Sign out</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="individual-workspace-main">
+        <main class="individual-main">
+
+            <!-- Moves Section -->
+            <div id="section-moves" class="individual-section">
+                <div id="moves-sticky-header" style="display:none;">
+                    <div class="individual-section-welcome">
+                        <h2>Take action now</h2>
+                    </div>
+                    <div id="moves-tab-bar" class="proxies-tab-bar">
+                        <button class="proxies-tab active" data-tab="vest" onclick="applyMovesTab('vest')"></button>
+                        <button class="proxies-tab" data-tab="comments" onclick="applyMovesTab('comments')"></button>
+                        <button class="proxies-tab" data-tab="attend" onclick="applyMovesTab('attend')"></button>
+                        <button class="proxies-tab" data-tab="sign" onclick="applyMovesTab('sign')"></button>
+                        <button class="proxies-tab" data-tab="volunteer" onclick="applyMovesTab('volunteer')"></button>
+                    </div>
+                </div>
+                <div id="section-moves-home" class="individual-section-tab" style="display:block;">
+                    <div class="individual-home-header">
+                        <div class="individual-section-welcome">
+                            <h2>Engage with the systems that form your world</h2>
+                            <p>Your investments, advocacy, donations, and votes</p>
+                        </div>
+                        <time class="individual-home-date" id="individual-home-date" datetime=""></time>
+                    </div>
+                    <div id="moves-since-last-visit" style="display:none;"></div>
+                    <div class="individual-section-quick-stats">
+                        <div class="individual-quick-stat">
+                            <div class="individual-quick-stat-number" id="moves-home-pending">0</div>
+                            <div class="individual-quick-stat-label">Pending actions</div>
+                        </div>
+                        <div class="individual-quick-stat">
+                            <div class="individual-quick-stat-number" id="moves-home-orgs">0</div>
+                            <div class="individual-quick-stat-label">Organizations</div>
+                        </div>
+                        <div class="individual-quick-stat">
+                            <div class="individual-quick-stat-number" id="moves-home-others">0</div>
+                            <div class="individual-quick-stat-label">Others on your actions</div>
+                        </div>
+                        <div class="individual-quick-stat">
+                            <div class="individual-quick-stat-number" id="moves-home-active-week">0</div>
+                            <div class="individual-quick-stat-label">Acting this week</div>
+                        </div>
+                    </div>
+                    <div id="home-nudges" style="margin-top:4px; padding-top:12px; border-top:1px solid var(--border-subtle);"></div>
+                    <div class="individual-section-tiles">
+                        <button class="individual-card individual-section-tile" onclick="movesCurrentTab='vest'; showIndividualSection('moves', 'feed');">
+                            <div class="individual-tile-title">Assets</div>
+                            <div class="individual-tile-desc">Where your bank or standing positions need a decision</div>
+                        </button>
+                        <button class="individual-card individual-section-tile" onclick="movesCurrentTab='sign'; showIndividualSection('moves', 'feed');">
+                            <div class="individual-tile-title">Take action</div>
+                            <div class="individual-tile-desc">Petitions and asks from organizations you follow</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Unified feed -->
+                <div id="section-moves-feed" class="individual-section-tab" style="display:none;">
+                    <div id="moves-feed-hint" class="individual-hint" style="display:none; margin-bottom:16px;" role="note">
+                        Mark Done when you've acted. Discard removes it for now.
+                    </div>
+                    <!-- Attend tab only: search a different zip than the saved profile location
+                         (traveling, or a large city where a few digits changes what Mobilize returns).
+                         Kept to one row / one input — the profile-location feed above still loads by
+                         default; this is an explicit override, not a replacement for it. -->
+                    <div id="moves-attend-search" style="display:none; margin-bottom:16px;">
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="moves-attend-search-zip" class="individual-form-input" placeholder="Search a zip code" style="flex:1; max-width:200px;" inputmode="numeric" maxlength="5" onkeydown="if(event.key==='Enter') searchAttendEvents();">
+                            <select id="moves-attend-search-radius" style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; color:var(--text-primary); background:white; font-family:inherit;">
+                                <option value="10">Within 10 mi</option>
+                                <option value="25" selected>Within 25 mi</option>
+                                <option value="50">Within 50 mi</option>
+                                <option value="100">Within 100 mi</option>
+                            </select>
+                            <button type="button" class="app-btn app-btn-outline" onclick="searchAttendEvents()">Search</button>
+                            <button type="button" class="app-btn app-btn-outline" id="moves-attend-search-reset" style="display:none;" onclick="resetAttendSearch()">Reset</button>
+                        </div>
+                        <div id="moves-attend-search-status" class="individual-hint" style="margin-top:6px;"></div>
+                    </div>
+                    <div id="moves-feed-empty-state" style="display:none; padding:24px; text-align:center; color:var(--text-secondary);">
+                        <p>No moves match this filter.</p>
+                    </div>
+                    <div id="moves-feed-list"></div>
+
+                    <!-- Vest tab: bank/invest/pension/pressure management, as a horizontal
+                         sub-tab sequence (Banks -> Investments -> Pension) rather than a stacked
+                         accordion — one asset type fills the page at a time (same pattern as the
+                         Proxies sub-tabs) instead of three sections all competing for space at
+                         once. Banks: #vest-bank-status-card is one combined card (bank name, flag
+                         status, standing position) — the old separate "X is flagged" banner was
+                         folded into it (2026-08) since the two disagreed for banks flagged without
+                         a bocc_2024 figure. Only a dated-pledge reminder still gets its own banner
+                         (#vest-bank-alerts), since that's a time-sensitive nudge, not standing
+                         status. -->
+                    <div id="moves-vest-sections" style="display:none; margin-top:20px;">
+                        <div id="vest-asset-tab-bar" class="proxies-tab-bar" style="margin-bottom:16px;">
+                            <button class="proxies-tab" data-vest-asset-tab="banks" onclick="switchVestAssetTab('banks')">Banks</button>
+                            <button class="proxies-tab" data-vest-asset-tab="invest" onclick="switchVestAssetTab('invest')">Investments</button>
+                            <button class="proxies-tab" data-vest-asset-tab="pension" onclick="switchVestAssetTab('pension')">Pension funds <span class="individual-vest-section-header-meta" id="vest-asset-tab-pension-meta"></span></button>
+                        </div>
+
+                        <div class="individual-vest-pane" id="vest-pane-banks" style="display:none;">
+                            <div id="vest-bank-alerts"></div>
+                            <div id="vest-bank-status-card" class="individual-card">
+                                <div id="vest-bank-status"></div>
+                                <div id="vest-pledge-section"></div>
+                            </div>
+                            <!-- Secondary, read-after-the-status-card group: only shown for a flagged
+                                 bank (toggled in loadVestBanksSection). Grouped under one label so
+                                 these don't read as more top-level cards competing with the status
+                                 card above for attention. -->
+                            <div id="vest-more-ways" class="individual-vest-more-ways" style="display:none;">
+                                <div class="individual-vest-subheading">More ways to act</div>
+                                <div id="vest-pressure-campaigns"></div>
+                                <div id="vest-alternatives-section"></div>
+                            </div>
+                        </div>
+
+                        <div class="individual-vest-pane" id="vest-pane-invest" style="display:none;">
+                            <div id="vest-invest-content"></div>
+                        </div>
+
+                        <div class="individual-vest-pane" id="vest-pane-pension" style="display:none;">
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+                                <button type="button" class="app-btn app-btn-outline" onclick="openAddPensionFund()">+ Add your pension fund</button>
+                            </div>
+                            <div id="financial-reps-container">
+                                <div class="individual-empty">Loading financial reps…</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proxies Section -->
+            <div id="section-proxies" class="individual-section" style="display:none;">
+                <div class="individual-section-welcome">
+                    <h2>Track who represents you and how</h2>
+                </div>
+                <div id="proxies-tab-bar" class="proxies-tab-bar" style="margin-bottom:16px;">
+                    <button class="proxies-tab" data-proxies-tab="elected" onclick="switchProxiesTab('elected')">Elected</button>
+                    <button class="proxies-tab" data-proxies-tab="advocates" onclick="switchProxiesTab('advocates')">Advocates</button>
+                    <button class="proxies-tab" data-proxies-tab="financial" onclick="switchProxiesTab('financial')">Financial</button>
+                </div>
+
+                <!-- Elected Tab -->
+                <div id="section-proxies-elected" class="individual-section-tab" style="display:none;">
+                    <div class="individual-vest-section" id="gov-reps-section-national">
+                        <button type="button" class="individual-vest-section-header" onclick="toggleGovRepsSection('national')">
+                            <span>National</span>
+                            <span class="individual-vest-chevron">▾</span>
+                        </button>
+                        <div class="individual-vest-section-body" id="gov-reps-section-national-body" style="display:none;">
+                            <div id="gov-reps-national">
+                                <div class="individual-empty">Loading your reps…</div>
+                            </div>
+                            <div class="individual-hint" style="margin-top:8px;">Active federal bills from these reps, via Ballotpedia — coming soon.</div>
+                        </div>
+                    </div>
+
+                    <div class="individual-vest-section" id="gov-reps-section-regional">
+                        <button type="button" class="individual-vest-section-header" onclick="toggleGovRepsSection('regional')">
+                            <span>Regional</span>
+                            <span class="individual-vest-chevron">▾</span>
+                        </button>
+                        <div class="individual-vest-section-body" id="gov-reps-section-regional-body" style="display:none;">
+                            <div id="gov-reps-regional">
+                                <div class="individual-empty">Loading your reps…</div>
+                            </div>
+                            <div class="individual-hint" style="margin-top:8px;">State-level bill tracking from these reps, via Ballotpedia — coming soon.</div>
+                        </div>
+                    </div>
+
+                    <div class="individual-vest-section" id="gov-reps-section-local">
+                        <button type="button" class="individual-vest-section-header" onclick="toggleGovRepsSection('local')">
+                            <span>Local</span>
+                            <span class="individual-vest-chevron">▾</span>
+                        </button>
+                        <div class="individual-vest-section-body" id="gov-reps-section-local-body" style="display:none;">
+                            <div id="gov-reps-local">
+                                <div class="individual-empty">Loading your reps…</div>
+                            </div>
+                            <div class="individual-hint" style="margin-top:8px;">Local ballot measures and ordinances from these officials, via Ballotpedia — coming soon.</div>
+                        </div>
+                    </div>
+
+                    <div id="house-rep-placeholder" class="individual-card" style="margin-top:16px; display:none;">
+                        <div style="font-weight:600; margin-bottom:6px;">Your House Rep</div>
+                        <div class="individual-hint">Add your country and ZIP or postal code in Settings so we can match your reps. <a href="#" onclick="openSettings(); return false;" style="color:var(--accent); font-weight:600;">Update in Settings →</a></div>
+                    </div>
+
+                    <div class="individual-vest-section" id="gov-reps-section-bills">
+                        <button type="button" class="individual-vest-section-header" onclick="toggleGovRepsSection('bills')">
+                            <span>Bills and Races</span>
+                            <span class="individual-vest-chevron">▾</span>
+                        </button>
+                        <div class="individual-vest-section-body" id="gov-reps-section-bills-body" style="display:none;">
+                            <div class="individual-hint">Coming soon — once Ballotpedia data is wired in, bills in progress and election races will surface here correlated with actions you can take — write your rep, campaign, track the vote.</div>
+                            <div id="gov-races-container">
+                                <div class="individual-empty">Loading…</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advocates Tab -->
+                <div id="section-proxies-advocates" class="individual-section-tab" style="display:none;">
+                    <div id="proxies-give-list"></div>
+                </div>
+
+                <!-- Financial Tab: read-only tracking. Managing/acting on any of this happens on Assets. -->
+                <div id="section-proxies-financial" class="individual-section-tab" style="display:none;">
+                    <div class="individual-hint" style="margin-bottom:16px;">A quick status check on where your money exerts pressure — banks, investments, pension funds. Manage and act on these from <a href="#" onclick="movesCurrentTab='vest'; showIndividualSection('moves', 'feed'); return false;" style="color:var(--accent); font-weight:600;">Assets</a>.</div>
+                    <div id="financial-tracking-summary">
+                        <div class="individual-empty">Loading…</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workshop Section -->
+            <div id="section-workshop" class="individual-section" style="display:none;">
+                <div id="workshop-root"></div>
+            </div>
+
+            <!-- Ledger Section -->
+            <div id="section-ledger" class="individual-section" style="display:none;">
+                <div class="individual-section-welcome">
+                    <h2>Your agency history</h2>
+                    <p>Position, completed actions, org responses, and giving — all in one place.</p>
+                </div>
+                <div class="proxies-tab-bar" style="margin-bottom:24px;">
+                    <button type="button" class="proxies-tab active" id="ledger-tab-btn-position" onclick="switchLedgerTab('position')">Position</button>
+                    <button type="button" class="proxies-tab" id="ledger-tab-btn-giving" onclick="switchLedgerTab('giving')">Giving</button>
+                    <button type="button" class="proxies-tab" id="ledger-tab-btn-actions" onclick="switchLedgerTab('actions')">Actions</button>
+                    <button type="button" class="proxies-tab" id="ledger-tab-btn-responses" onclick="switchLedgerTab('responses')">Responses</button>
+                </div>
+
+                <!-- Tab: Position -->
+                <div id="ledger-tab-position">
+                    <div id="ledger-impact-section" class="individual-card">
+                        <div class="individual-section-title">Your Impact This Year</div>
+                        <div id="ledger-impact-summary" class="individual-hint">Loading…</div>
+                    </div>
+
+                    <div id="ledger-position-section" class="individual-card">
+                        <div class="individual-section-title">Your Position</div>
+                        <div class="individual-empty">Financial position will appear here.</div>
+                    </div>
+
+                    <!-- ASPIRATIONAL:COMMONER -->
+                    <div id="ledger-balance-sheet-section" class="individual-card" data-aspirational="commoner">
+                        <div class="individual-section-title">Personal Balance Sheet</div>
+                        <div id="personal-balance-sheet-summary" class="individual-hint">Loading…</div>
+                    </div>
+                    <!-- /ASPIRATIONAL -->
+                </div>
+
+                <!-- Tab: Giving -->
+                <div id="ledger-tab-giving" style="display:none;">
+                    <div id="giving-history-section">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                            <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary);">Giving History</div>
+                            <button type="button" class="app-btn app-btn-outline" style="font-size:13px;" onclick="openSubscribedOrgDonationPicker()">+ Log donation</button>
+                        </div>
+                        <div id="giving-history-list"><div class="individual-hint">Loading…</div></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Actions Completed -->
+                <div id="ledger-tab-actions" style="display:none;">
+                    <div id="completed-actions-section">
+                        <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); margin-bottom:12px;">Actions Completed</div>
+                        <div id="completed-actions-list"><div class="individual-hint">Loading…</div></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Organization Responses -->
+                <div id="ledger-tab-responses" style="display:none;">
+                    <div id="ledger-inbound-wrap">
+                        <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); margin-bottom:12px;">Organization Responses</div>
+                        <div id="ledger-inbound-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Framework Section -->
+            <div id="section-turnarounds" class="individual-section" style="display:none;">
+                <div class="individual-section-welcome">
+                    <h2>Systems</h2>
+                    <p>How <a href="https://www.pik-potsdam.de/en/institute/labs/pbscience/pbscience" target="_blank" rel="noopener" style="color:var(--accent);">planetary boundaries</a>, <a href="https://earth4all.life/the-five-extraordinary-turnarounds/" target="_blank" rel="noopener" style="color:var(--accent);">structural turnarounds</a>, and <a href="https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/" target="_blank" rel="noopener" style="color:var(--accent);">leverage points</a> fit together.</p>
+                </div>
+                <div class="proxies-tab-bar" style="margin-bottom:24px;">
+                    <button type="button" class="proxies-tab active" id="framework-tab-btn-overview" onclick="switchFrameworkTab('overview')">Overview</button>
+                    <button type="button" class="proxies-tab" id="framework-tab-btn-boundaries" onclick="switchFrameworkTab('boundaries')">Boundaries</button>
+                    <button type="button" class="proxies-tab" id="framework-tab-btn-turnarounds" onclick="switchFrameworkTab('turnarounds')">Turnarounds</button>
+                    <button type="button" class="proxies-tab" id="framework-tab-btn-meadows" onclick="switchFrameworkTab('meadows')">Leverage Points</button>
+                </div>
+
+                <!-- Tab: How the three frameworks fit together -->
+                <div id="framework-tab-overview">
+                    <div style="margin-bottom:24px;">
+                        <h2 style="font-size:20px; font-weight:700; color:var(--text-primary); margin:0 0 8px;">How this works</h2>
+                        <p style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 12px; max-width:640px;">
+                            Every action on Causal connects to a bigger picture. Causal shows three layers together:
+                        </p>
+                        <ol style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 16px; padding-left:20px; max-width:640px;">
+                            <li><strong style="color:var(--text-primary);">Planetary boundaries</strong> — how close each limit is to being crossed.</li>
+                            <li><strong style="color:var(--text-primary);">Turnarounds</strong> — the structural shifts that hold a limit or restore one already crossed.</li>
+                            <li><strong style="color:var(--text-primary);">Leverage</strong> — how much impact an action is likely to have.</li>
+                        </ol>
+                        <p style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0 0 6px; max-width:640px;">What you see</p>
+                        <ul style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 16px; padding-left:20px; max-width:640px;">
+                            <li>A decision closing this week links to the structural shift it feeds.</li>
+                            <li>That shift links to how close the relevant planetary limit is to being crossed.</li>
+                            <li>An action can carry weight across more than one turnaround, and Causal tracks each.</li>
+                            <li>As limits shift and decisions open or close, the picture updates to show where strain is highest and where action still has leverage.</li>
+                        </ul>
+                        <p style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0 0 6px; max-width:640px;">Why timing matters</p>
+                        <ul style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 16px; padding-left:20px; max-width:640px;">
+                            <li>Once something is built (a pipeline, a law, a plant), it becomes rooted and harder to undo.</li>
+                            <li>Causal weighs whether a decision is still open as much as what it is about, because that is where the leverage is.</li>
+                        </ul>
+                        <p style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 16px; max-width:640px;">
+                            <strong style="color:var(--text-primary);">This is an early version of the framework.</strong> As Workshop's systems-mapping work feeds back into it, the links between actions and shifts should get sharper.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Tab: Nine boundaries, seven breached -->
+                <div id="framework-tab-boundaries" style="display:none;">
+                    <div id="boundaries-panel">
+                        <!-- Rendered by turnarounds.js loadBoundariesPanel() -->
+                    </div>
+                </div>
+
+                <!-- Tab: Five E4A turnarounds -->
+                <div id="framework-tab-turnarounds" style="display:none;">
+                    <div style="margin-bottom:24px;">
+                        <h2 style="font-size:20px; font-weight:700; color:var(--text-primary); margin:0 0 8px;">What needs to change</h2>
+                        <p style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 8px; max-width:640px;">The <a href="https://earth4all.life/the-five-extraordinary-turnarounds/" target="_blank" rel="noopener" style="color:var(--accent);">Earth4All</a> research program identifies five structural transformations that, if achieved by 2035–2040, address the primary drivers of planetary boundary transgression. These turnarounds are interdependent — energy transition requires inequality reduction to be politically feasible; food transformation supports poverty elimination.</p>
+                        <p style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 24px; max-width:640px;"><strong>Note:</strong> The five turnarounds address seven of the nine boundaries directly. Biosphere integrity and novel entities — among the most severely transgressed — are not fully covered by the turnaround framework. Actions addressing biodiversity, chemical pollution, and ocean governance appear in Causal's feed and matter. They just don't fit neatly into any single turnaround.</p>
+                    </div>
+                    <div id="turnarounds-cards-grid" style="display:flex; flex-direction:column; gap:6px; max-width:700px;">
+                        <!-- Cards will be inserted here by turnarounds.js -->
+                    </div>
+                </div>
+
+                <!-- Tab: Meadows leverage hierarchy -->
+                <div id="framework-tab-meadows" style="display:none;">
+                    <div id="meadows-panel">
+                        <!-- Rendered by turnarounds.js loadMeadowsPanel() -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- ========================
+     MODALS & OVERLAYS
+     ======================== -->
+
+<!-- Manual donation overlay -->
+<div class="app-modal-overlay" id="org-donation-overlay" onclick="if(event.target===this)closeOrgDonationSheet()">
+    <div class="app-modal">
+        <h3>Log a donation</h3>
+        <p class="individual-hint" id="org-donation-desc">Record a donation for this organization.</p>
+        <label>Amount</label>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="padding:8px 12px; background:var(--surface-page); border:1px solid var(--border); border-radius:6px;">$</span>
+            <input type="number" id="org-donation-amount" class="individual-form-input" min="0.01" step="0.01" inputmode="decimal" placeholder="25.00">
+        </div>
+        <label>Date</label>
+        <input type="date" id="org-donation-date" class="individual-form-input" style="margin-bottom:16px;">
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeOrgDonationSheet()">Cancel</button>
+            <button type="button" class="app-btn" onclick="submitOrgDonation()">Submit</button>
+        </div>
+    </div>
+</div>
+
+<!-- Donation picker overlay -->
+<div class="app-modal-overlay" id="org-donation-picker-overlay" onclick="if(event.target===this)closeSubscribedOrgDonationPicker()">
+    <div class="app-modal">
+        <h3>Log a donation</h3>
+        <p class="individual-hint" style="margin-bottom:16px;">Choose one organization.</p>
+        <div id="org-donation-picker-list" style="margin-bottom:16px;"></div>
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeSubscribedOrgDonationPicker()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Contact-rep picker overlay -->
+<div class="app-modal-overlay" id="contact-rep-picker-overlay" onclick="if(event.target===this)closeContactRepPicker()">
+    <div class="app-modal">
+        <h3>Contact your rep</h3>
+        <p class="individual-hint" style="margin-bottom:16px;">Choose which rep this is for. It'll appear under their card in Elected with what to say.</p>
+        <div id="contact-rep-picker-list" style="margin-bottom:16px;"></div>
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeContactRepPicker()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Donation confirm overlay -->
+<div class="app-modal-overlay" id="donation-confirm-modal" onclick="if(event.target===this)closeDonationConfirmModal()">
+    <div class="app-modal">
+        <h3>Confirm donation</h3>
+        <p class="individual-hint" style="margin-bottom:16px;">Did you complete your donation to <strong id="donation-confirm-org-name"></strong>?</p>
+        <label>Amount donated</label>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <span style="padding:8px 12px; background:var(--surface-page); border:1px solid var(--border); border-radius:6px;">$</span>
+            <input type="number" id="donation-confirm-amount" class="individual-form-input" min="0.01" step="0.01" inputmode="decimal" placeholder="25.00">
+        </div>
+        <label>Date</label>
+        <input type="date" id="donation-confirm-date" class="individual-form-input" style="margin-bottom:16px;">
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeDonationConfirmModal()">Cancel</button>
+            <button type="button" class="app-btn" onclick="submitDonationConfirm()">Confirm donation</button>
+        </div>
+        <div style="margin-top:12px; text-align:center;">
+            <a href="#" onclick="event.preventDefault(); closeDonationConfirmModal();" style="font-size:12px; color:var(--text-secondary); text-decoration:none;">I didn't complete this donation</a>
+        </div>
+    </div>
+</div>
+
+<!-- Contributed org overlay -->
+<div class="app-modal-overlay" id="contributed-org-overlay" onclick="if(event.target===this)closeContributedOrgSheet()">
+    <div class="app-modal">
+        <h3>Add an org you support</h3>
+        <p class="individual-hint" style="margin-bottom:16px;">Search ProPublica and select a match, or continue with what you typed.</p>
+        <label>Organization name</label>
+        <input type="text" id="contrib-org-name" class="individual-form-input" placeholder="e.g. Mutual Aid Disaster Relief" style="margin-bottom:12px;">
+        <div id="contrib-org-suggestions" style="margin-bottom:16px;"></div>
+        <div class="individual-hint" id="contrib-org-tip" style="font-size:12px; margin-bottom:16px; line-height:1.5;">
+            Tip: give orgs your Causal address to auto-log donations and actions in your Ledger.
+        </div>
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeContributedOrgSheet()">Cancel</button>
+            <button type="button" class="app-btn" onclick="submitContributedOrg()">Add</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add local official overlay -->
+<div class="app-modal-overlay" id="add-local-official-overlay" onclick="if(event.target===this)closeAddLocalOfficial()">
+    <div class="app-modal">
+        <h3>Add a local official</h3>
+        <p class="individual-hint" style="margin-bottom:16px;">Add officials not covered by our automatic federal lookup — city council, county commissioners, school board, etc.</p>
+        <label>Name</label>
+        <input type="text" id="local-official-name" class="individual-form-input" placeholder="e.g. Jane Smith" style="margin-bottom:12px;">
+        <label>Role / title</label>
+        <input type="text" id="local-official-role" class="individual-form-input" placeholder="e.g. City Council, District 4" style="margin-bottom:12px;">
+        <label>Phone <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+        <input type="text" id="local-official-phone" class="individual-form-input" placeholder="(555) 555-5555" style="margin-bottom:12px;">
+        <label>Website <span style="font-weight:400; color:var(--text-secondary);">(optional)</span></label>
+        <input type="text" id="local-official-website" class="individual-form-input" placeholder="https://…" style="margin-bottom:16px;">
+        <div class="individual-actions">
+            <button type="button" class="app-btn-outline" onclick="closeAddLocalOfficial()">Cancel</button>
+            <button type="button" class="app-btn" onclick="submitAddLocalOfficial()">Add official</button>
+        </div>
+    </div>
+</div>
+
+<!-- Call popup -->
+<div class="individual-call-popup-overlay" id="call-popup-overlay" onclick="if(event.target===this)closeCallPopup()">
+    <div class="individual-call-popup">
+        <div class="individual-call-popup-name" id="call-popup-name"></div>
+        <div class="individual-call-popup-number" id="call-popup-number"></div>
+        <a class="individual-call-popup-dial" id="call-popup-dial" href="#">Call now</a>
+        <button type="button" class="individual-call-popup-cancel" onclick="closeCallPopup()">Dismiss</button>
+    </div>
+</div>
+
+<!-- Settings Panel -->
+<div id="settings-panel" class="individual-settings-panel"></div>
+
+<!-- Representative Profile Panel -->
+<div id="rep-profile-panel" class="individual-info-panel">
+    <div class="individual-info-panel-header">
+        <span class="individual-info-panel-close" onclick="closeRepProfile()" style="cursor:pointer;">‹</span>
+        <span class="individual-info-panel-title" id="rep-profile-panel-title"></span>
+    </div>
+    <div class="individual-info-panel-body" id="rep-profile-panel-body"></div>
+</div>
+
+<!-- Scripts -->
+<script src="/individual/js/settings.js"></script>
+<script src="/individual/js/moves.js"></script>
+<script src="/individual/js/money.js"></script>
+<script src="/individual/js/turnarounds.js"></script>
+<script src="/individual/js/router.js"></script>
+<script src="/shared/js/idle-logout.js"></script>
+
+</body>
+</html>

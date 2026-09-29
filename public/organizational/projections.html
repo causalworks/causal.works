@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="projections">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Projections</h1>
+          <section class="organizational-card">
+            <div class="organizational-budget-toolbar">
+              <label class="organizational-budget-field"><span class="organizational-hint">Fiscal year</span><input type="number" id="organizational-proj-fy" min="2000" max="2200" step="1" class="organizational-budget-fy-input"></label>
+              <button type="button" class="organizational-btn organizational-btn-secondary" id="organizational-proj-load">Load</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-proj-add-manual">+ New planned amount</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-proj-add-allocation">+ New distribution schedule</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-proj-recalc">Recalculate formulas</button>
+            </div>
+          </section>
+
+          <details class="organizational-collapsible" id="organizational-collapsible-proj-manual" open>
+            <summary class="organizational-section-heading">Planned amounts <abbr class="organizational-term" tabindex="0" title="Projection overrides stored in coop_projections">overrides</abbr></summary>
+            <div class="organizational-section-body">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table">
+                  <thead><tr><th>Account</th><th>Program</th><th>Scope</th><th>Value / formula</th><th>Source</th><th>Notes</th><th>Actions</th></tr></thead>
+                  <tbody id="organizational-proj-manual-tbody"><tr class="organizational-table-empty"><td colspan="7">Load fiscal year.</td></tr></tbody>
+                </table>
+              </div>
+              <p id="organizational-proj-manual-fresh" class="organizational-data-freshness" style="margin:6px 0 0;" hidden></p>
+            </div>
+          </details>
+
+          <details class="organizational-collapsible" id="organizational-collapsible-proj-alloc" open>
+            <summary class="organizational-section-heading">Distribution schedules <abbr class="organizational-term" tabindex="0" title="Allocation schedules distribute one annual planned amount across programs, accounts, and months">allocations</abbr></summary>
+            <div class="organizational-section-body">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table">
+                  <thead><tr><th>Name</th><th>FY</th><th>Total</th><th>Programs</th><th>Accounts</th><th>Status</th><th>Actions</th></tr></thead>
+                  <tbody id="organizational-proj-alloc-tbody"><tr class="organizational-table-empty"><td colspan="7">Load fiscal year.</td></tr></tbody>
+                </table>
+              </div>
+              <p id="organizational-proj-alloc-fresh" class="organizational-data-freshness" style="margin:6px 0 0;" hidden></p>
+            </div>
+          </details>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/collapsible.js" defer></script>
+  <script src="/organizational/js/projection-editor.js" defer></script>
+  <script src="/organizational/js/projections.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main">
+        <p id="organizational-onb-error" class="organizational-error" hidden></p>
+        <div id="organizational-onb-loading" class="organizational-empty">Loading…</div>
+
+        <div id="organizational-onb-root" hidden>
+          <p class="organizational-hint" style="margin-top:0;">
+            <a id="organizational-onb-back-org" class="organizational-nav-link" href="#" style="font-weight:600;">← Back to workspace</a>
+          </p>
+          <h1 class="organizational-org-dashboard-title" id="organizational-onb-title">Setup</h1>
+
+          <nav class="organizational-wizard-progress" id="organizational-onb-progress" aria-label="Setup progress"></nav>
+
+          <section class="organizational-card organizational-wizard-card" id="organizational-onb-panel"></section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/onboarding.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

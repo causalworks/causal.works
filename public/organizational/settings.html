@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="settings">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Settings | Organization</h1>
+
+          <!-- Chart of accounts and Imports moved to Budget's own Settings tab (2026-09-11):
+               they're Budget-module config, not true regardless-of-module org config.
+               Integrations briefly moved there too but moved back here (2026-09-12) — an
+               OAuth credential belongs to the whole org, not to whichever module happened to
+               consume it first, and other modules (e.g. Compliance's 990 Expense
+               classification) depend on the same connection. -->
+          <nav class="organizational-settings-subnav" aria-label="Settings sections">
+            <a class="organizational-settings-subnav--active" id="organizational-settings-tab-org" data-settings-tab="organization" href="#">Organization</a>
+            <a id="organizational-settings-tab-integrations" data-settings-tab="integrations" href="#">Integrations</a>
+          </nav>
+
+          <div id="organizational-settings-panel-integrations" class="organizational-settings-panel" data-settings-panel="integrations" hidden>
+            <h2 class="organizational-subheading" style="margin-top:0;">Integrations — Xero</h2>
+            <section class="organizational-card">
+              <p id="organizational-xero-status-line" class="organizational-hint" style="margin-bottom: 10px;"></p>
+              <p id="organizational-xero-sync-freshness" class="organizational-data-freshness" hidden></p>
+              <p id="organizational-xero-config-warn" class="organizational-error" style="margin-bottom: 12px;" hidden></p>
+              <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px;">
+                <button type="button" class="organizational-btn organizational-btn-secondary" id="organizational-connect-xero">Connect Xero</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-xero-refresh" hidden>Refresh Xero data</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-xero-disconnect" hidden>Disconnect Xero</button>
+              </div>
+              <p class="organizational-hint" id="organizational-xero-hint" style="margin-top: 0;" hidden></p>
+              <p class="organizational-hint" style="margin-top: 12px; font-size: 0.8125rem;">Once connected, map your chart of accounts and tracking categories to programs in <a class="organizational-nav-link" id="organizational-xero-mapping-link" href="#">Budget → Settings → Chart of accounts</a>.</p>
+            </section>
+
+            <h2 class="organizational-subheading">Integrations — QuickBooks</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin:0;">QuickBooks integration — coming soon.</p>
+            </section>
+
+            <h2 class="organizational-subheading">Integrations — Tracking categories</h2>
+            <section class="organizational-card organizational-card-flush" id="organizational-xero-tracking-section" hidden>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Xero tracking categories">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Options</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-xero-tracking-tbody">
+                    <tr class="organizational-table-empty"><td colspan="3">No tracking categories loaded.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="organizational-settings-panel-organization" class="organizational-settings-panel" data-settings-panel="organization">
+            <h2 class="organizational-subheading" style="margin-top:0;">Org basics</h2>
+            <section class="organizational-card">
+              <label for="organizational-org-display-name">Display name</label>
+              <input id="organizational-org-display-name" type="text" maxlength="200" autocomplete="organization">
+
+              <label for="organizational-org-ein">EIN</label>
+              <input id="organizational-org-ein" type="text" maxlength="32" autocomplete="off">
+
+              <label for="organizational-org-state">State</label>
+              <select id="organizational-org-state" aria-label="State">
+                <option value="">Select state</option>
+                <option value="AL">Alabama</option>
+                <option value="AK">Alaska</option>
+                <option value="AZ">Arizona</option>
+                <option value="AR">Arkansas</option>
+                <option value="CA">California</option>
+                <option value="CO">Colorado</option>
+                <option value="CT">Connecticut</option>
+                <option value="DE">Delaware</option>
+                <option value="FL">Florida</option>
+                <option value="GA">Georgia</option>
+                <option value="HI">Hawaii</option>
+                <option value="ID">Idaho</option>
+                <option value="IL">Illinois</option>
+                <option value="IN">Indiana</option>
+                <option value="IA">Iowa</option>
+                <option value="KS">Kansas</option>
+                <option value="KY">Kentucky</option>
+                <option value="LA">Louisiana</option>
+                <option value="ME">Maine</option>
+                <option value="MD">Maryland</option>
+                <option value="MA">Massachusetts</option>
+                <option value="MI">Michigan</option>
+                <option value="MN">Minnesota</option>
+                <option value="MS">Mississippi</option>
+                <option value="MO">Missouri</option>
+                <option value="MT">Montana</option>
+                <option value="NE">Nebraska</option>
+                <option value="NV">Nevada</option>
+                <option value="NH">New Hampshire</option>
+                <option value="NJ">New Jersey</option>
+                <option value="NM">New Mexico</option>
+                <option value="NY">New York</option>
+                <option value="NC">North Carolina</option>
+                <option value="ND">North Dakota</option>
+                <option value="OH">Ohio</option>
+                <option value="OK">Oklahoma</option>
+                <option value="OR">Oregon</option>
+                <option value="PA">Pennsylvania</option>
+                <option value="RI">Rhode Island</option>
+                <option value="SC">South Carolina</option>
+                <option value="SD">South Dakota</option>
+                <option value="TN">Tennessee</option>
+                <option value="TX">Texas</option>
+                <option value="UT">Utah</option>
+                <option value="VT">Vermont</option>
+                <option value="VA">Virginia</option>
+                <option value="WA">Washington</option>
+                <option value="WV">West Virginia</option>
+                <option value="WI">Wisconsin</option>
+                <option value="WY">Wyoming</option>
+              </select>
+
+              <label for="organizational-org-fy-end-month">Fiscal year end month</label>
+              <select id="organizational-org-fy-end-month" aria-label="Fiscal year end month">
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+
+              <label for="organizational-org-mission">Mission</label>
+              <textarea id="organizational-org-mission" rows="3" maxlength="8000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+              <label for="organizational-org-website">Website</label>
+              <input id="organizational-org-website" type="text" maxlength="500" autocomplete="url">
+
+              <div class="organizational-actions">
+                <button type="button" class="organizational-btn" id="organizational-org-save">Save basics</button>
+              </div>
+            </section>
+
+            <div id="organizational-workspace-users-demo-note-wrap" hidden>
+              <h2 class="organizational-subheading">Workspace users</h2>
+              <section class="organizational-card">
+                <p class="organizational-hint" style="margin:0;">CommunityOrg is a shared sandbox used by many separate accounts, so its member list is hidden to protect their privacy.</p>
+              </section>
+            </div>
+
+            <div id="organizational-workspace-users-zone" hidden>
+              <h2 class="organizational-subheading">Workspace users</h2>
+              <section class="organizational-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                  <p class="organizational-hint" style="margin:0;">Invite teammates and manage roles</p>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-user-invite">Invite user</button>
+                </div>
+
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table" aria-label="Organization users">
+                    <thead>
+                      <tr>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="organizational-users-tbody">
+                      <tr class="organizational-table-empty">
+                        <td colspan="4">No members yet.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div id="organizational-invites-section" style="margin-top: 24px;">
+                  <h3 style="font-size: 0.9375rem; font-weight: 600; margin: 0 0 12px 0;">Pending invites</h3>
+                  <div class="organizational-table-wrap">
+                    <table class="organizational-table" aria-label="Pending invites">
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Role</th>
+                          <th>Expires</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="organizational-invites-tbody">
+                        <tr class="organizational-table-empty">
+                          <td colspan="4">No pending invites</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <h2 class="organizational-subheading">Fiscal sponsorship mode</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin-top:0;">If your organization fiscally sponsors other projects, enable this mode to manage sponsored projects within the cooperative.</p>
+              
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;">
+                <input type="checkbox" id="organizational-fiscal-sponsorship-mode">
+                Enable fiscal sponsorship mode
+              </label>
+
+              <div id="organizational-fiscal-sponsorship-fields" hidden>
+                <label for="organizational-sponsorship-model">Sponsorship model</label>
+                <select id="organizational-sponsorship-model">
+                  <option value="">Select model</option>
+                  <option value="model_c">Standard (pass-through)</option>
+                  <option value="model_a">Managed (comprehensive)</option>
+                  <option value="other">Other</option>
+                </select>
+
+                <label for="organizational-default-admin-rate">Default admin allocation rate (%)</label>
+                <input id="organizational-default-admin-rate" type="number" min="0" max="100" step="0.5" placeholder="e.g., 10">
+
+                <div style="margin-top: 16px;">
+                  <span class="organizational-hint">Number of sponsored projects: </span>
+                  <span id="organizational-sponsored-projects-count" style="font-weight: 600;">0</span>
+                </div>
+              </div>
+
+              <p class="organizational-hint" style="margin-top: 16px; font-size: 0.875rem;">When enabled, your cooperative workspace adds a Sponsored Projects section where you can list and manage projects your organization fiscally sponsors. Full multi-entity accounting is in development; the current view supports listing and basic information.</p>
+
+              <div class="organizational-actions" style="margin-top: 16px;">
+                <button type="button" class="organizational-btn" id="organizational-fiscal-sponsorship-save">Save fiscal sponsorship settings</button>
+              </div>
+            </section>
+
+            <h2 class="organizational-subheading">Membership</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin-top:0;">Enable membership management to track member records and roles within your organization.</p>
+
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;">
+                <input type="checkbox" id="organizational-membership-enabled">
+                Enable membership management
+              </label>
+
+              <p class="organizational-hint" style="margin-top: 16px; font-size: 0.875rem;">When enabled, a Membership section appears in the sidebar where you can view and manage member records.</p>
+
+              <div class="organizational-actions" style="margin-top: 16px;">
+                <button type="button" class="organizational-btn" id="organizational-membership-save">Save membership settings</button>
+              </div>
+            </section>
+
+            <h2 class="organizational-subheading">Security</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin-top:0;">How long a session stays signed in between visits to this workspace before requiring login again. This does not affect the separate 15-minute automatic logout after inactivity, which always applies.</p>
+
+              <label for="organizational-session-timeout">Session timeout</label>
+              <select id="organizational-session-timeout">
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes (default)</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+                <option value="240">4 hours</option>
+                <option value="480">8 hours</option>
+              </select>
+
+              <div class="organizational-actions" style="margin-top: 16px;">
+                <button type="button" class="organizational-btn" id="organizational-session-timeout-save">Save security settings</button>
+              </div>
+            </section>
+
+            <h2 class="organizational-subheading">Organization characteristics</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin-top:0;">These characteristics determine which compliance obligations apply to your organization from the cooperative's shared templates.</p>
+              
+              <label for="organizational-entity-classification">Entity classification</label>
+              <select id="organizational-entity-classification">
+                <option value="">Select classification</option>
+                <option value="501(c)(3)">501(c)(3) - Public charity</option>
+                <option value="501(c)(4)">501(c)(4) - Social welfare</option>
+                <option value="other">Other</option>
+              </select>
+
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;">
+                <input type="checkbox" id="organizational-federal-grant-recipient">
+                Federal grant recipient
+              </label>
+
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;">
+                <input type="checkbox" id="organizational-lobbying-activity">
+                Has lobbying activity
+              </label>
+
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:16px;">
+                <input type="checkbox" id="organizational-political-activity">
+                Has political/electoral activity
+              </label>
+
+              <label for="organizational-state-registrations">State charitable solicitation registrations</label>
+              <input id="organizational-state-registrations" type="text" placeholder="e.g., MA, NY, CA" autocomplete="off">
+              <p class="organizational-hint" style="font-size: 0.8125rem;">Enter state codes separated by commas (e.g., MA, NY, CA)</p>
+
+              <div class="organizational-actions" style="margin-top: 16px;">
+                <button type="button" class="organizational-btn" id="organizational-org-characteristics-save">Save organization characteristics</button>
+              </div>
+            </section>
+
+            <div id="organizational-org-danger-zone" hidden>
+              <h2 class="organizational-subheading" style="color: var(--red);">Danger zone</h2>
+              <section class="organizational-card" style="border-color: var(--red);">
+                <p class="organizational-hint" style="margin-top:0;">Deleting this organization removes it from your organization's view immediately. The underlying data and uploaded files stay on the server for 30 days in case this was a mistake, then are permanently erased — this cannot be undone after that point.</p>
+                <div class="organizational-actions" style="margin-top: 16px;">
+                  <button type="button" class="organizational-btn-danger" id="organizational-org-delete-open">Delete organization</button>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div id="organizational-org-delete-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-org-delete-modal-title" hidden>
+            <div class="organizational-modal" onclick="event.stopPropagation()">
+              <h3 id="organizational-org-delete-modal-title">Delete organization</h3>
+              <p class="organizational-hint" style="margin-top:0;">This hides <strong id="organizational-org-delete-name"></strong> right away. It stays recoverable for 30 days — contact support before then if this was a mistake. After 30 days, all of its data and uploaded files are permanently erased and cannot be recovered.</p>
+              <form id="organizational-org-delete-form">
+                <label for="organizational-org-delete-confirm">Type <strong id="organizational-org-delete-name-2"></strong> to confirm</label>
+                <input id="organizational-org-delete-confirm" type="text" autocomplete="off" required>
+                <p id="organizational-org-delete-error" class="organizational-error" style="margin-top:8px;" hidden></p>
+                <div class="organizational-modal-actions">
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-org-delete-cancel">Cancel</button>
+                  <button type="submit" class="organizational-btn-danger" id="organizational-org-delete-confirm-btn" disabled>Delete organization</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div id="organizational-user-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-user-modal-title" hidden>
+            <div class="organizational-modal" onclick="event.stopPropagation()">
+              <h3 id="organizational-user-modal-title">Invite user</h3>
+              <form id="organizational-user-form">
+                <input type="hidden" id="organizational-user-edit-id" value="">
+
+                <label for="organizational-user-email">Email</label>
+                <input id="organizational-user-email" type="email" required maxlength="255" autocomplete="email">
+
+                <label for="organizational-user-role">Role</label>
+                <select id="organizational-user-role">
+                  <option value="admin">Admin</option>
+                  <option value="finance">Finance</option>
+                  <option value="fundraising">Fundraising</option>
+                  <option value="program">Program</option>
+                </select>
+
+                <div id="organizational-user-programs-field" hidden>
+                  <label>Programs</label>
+                  <div id="organizational-user-programs-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--organizational-border,var(--border));border-radius:var(--radius-md);padding:8px;"></div>
+                </div>
+
+                <div class="organizational-modal-actions">
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-user-cancel">Cancel</button>
+                  <button type="submit" class="organizational-btn" id="organizational-user-save">Send invite</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div id="organizational-role-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-role-modal-title" hidden>
+            <div class="organizational-modal" onclick="event.stopPropagation()">
+              <h3 id="organizational-role-modal-title">Change role</h3>
+              <form id="organizational-role-form">
+                <input type="hidden" id="organizational-role-member-id" value="">
+
+                <label for="organizational-role-select">Role</label>
+                <select id="organizational-role-select">
+                  <option value="admin">Admin</option>
+                  <option value="finance">Finance</option>
+                  <option value="fundraising">Fundraising</option>
+                  <option value="program">Program</option>
+                </select>
+
+                <div id="organizational-role-programs-field" hidden>
+                  <label>Programs</label>
+                  <div id="organizational-role-programs-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--organizational-border,var(--border));border-radius:var(--radius-md);padding:8px;"></div>
+                </div>
+
+                <div class="organizational-modal-actions">
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-role-cancel">Cancel</button>
+                  <button type="submit" class="organizational-btn" id="organizational-role-save">Save</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/collapsible.js" defer></script>
+  <script src="/organizational/js/settings.js?v=21" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

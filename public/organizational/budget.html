@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="budget">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <input type="hidden" id="organizational-budget-fy" value="2026">
+
+          <!-- Everything above the scrollable grid stays fixed in this block -->
+          <div class="organizational-budget-sticky-header">
+            <!-- Org name -->
+            <div class="organizational-budget-top-row">
+              <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Budget</h1>
+            </div>
+            <!-- Metric cards -->
+            <div id="organizational-budget-stat-strip" class="organizational-budget-stat-strip"></div>
+            <!-- Workspace tabs. Settings lives outside this row as a gear icon on the right
+                 (moved 2026-09-15) -- it's setup/configuration (COA, Programs, Imports), not a
+                 data view like its siblings, so it gets the icon-button treatment instead of
+                 competing for space as another text tab. Still routes through the same
+                 switchTab('settings')/panes.settings plumbing in budget-workspace.js. -->
+            <div class="organizational-tabs organizational-budget-workspace-tabs" id="organizational-budget-workspace-tabs">
+              <button type="button" class="organizational-tab active" data-section="budget">Budget</button>
+              <button type="button" class="organizational-tab" data-section="personnel">Personnel</button>
+              <button type="button" class="organizational-tab" data-section="insurance">Insurance</button>
+              <button type="button" class="organizational-tab" data-section="schedules">Other Schedules</button>
+              <button type="button" class="organizational-tab" data-section="indirect-costs">Indirect Costs</button>
+              <span class="organizational-tab-divider" aria-hidden="true"></span>
+              <button type="button" class="organizational-tab organizational-tab-whatif" data-section="scenarios">Scenarios</button>
+              <button type="button" class="organizational-budget-settings-btn" id="organizational-budget-settings-btn" data-section="settings" aria-label="Budget settings" title="Settings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              </button>
+            </div>
+            <!-- FY / Program / Grant / Decimals — one left-aligned row. Hidden on the Settings
+                 tab (see budget-workspace.js's switchTab) -- Settings (COA/Programs/Imports)
+                 isn't FY/program/grant-scoped like its sibling tabs, so showing these controls
+                 there read as confusing dead chrome (caught in a 2026-09-15 layout review). -->
+            <div class="organizational-budget-filter-bar" id="organizational-budget-filter-bar">
+              <div class="organizational-budget-fy-nav">
+                <button type="button" id="organizational-budget-fy-prev" aria-label="Previous fiscal year" title="Previous year">‹</button>
+                <span class="organizational-budget-fy-label" id="organizational-budget-fy-label">FY 2026</span>
+                <button type="button" id="organizational-budget-fy-next" aria-label="Next fiscal year" title="Next year">›</button>
+              </div>
+              <select id="organizational-budget-program" aria-label="Budget program scope" class="organizational-budget-grant-select">
+                <option value="">All programs</option>
+              </select>
+              <select id="organizational-budget-grant" aria-label="Budget grant scope" class="organizational-budget-grant-select">
+                <option value="" title="Unrestricted net assets">No grant</option>
+              </select>
+              <div class="organizational-budget-view-options">
+                <div class="organizational-seg-toggle" id="organizational-budget-view-mode-toggle" role="group" aria-label="Grid view">
+                  <button type="button" class="organizational-seg-btn active" data-view-mode="totals">Totals</button>
+                  <button type="button" class="organizational-seg-btn" data-view-mode="monthly">Monthly</button>
+                </div>
+                <button type="button" id="organizational-budget-toggle-cents" class="organizational-budget-view-btn" title="Toggle cents display">Show decimals</button>
+              </div>
+            </div>
+            <!-- Top horizontal scrollbar with chevrons (budget tab only) -->
+            <div class="organizational-budget-top-scroll-row" id="organizational-budget-top-scroll-row">
+              <button class="organizational-budget-scroll-btn" id="organizational-budget-scroll-left" aria-label="Scroll left" title="Scroll left">‹</button>
+              <div class="organizational-budget-top-scroll" id="organizational-budget-top-scroll">
+                <div id="organizational-budget-top-scroll-inner"></div>
+              </div>
+              <button class="organizational-budget-scroll-btn" id="organizational-budget-scroll-right" aria-label="Scroll right" title="Scroll right">›</button>
+            </div>
+          </div>
+
+          <!-- Workspace content area -->
+          <div id="organizational-budget-workspace">
+            <!-- Budget tab -->
+            <div id="organizational-budget-tab-budget" class="organizational-budget-tab-pane">
+              <div id="organizational-budget-math-warning" class="organizational-budget-math-warning" hidden>
+                <span id="organizational-budget-math-warning-text"></span>
+                <button type="button" id="organizational-budget-fix-math-btn" class="organizational-budget-fix-math-btn">Fix math</button>
+                <button type="button" id="organizational-budget-math-warning-dismiss" class="organizational-budget-math-warning-dismiss" aria-label="Dismiss">✕</button>
+              </div>
+              <div class="organizational-budget-tab-budget-layout">
+                <div class="organizational-budget-grid-with-chevrons">
+                  <div class="organizational-budget-grid-scroll">
+                    <table class="organizational-table organizational-budget-grid organizational-budget-dashboard-table" aria-label="Budget dashboard">
+                      <thead>
+                        <tr>
+                          <th class="organizational-budget-sticky-col">Account name</th>
+                          <th class="organizational-budget-col-num">Approved budget</th>
+                          <th class="organizational-budget-col-num">YTD actual</th>
+                          <th class="organizational-budget-col-num">FY projected</th>
+                          <th class="organizational-budget-col-num">Variance</th>
+                        </tr>
+                      </thead>
+                      <tbody id="organizational-budget-grid-tbody">
+                        <tr class="organizational-table-empty">
+                          <td colspan="40">Loading…</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Inline right-rail panel: row-click line-item editing renders
+                     here (no overlay/slide) so it shares the view with the grid
+                     instead of covering it. Hidden until a line item is clicked. -->
+                <aside class="organizational-budget-inline-panel" id="organizational-budget-inline-panel" hidden>
+                  <div class="organizational-panel-header" id="organizational-budget-inline-panel-header" hidden>
+                    <h3 id="organizational-budget-inline-panel-title"></h3>
+                    <button type="button" id="organizational-budget-inline-panel-close" class="organizational-panel-close" aria-label="Close">×</button>
+                  </div>
+                  <p id="organizational-budget-inline-panel-error" class="organizational-panel-error" hidden></p>
+                  <div class="organizational-panel-body" id="organizational-budget-inline-panel-body"></div>
+                </aside>
+              </div>
+            </div>
+
+            <!-- Personnel tab -->
+            <div id="organizational-budget-tab-personnel" class="organizational-budget-tab-pane" hidden></div>
+
+            <!-- Insurance tab -->
+            <div id="organizational-budget-tab-insurance" class="organizational-budget-tab-pane" hidden>
+              <div style="padding: 16px; text-align: center;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);">Insurance schedules — coming soon</p>
+              </div>
+            </div>
+
+            <!-- Other Schedules tab -->
+            <div id="organizational-budget-tab-schedules" class="organizational-budget-tab-pane" hidden>
+              <div style="padding: 16px; text-align: center;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);">General schedules — coming soon</p>
+              </div>
+            </div>
+
+            <!-- Indirect Costs tab -->
+            <div id="organizational-budget-tab-indirect-costs" class="organizational-budget-tab-pane" hidden></div>
+
+            <!-- Scenarios tab — branch-and-compare draft budgets. See
+                 .claude/plans/2026-09-14-scenario-budgeting-spec.md. -->
+            <div id="organizational-budget-tab-scenarios" class="organizational-budget-tab-pane" hidden></div>
+
+            <!-- Settings tab — Chart of Accounts, Imports. Moved from the org-wide Settings
+                 page (2026-09-11): this is Budget-module config, not org-wide config, so it
+                 lives with the module that owns it, not in generic Settings. (Organization is
+                 an enterprise app — each module may own its own settings; the org-wide
+                 Settings page stays for things true regardless of which modules are on.)
+                 Integrations (Xero/QuickBooks connect) briefly lived here too but moved back
+                 to org-wide Settings (2026-09-12) — an OAuth credential belongs to the whole
+                 org, not to whichever module consumed it first; this tab now just reads
+                 whatever connection status Settings' Integrations tab established. -->
+            <div id="organizational-budget-tab-settings" class="organizational-budget-tab-pane" hidden>
+
+              <h2 class="organizational-subheading" style="margin-top:0;">Chart of accounts</h2>
+              <p class="organizational-hint" style="margin-top:0;">
+                Manage your chart of accounts, map Xero accounts, and set up programs. You can also re-import your chart of accounts here if needed.
+              </p>
+              <p id="organizational-xero-not-connected-hint" class="organizational-hint" hidden>
+                Xero isn't connected yet. <a class="organizational-nav-link" id="organizational-xero-settings-link" href="#">Connect it in Settings → Integrations</a> to map accounts and tracking categories.
+              </p>
+              <h3 class="organizational-subheading" style="font-size:0.9375rem;" id="organizational-xero-mapping-heading" hidden><abbr class="organizational-term" tabindex="0" title="Chart of accounts — the list of accounts used to categorize income and expenses">Account categories</abbr> mapping</h3>
+              <section class="organizational-card organizational-card-flush" id="organizational-xero-mapping-section" hidden>
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table" aria-label="Xero account mapping">
+                    <thead>
+                      <tr>
+                        <th>Xero code</th>
+                        <th>Xero name</th>
+                        <th>Type</th>
+                        <th>Map to NP account</th>
+                      </tr>
+                    </thead>
+                    <tbody id="organizational-xero-mapping-tbody">
+                      <tr class="organizational-table-empty"><td colspan="4">Load Xero data to see accounts.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <h3 class="organizational-subheading" style="font-size:0.9375rem;" id="organizational-xero-track-map-heading" hidden>Tracking → Program map</h3>
+              <section class="organizational-card" id="organizational-xero-track-map-section" hidden>
+                <div id="organizational-xero-track-map-blocks"></div>
+              </section>
+
+              <h3 class="organizational-subheading" style="font-size:0.9375rem;">Programs &amp; activities</h3>
+              <section class="organizational-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+                  <p class="organizational-hint" style="margin:0;">Programs split your budget and reporting (e.g. by initiative or funding source).</p>
+                  <div style="display:flex;gap:8px;align-items:center;">
+                    <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-program-add">+ Add program</button>
+                    <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-activity-add">+ Add activity</button>
+                  </div>
+                </div>
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table" aria-label="Programs">
+                    <thead>
+                      <tr>
+                        <th>Program</th>
+                        <th>Description</th>
+                        <th>Active</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="organizational-programs-tbody">
+                      <tr class="organizational-table-empty">
+                        <td colspan="4">No programs yet. Add one to start manual budget lines.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p id="organizational-programs-freshness" class="organizational-data-freshness" style="margin:6px 0 0;" hidden></p>
+              </section>
+
+              <h2 class="organizational-subheading">Imports</h2>
+              <p class="organizational-hint" style="margin-top:0;">
+                Import your data in order, 1 through 7. Each template's header row lists its columns.
+              </p>
+              <div class="organizational-import-grid">
+                <section class="organizational-card organizational-import-card" data-import-kind="coa">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">1</span><h3 class="organizational-subheading">Chart of accounts</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/coa.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="COA CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="programs">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">2</span><h3 class="organizational-subheading">Programs &amp; activities</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/programs.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Programs CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="grants">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">3</span><h3 class="organizational-subheading">Grants</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/grants.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Grants CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="budget-lines">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">4</span><h3 class="organizational-subheading">Budget lines</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/budget_lines.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Budget lines CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="actuals">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">5</span><h3 class="organizational-subheading">Actuals (GL activity)</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/actuals.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Actuals CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="balance-sheet">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">6</span><h3 class="organizational-subheading">Balance sheet (opening balances)</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/balance_sheet.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Balance sheet CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+                <section class="organizational-card organizational-import-card" data-import-kind="personnel">
+                  <div class="organizational-import-card-head"><span class="organizational-import-step">7</span><h3 class="organizational-subheading">Personnel roster</h3></div>
+                  <p><a class="organizational-nav-link" href="/organizational/data/templates/personnel.template.csv" download>Download template</a></p>
+                  <div class="organizational-import-actions">
+                    <input type="file" accept=".csv,text/csv" class="organizational-import-file" aria-label="Personnel CSV" />
+                    <button type="button" class="organizational-btn organizational-import-submit">Import</button>
+                  </div>
+                  <p class="organizational-import-result organizational-hint" hidden></p>
+                </section>
+              </div>
+
+              <h3 class="organizational-subheading" style="font-size:0.9375rem;">Import history</h3>
+              <section class="organizational-card">
+                <p id="organizational-import-global-hint" class="organizational-data-freshness" hidden></p>
+                <p id="organizational-import-history-empty" class="organizational-hint" style="margin:0;">No imports yet for this organization.</p>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add/edit program modal — used by the Settings tab's "Chart of accounts" > Programs &
+       activities section (public/organizational/js/budget-settings.js). Moved from the
+       org-wide Settings page 2026-09-11 along with the rest of that section. -->
+  <div id="organizational-program-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-program-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-program-modal-title">Add program</h3>
+      <form id="organizational-program-form">
+        <input type="hidden" id="organizational-program-edit-id" value="">
+        <label for="organizational-program-name">Program name</label>
+        <input id="organizational-program-name" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-program-description">Description</label>
+        <textarea id="organizational-program-description" rows="3" maxlength="8000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div id="organizational-program-parent-wrap" hidden>
+          <label for="organizational-program-parent-id">Parent program</label>
+          <select id="organizational-program-parent-id">
+            <option value="">Select parent</option>
+          </select>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:14px;">
+          <input type="checkbox" id="organizational-program-active" checked>
+          Active
+        </label>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-program-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-program-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Recode modal — moves a program/activity's planning-stage data (budget lines, grant/
+       personnel allocations, schedule items, projections, indirect-cost allocations) to a
+       different program/activity of the same dimension, so an emptied-out one can later be
+       deactivated. Posted data (ledger/bills/invoices/actuals/fixed assets) is out of scope --
+       see server/organizational/lib/programRecode.js. Added 2026-09-16. -->
+  <div id="organizational-recode-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-recode-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-recode-modal-title">Recode data</h3>
+      <p class="organizational-hint" id="organizational-recode-source-label" style="margin-top:0;"></p>
+
+      <label for="organizational-recode-target">Move data to</label>
+      <select id="organizational-recode-target">
+        <option value="">Select target</option>
+      </select>
+
+      <div id="organizational-recode-preview" style="margin-top:14px;"></div>
+
+      <div class="organizational-modal-actions">
+        <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-recode-cancel">Cancel</button>
+        <button type="button" class="organizational-btn" id="organizational-recode-confirm" disabled>Recode</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/collapsible.js" defer></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/projection-editor.js" defer></script>
+  <script src="/organizational/js/projections.js" defer></script>
+  <script src="/organizational/js/budget-workspace.js" defer></script>
+  <script src="/organizational/js/budget-grid.js" defer></script>
+  <script src="/organizational/js/budget-personnel.js" defer></script>
+  <script src="/organizational/js/budget-schedules.js" defer></script>
+  <script src="/organizational/js/budget-indirect.js" defer></script>
+  <script src="/organizational/js/budget-scenarios.js" defer></script>
+  <script src="/organizational/js/budget-settings.js" defer></script>
+  <!-- Personnel sliding panel -->
+  <aside id="organizational-personnel-panel" class="organizational-grant-panel" role="dialog" aria-label="Personnel entry">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-personnel-panel-title">Add employee</h3>
+      <button type="button" id="organizational-personnel-panel-close" class="organizational-panel-close" aria-label="Close">×</button>
+    </div>
+    <p id="organizational-personnel-panel-error" class="organizational-panel-error" hidden></p>
+    <div class="organizational-panel-body" id="organizational-personnel-panel-body"></div>
+  </aside>
+  <div id="organizational-personnel-panel-overlay" class="organizational-panel-overlay"></div>
+
+  <!-- Shared item panel (Insurance, Schedules, Indirect Costs) -->
+  <aside id="organizational-item-panel" class="organizational-grant-panel" role="dialog" aria-label="Edit item">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-item-panel-title"></h3>
+      <button type="button" id="organizational-item-panel-close" class="organizational-panel-close" aria-label="Close">×</button>
+    </div>
+    <p id="organizational-item-panel-error" class="organizational-panel-error" hidden></p>
+    <div class="organizational-panel-body" id="organizational-item-panel-body"></div>
+  </aside>
+  <div id="organizational-item-panel-overlay" class="organizational-panel-overlay"></div>
+
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

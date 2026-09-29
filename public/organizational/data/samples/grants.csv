@@ -1,0 +1,6 @@
+funder,grant_name,funder_grant_id,status,grant_amount,request_amount,start_date,end_date,type,next_report_due,final_report_submitted,renewal_application_due,loi_submitted_at,application_submitted_at,award_date,period_start_date,period_end_date,restrictions,notes
+National Science Foundation,STEM Youth Access,NSF-2026-0042,awarded,120000,95000,2026-01-15,2027-06-30,restricted,2026-09-15,2027-06-30,2027-03-01,2025-09-01,2025-11-15,2026-01-15,2026-01-15,2027-06-30,Use for P01 only,
+United Way,General Operating Support,,awarded,85000,,2026-01-01,2026-12-31,unrestricted,2026-10-01,2026-12-31,2027-06-01,,2025-10-01,2026-01-01,2026-01-01,2026-12-31,,
+State Arts Council,Festival Grant,SAC-FY25-117,closed,40000,40000,2025-07-01,2025-12-31,restricted,,,,,2025-07-01,2025-07-01,2025-12-31,,Completed successfully
+Example Foundation,Capacity Building,,applied,,,,,unrestricted,,,,2025-12-01,2026-02-01,,,,,Pending review
+Federal Agency X,Innovation Pilot,,prospect,,180000,,,,,,,,,,,,restricted,Early stage

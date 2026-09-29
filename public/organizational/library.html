@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Library — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="library">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading library…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Library</h1>
+
+          <div id="organizational-library-list" style="margin-top: 24px;">
+            <p class="organizational-empty">Loading library…</p>
+          </div>
+
+          <h3 style="font-size: 1rem; font-weight: 600; margin: 32px 0 8px;">Pending submissions</h3>
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-library-propose-btn" style="margin-bottom: 16px;">Propose a change</button>
+          <div id="organizational-library-submissions-list">
+            <p class="organizational-empty">Loading pending submissions…</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Propose Library Change Modal -->
+  <div id="organizational-library-propose-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-library-propose-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-library-propose-modal-title">Propose a change</h3>
+      <form id="organizational-library-propose-form">
+        <label for="organizational-library-propose-target">Editing an existing item? (optional)</label>
+        <select id="organizational-library-propose-target">
+          <option value="">— Propose a new item —</option>
+        </select>
+
+        <label for="organizational-library-propose-category">Category</label>
+        <select id="organizational-library-propose-category" required>
+          <option value="">Select category</option>
+          <option value="chart_of_accounts">Chart of Accounts</option>
+          <option value="templates_financial_reports">Financial Report Templates</option>
+          <option value="templates_grants">Grant Templates</option>
+          <option value="templates_board_materials">Board Materials</option>
+          <option value="policy_examples">Policy Examples</option>
+          <option value="methods_notes">Methods & Notes</option>
+        </select>
+
+        <label for="organizational-library-propose-title">Title</label>
+        <input id="organizational-library-propose-title" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-library-propose-description">Description</label>
+        <input id="organizational-library-propose-description" type="text" required maxlength="500" autocomplete="off">
+
+        <label for="organizational-library-propose-body">Content (Markdown)</label>
+        <textarea id="organizational-library-propose-body" rows="8" required style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-library-propose-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-library-propose-save">Submit for approval</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/library-shared.js" defer></script>
+  <script src="/organizational/js/library.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

@@ -1,0 +1,344 @@
+<title>The Accounting Module, Explained</title>
+<style>
+  :root{
+    --paper:#eef1ea;
+    --paper-raised:#ffffff;
+    --ink:#1c2622;
+    --ink-soft:#4b5750;
+    --line:#c9d0c3;
+    --accent:#2f6f5e;
+    --accent-soft:#dce9e3;
+    --amber:#b5792f;
+    --amber-soft:#f1e3cd;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+      --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+    --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"]{
+    --paper:#eef1ea; --paper-raised:#ffffff; --ink:#1c2622; --ink-soft:#4b5750;
+    --line:#c9d0c3; --accent:#2f6f5e; --accent-soft:#dce9e3; --amber:#b5792f; --amber-soft:#f1e3cd;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  .page{ max-width:920px; margin:0 auto; padding:56px 24px 96px; }
+
+  header.masthead{ border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:40px; }
+  .eyebrow{ font-family:var(--mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin:0 0 12px; }
+  h1{ font-family:var(--serif); font-weight:400; font-size:clamp(32px,4.2vw,46px); line-height:1.1; margin:0 0 14px; text-wrap:balance; color:var(--ink); }
+  .dek{ font-size:17px; color:var(--ink-soft); max-width:62ch; margin:0; }
+
+  h2{ font-family:var(--serif); font-weight:400; font-size:26px; margin:0 0 6px; color:var(--ink); }
+  h2 .num{ font-family:var(--mono); font-size:14px; color:var(--ink-soft); margin-right:10px; }
+  .section-intro{ color:var(--ink-soft); font-size:15px; margin:0 0 20px; max-width:66ch; }
+
+  section{margin-bottom:56px;}
+  section.lede{margin-bottom:48px;}
+  .lede p{font-size:17px;max-width:68ch;}
+
+  .map-frame{ background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:20px; overflow-x:auto; }
+
+  .sitemap-svg{width:100%; height:auto; min-width:820px; display:block;}
+  .sitemap-svg .box{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.3;}
+  .sitemap-svg .box-dim{fill:var(--paper); stroke:var(--line); stroke-dasharray:4 3;}
+  .sitemap-svg .box-accent2{fill:var(--amber-soft); stroke:var(--amber);}
+  .sitemap-svg .title{font-family:var(--sans); font-size:13px; font-weight:600; fill:var(--ink);}
+  .sitemap-svg .title.dim{fill:var(--ink-soft); font-weight:600;}
+  .sitemap-svg .subt{font-family:var(--mono); font-size:9.5px; fill:var(--ink-soft);}
+  .sitemap-svg .caption{font-family:var(--mono); font-size:10px; fill:var(--ink-soft);}
+  .sitemap-svg .conn{stroke:var(--line); stroke-width:1.4; fill:none;}
+  .sitemap-svg .conn-dashed{stroke-dasharray:3 3;}
+
+  .flow-note{ font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); padding:4px 0; }
+  .flow-note b{color:var(--accent); font-weight:600;}
+
+  .toc{ display:flex; flex-wrap:wrap; gap:8px; margin:24px 0 0; padding:0; list-style:none; }
+  .toc a{ display:inline-block; font-family:var(--mono); font-size:12px; letter-spacing:0.02em; color:var(--ink-soft); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--paper-raised); transition:border-color .15s ease, color .15s ease; }
+  .toc a:hover, .toc a:focus-visible{ border-color:var(--accent); color:var(--accent); outline:none; }
+
+  .area{ background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:26px 28px; margin-bottom:18px; scroll-margin-top:20px; }
+  .area-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:10px; }
+  .area-title{ font-family:var(--serif); font-size:21px; margin:0; color:var(--ink); }
+  .badge{ font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase; padding:3px 9px; border-radius:999px; white-space:nowrap; }
+  .badge.core{ background:var(--accent-soft); color:var(--accent); }
+  .badge.conditional{ background:var(--amber-soft); color:var(--amber); }
+  .badge.shared{ background:var(--accent-soft); color:var(--accent); }
+  .badge.hidden{ background:var(--line); color:var(--ink-soft); }
+  .badge.planned{ background:var(--paper); color:var(--ink-soft); border:1px dashed var(--line); }
+
+  .area p{margin:0 0 10px; color:var(--ink);}
+  .area ul{margin:8px 0 0; padding-left:20px;}
+  .area li{margin-bottom:6px;}
+  .area li b{color:var(--ink); font-weight:600;}
+
+  .callout{ border:1px solid var(--amber); background:var(--amber-soft); border-radius:6px; padding:22px 26px; }
+  .callout h2{font-size:20px; color:var(--ink);}
+  .callout ul{margin:12px 0 0; padding-left:20px;}
+  .callout li{margin-bottom:10px; color:var(--ink);}
+
+  .callout.roadmap{ border-color:var(--line); background:var(--paper-raised); }
+  .roadmap h3{ font-family:var(--serif); font-weight:400; font-size:18px; margin:20px 0 8px; color:var(--ink); }
+  .roadmap h3:first-of-type{margin-top:6px;}
+
+  .spec{ border:1px dashed var(--line); border-radius:6px; padding:12px 16px; margin:12px 0; background:color-mix(in srgb, var(--paper) 55%, transparent); }
+  .spec-label{font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
+  .spec code, .area code{font-family:var(--mono); font-size:12.5px; background:var(--accent-soft); color:var(--accent); padding:1px 6px; border-radius:4px;}
+
+  table.api-table{width:100%; border-collapse:collapse; font-size:14px;}
+  table.api-table th, table.api-table td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.api-table th{font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  table.api-table td.svc{font-weight:600; white-space:nowrap;}
+  table.api-table tr:last-child td{border-bottom:none;}
+
+  footer{ margin-top:64px; padding-top:20px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink-soft); }
+  a{color:var(--accent);}
+
+  @media (max-width:600px){ .page{padding:36px 16px 72px;} .area{padding:20px 18px;} }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Causal · cooperative · Last updated September 24, 2026</p>
+    <h1>The Accounting Module, Explained</h1>
+    <p class="dek">A plain-language tour of the Accounting area: one sidebar item, eleven tabs. It covers what is live today, what is planned, and what is still rough.</p>
+  </header>
+
+  <section class="lede">
+    <p>Where Budget is the plan, Accounting is the record of what actually happened: a real double-entry ledger, bills and invoices, bank reconciliation modeled on Xero's, and the fixed-asset, expense-claim, board-designation, gift-posting, and recode tools around it. It is opt-in per organization: every organization starts on Xero as its system of record and can switch to Causal's own ledger when ready. Each organization's accounting is completely private to it, built around the common structures nonprofits share (a standard chart of accounts, restriction classes, program and grant tagging).</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">Map</span>How the pieces connect</h2>
+    <p class="section-intro">One sidebar item, eleven tabs, sharing data with Budget, Funding, Contacts, and (optionally) Xero and Plaid rather than duplicating it.</p>
+    <div class="map-frame">
+      <svg class="sitemap-svg" viewBox="0 0 1240 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sitemap: Accounting leads to eleven tabs: Dashboard, Transactions, Bank Reconciliation, Approval Policy, Purchases, Sales, Fixed Assets, Expense Claims, Board Designations, Find and Recode, and Gift Postings. Transactions feeds Budget and Reports, Bank Reconciliation connects to Xero and Plaid, Purchases and Sales use the shared Contacts list, and Gift Postings receives gifts from Funding.">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink-soft)"></path></marker></defs>
+        <line x1="620" y1="65" x2="620" y2="90" class="conn"></line>
+        <line x1="80" y1="90" x2="1160" y2="90" class="conn"></line>
+        <line x1="80" y1="90" x2="80" y2="100" class="conn"></line>
+        <line x1="188" y1="90" x2="188" y2="100" class="conn"></line>
+        <line x1="296" y1="90" x2="296" y2="100" class="conn"></line>
+        <line x1="404" y1="90" x2="404" y2="100" class="conn"></line>
+        <line x1="512" y1="90" x2="512" y2="100" class="conn"></line>
+        <line x1="620" y1="90" x2="620" y2="100" class="conn"></line>
+        <line x1="728" y1="90" x2="728" y2="100" class="conn"></line>
+        <line x1="836" y1="90" x2="836" y2="100" class="conn"></line>
+        <line x1="944" y1="90" x2="944" y2="100" class="conn"></line>
+        <line x1="1052" y1="90" x2="1052" y2="100" class="conn"></line>
+        <line x1="1160" y1="90" x2="1160" y2="100" class="conn"></line>
+        <g class="nodegrp"><rect x="535" y="15" width="170" height="50" rx="6" class="box"></rect><text x="620" y="36" class="title" text-anchor="middle">Accounting</text><text x="620" y="52" class="subt" text-anchor="middle">one sidebar item</text></g>
+        <g class="nodegrp"><rect x="30" y="100" width="100" height="54" rx="6" class="box"></rect><text x="80" y="122" class="title" text-anchor="middle">Dashboard</text><text x="80" y="138" class="subt" text-anchor="middle">orientation</text></g>
+        <g class="nodegrp"><rect x="138" y="100" width="100" height="54" rx="6" class="box"></rect><text x="188" y="122" class="title" text-anchor="middle">Transactions</text><text x="188" y="138" class="subt" text-anchor="middle">the ledger</text></g>
+        <g class="nodegrp"><rect x="246" y="100" width="100" height="54" rx="6" class="box"></rect><text x="296" y="122" class="title" text-anchor="middle">Bank</text><text x="296" y="136" class="title" text-anchor="middle">Reconciliation</text></g>
+        <g class="nodegrp"><rect x="354" y="100" width="100" height="54" rx="6" class="box"></rect><text x="404" y="122" class="title" text-anchor="middle">Approval</text><text x="404" y="136" class="title" text-anchor="middle">Policy</text></g>
+        <g class="nodegrp"><rect x="462" y="100" width="100" height="54" rx="6" class="box"></rect><text x="512" y="122" class="title" text-anchor="middle">Purchases</text><text x="512" y="138" class="subt" text-anchor="middle">Bills / AP</text></g>
+        <g class="nodegrp"><rect x="570" y="100" width="100" height="54" rx="6" class="box"></rect><text x="620" y="122" class="title" text-anchor="middle">Sales</text><text x="620" y="138" class="subt" text-anchor="middle">Invoicing / AR</text></g>
+        <g class="nodegrp"><rect x="678" y="100" width="100" height="54" rx="6" class="box"></rect><text x="728" y="122" class="title" text-anchor="middle">Fixed</text><text x="728" y="136" class="title" text-anchor="middle">Assets</text></g>
+        <g class="nodegrp"><rect x="786" y="100" width="100" height="54" rx="6" class="box"></rect><text x="836" y="122" class="title" text-anchor="middle">Expense</text><text x="836" y="136" class="title" text-anchor="middle">Claims</text></g>
+        <g class="nodegrp"><rect x="894" y="100" width="100" height="54" rx="6" class="box"></rect><text x="944" y="122" class="title" text-anchor="middle">Board</text><text x="944" y="136" class="title" text-anchor="middle">Designations</text></g>
+        <g class="nodegrp"><rect x="1002" y="100" width="100" height="54" rx="6" class="box"></rect><text x="1052" y="122" class="title" text-anchor="middle">Find &amp;</text><text x="1052" y="136" class="title" text-anchor="middle">Recode</text></g>
+        <g class="nodegrp"><rect x="1110" y="100" width="100" height="54" rx="6" class="box"></rect><text x="1160" y="122" class="title" text-anchor="middle">Gift</text><text x="1160" y="136" class="title" text-anchor="middle">Postings</text></g>
+        <text x="30" y="285" class="caption">Solid lines: tabs inside Accounting. Dashed lines: data shared with other areas of the workspace (one shared schema, not synced copies).</text>
+        <text x="30" y="301" class="caption">Dashboard reads from the other tabs and writes nothing of its own. Gift Postings receives in-kind gifts and pledges recorded in Funding.</text>
+                <g class="nodegrp"><rect x="82" y="200" width="116" height="46" rx="6" class="box box-dim"></rect><text x="140" y="220" class="title dim" text-anchor="middle">Budget</text><text x="140" y="235" class="subt" text-anchor="middle">feeds actuals</text></g>
+        <line x1="188" y1="154" x2="140" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+        <g class="nodegrp"><rect x="218" y="200" width="116" height="46" rx="6" class="box box-dim"></rect><text x="276" y="220" class="title dim" text-anchor="middle">Reports</text><text x="276" y="235" class="subt" text-anchor="middle">statements, 990</text></g>
+        <line x1="188" y1="154" x2="276" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+        <g class="nodegrp"><rect x="354" y="200" width="116" height="46" rx="6" class="box box-dim"></rect><text x="412" y="220" class="title dim" text-anchor="middle">Xero / Plaid</text><text x="412" y="235" class="subt" text-anchor="middle">bank + actuals</text></g>
+        <line x1="296" y1="154" x2="412" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+        <g class="nodegrp"><rect x="502" y="200" width="116" height="46" rx="6" class="box box-dim"></rect><text x="560" y="220" class="title dim" text-anchor="middle">Contacts</text><text x="560" y="235" class="subt" text-anchor="middle">shared list</text></g>
+        <line x1="512" y1="154" x2="560" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+        <line x1="620" y1="154" x2="560" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+        <g class="nodegrp"><rect x="1042" y="200" width="116" height="46" rx="6" class="box box-dim"></rect><text x="1100" y="220" class="title dim" text-anchor="middle">Funding</text><text x="1100" y="235" class="subt" text-anchor="middle">gifts, grants</text></g>
+        <line x1="1160" y1="154" x2="1100" y2="200" class="conn conn-dashed" marker-end="url(#arrow)"></line>
+      </svg>
+    </div>
+
+    <div class="map-frame" style="margin-top:14px;">
+      <div class="flow-note"><b>Bank Reconciliation</b> → confirm a line → posts through the same API <b>Transactions</b> uses directly</div>
+      <div class="flow-note"><b>Approval Policy</b> → federal-award grant tagged → transaction held for review before it reaches <b>Transactions</b></div>
+      <div class="flow-note"><b>Accounting</b> (once switched on) → feeds Budget's budget-vs-actual the same way a Xero import does</div>
+      <div class="flow-note"><b>Purchases</b> / <b>Sales</b> → bill or invoice paid → Bank Reconciliation's Match finds it and links the incoming bank line to the payment already recorded, or records the payment itself</div>
+      <div class="flow-note"><b>Funding</b> → grant, pledge, or in-kind gift recorded (unposted) → <b>Gift Postings</b> reviews and posts in-kind gifts and pledges; a cash grant gift becomes a Match candidate when the deposit arrives. One record becomes the ledger transaction, never a synced copy</div>
+      <div class="flow-note"><b>Dashboard</b> → reads from Transactions, Bank Reconciliation, Purchases, and Sales; writes nothing of its own</div>
+    </div>
+
+    <ul class="toc">
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#transactions">Transactions</a></li>
+      <li><a href="#bank-reconciliation">Bank Reconciliation</a></li>
+      <li><a href="#approval-policy">Approval Policy</a></li>
+      <li><a href="#purchases">Purchases</a></li>
+      <li><a href="#sales">Sales</a></li>
+      <li><a href="#fixed-assets">Fixed Assets</a></li>
+      <li><a href="#expense-claims">Expense Claims</a></li>
+      <li><a href="#board-designations">Board Designations</a></li>
+      <li><a href="#find-recode">Find &amp; Recode</a></li>
+      <li><a href="#gift-postings">Gift Postings</a></li>
+      <li><a href="#contacts">Contacts</a></li>
+      <li><a href="#backend">Backend &amp; how it fits together</a></li>
+            <li><a href="#rough-edges">Rough edges and what's next</a></li>
+    </ul>
+  </section>
+
+  <section id="areas">
+    <h2><span class="num">Areas</span>The module, tab by tab</h2>
+
+    <div class="area" id="dashboard">
+      <div class="area-head"><h3 class="area-title">Dashboard</h3><span class="badge core">Live</span></div>
+      <p>The default landing tab: an orientation screen that reads from the rest of the module and writes nothing of its own, in nonprofit terms ("surplus/deficit," never "profit").</p>
+      <ul>
+        <li><b>Restricted vs. unrestricted cash</b>, with a linked count of bank lines still waiting on Reconciliation</li>
+        <li><b>Bills to pay / Invoices owed</b>, as aging bars (current / 1&ndash;30 / 31&ndash;60 / 61&ndash;90 / 90+)</li>
+        <li><b>Needs attention</b>: federal-award transactions awaiting sign-off, and a closed fiscal year left unlocked over 60 days</li>
+        <li><b>Recent activity</b>: transactions, bills, invoices, and confirmed bank lines in one feed</li>
+      </ul>
+    </div>
+
+    <div class="area" id="transactions">
+      <div class="area-head"><h3 class="area-title">Transactions</h3><span class="badge core">Live</span></div>
+      <p>The ledger itself: every posted transaction, one row per line, with the account, program, and grant it touched, filterable by grant, program, account, date, and status. A transaction can be posted manually or voided afterward. Voiding never edits history: it adds a reversing record. Every transaction respects its fiscal year's lock, and every ledger write is recorded in the activity log.</p>
+      <p>A line coded against a federal-award grant doesn't post at once. It waits in Approval Policy for a second person's sign-off, the one hard stop in the module.</p>
+    </div>
+
+    <div class="area" id="bank-reconciliation">
+      <div class="area-head"><h3 class="area-title">Bank Reconciliation</h3><span class="badge core">Live</span></div>
+      <p>Modeled on Xero's own reconciliation: the bank feed is where most day-to-day coding happens. An account strip shows each cash or card account with its connection status, balance, and lines needing attention. Three views sit under it: <b>Reconcile</b>, <b>Cash Coding</b>, and <b>Rules</b>.</p>
+      <p><b>Getting lines in.</b> Connect a bank through Plaid or import a CSV. Both fill the same queue, and duplicates are detected and skipped. A pending Plaid transaction is replaced outright when the posted version arrives.</p>
+      <p><b>Reconcile</b> handles one line at a time: <b>Match</b>, <b>Create</b> a coded entry (with an optional multi-line split), <b>Transfer</b> to another of the organization's accounts, or <b>Discuss</b> to flag a question rather than guess. Match searches unpaid bills and invoices by amount, date, and payee, and also finds payments already recorded and cash grant gifts waiting for their deposit. It supports multi-select, with a running total that must equal the line exactly. Every match that posts a payment uses the same function as the bill or invoice panel's "Record payment," so there is one posting path and no duplicate entries.</p>
+      <p><b>Coding memory and Rules.</b> Create's fields auto-fill from the last coding for the same payee. <b>Rules</b> are deterministic, organization-written (text in the payee or description, optionally an amount range, direction, or account), the first matching rule by priority wins, and each offers a one-click Apply. Rules never post on their own; a person confirms every coding.</p>
+      <p><b>Cash Coding</b> is the spreadsheet-style bulk view, match-aware and able to split one line across programs or grants. A <b>Bank Reconciliation report</b> ties the bank's ending balance to the ledger's cash balance. <b>Unreconcile</b> voids the posting in an open period; in a locked period it posts a mirrored reversing entry in the current period instead, keeping the original's grant and restriction tags.</p>
+    </div>
+
+    <div class="area" id="approval-policy">
+      <div class="area-head"><h3 class="area-title">Approval Policy</h3><span class="badge core">Live</span></div>
+      <p>Light-touch by default, like Xero and QuickBooks. An organization records its own review policy in plain terms (who reviews, how often, what amount warrants a second look), exportable as a dated document for a CPA or auditor. A flagged-review list surfaces large transactions, new payees, and manually entered lines. The one mandatory sign-off is for transactions against a federal-award grant. Approving a bill needs an admin or finance role.</p>
+    </div>
+
+    <div class="area" id="purchases">
+      <div class="area-head"><h3 class="area-title">Purchases (Bills / AP)</h3><span class="badge core">Live</span></div>
+      <p>A vendor bill is entered when received, so what the organization owes shows up as a liability. Lifecycle: Draft, Pending Approval, Approved (the liability posts here), Partially Paid, Paid, with Void before Approval. A federal-award bill goes through the second-approver gate first. Bills can be edited fully while unposted and by metadata only afterward.</p>
+      <ul>
+        <li><b>Payments</b>: partial payments each post a clearing entry (debit AP, credit the bank account). An approved bill can be scheduled for a future date, but nothing pays itself, since moving money unattended is a separate decision.</li>
+        <li><b>Scanned-bill prefill</b>: uploading a bill reads header fields (vendor, dates, reference, total) into the draft with Gemini. Account and program suggestions come from how that vendor was coded before.</li>
+        <li><b>Credit notes and aging</b>: vendor credit notes handle returns without voiding a bill, and an AP Aging report is one click away.</li>
+        <li><b>Recurring schedules</b>: a repeating bill template (monthly, quarterly, annual, or chosen months). A daily job creates a Draft for each schedule that is due; nothing is submitted or approved on anyone's behalf.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="sales">
+      <div class="area-head"><h3 class="area-title">Sales (Invoicing / AR)</h3><span class="badge core">Live</span></div>
+      <p>For earned revenue that isn't a gift or a grant: program fees, event tickets, facility rental, fee-for-service contracts. Line items carry a fair-market-value field, so a $250 gala ticket including a $75 dinner splits into earned revenue and contribution automatically.</p>
+      <p>Lifecycle: Draft, Sent, Partially Paid or Paid, Void or Write Off. Installments each post a clearing entry (debit the bank account, credit AR), and status follows what has actually been received. Customer credit notes handle refunds without voiding the invoice, and writing off a partly paid invoice writes off only the remaining balance. AR Aging nets out payments received. Scanned-invoice prefill and recurring schedules work as on Purchases.</p>
+    </div>
+
+    <div class="area" id="fixed-assets">
+      <div class="area-head"><h3 class="area-title">Fixed Assets</h3><span class="badge core">Live</span></div>
+      <p>A per-asset register: each capitalized asset with its cost, acquisition date, useful life, salvage value, and the asset, accumulated-depreciation, and depreciation-expense accounts it uses. Assets can be marked disposed. Depreciation is straight-line only. <b>Run depreciation…</b> always previews what would post through a chosen date before anything is written, and re-running for a period that already has entries posts nothing twice. Each posting is a real ledger transaction.</p>
+    </div>
+
+    <div class="area" id="expense-claims">
+      <div class="area-head"><h3 class="area-title">Expense Claims</h3><span class="badge core">Live</span></div>
+      <p>Reimbursing a staff or board member for money they spent. This is not a vendor bill: the organization owes an individual, and payments to insiders carry self-dealing risk. A claim has lines (including mileage as miles times a rate) and moves Draft, Pending Approval, Approved, Paid, with Void. A claimant can never approve their own claim, enforced by the database. The claimant can edit their own draft.</p>
+      <ul>
+        <li><b>Receipts</b>: attach one in the Document Vault; uploading it can prefill vendor, date, and amount for review. Below an organization-set threshold no receipt is needed. Above it, the claim needs a receipt or a signed missing-receipt statement, which starts a 60-day follow-up shown on the dashboard.</li>
+        <li><b>Approval timing</b>: under "Approval settings…" an organization chooses pre-approval (the default) or confirmation after payout, for small organizations that can't reliably get approval before money moves.</li>
+        <li><b>Messages</b>: each claim has a thread between claimant and admins, with email notifications.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="board-designations">
+      <div class="area-head"><h3 class="area-title">Board Designations</h3><span class="badge core">Live</span></div>
+      <p>For funds the board has set aside within unrestricted net assets, such as an operating reserve. A designation is an internal decision, not a donor restriction. Ledger lines are tagged with a designation, and each keeps a running balance (designate adds, release subtracts), shown as a board-designated line on the Statement of Financial Position.</p>
+    </div>
+
+    <div class="area" id="find-recode">
+      <div class="area-head"><h3 class="area-title">Find &amp; Recode</h3><span class="badge core">Live</span></div>
+      <p>Search posted transactions with a condition builder (each condition a field, an operator like Is or Is Not, and a value, joined by an All or Any toggle), then recode the account, program or activity, or grant on the ones selected. It previews first. Amounts never change and posted transactions are never edited in place: a new correcting journal is posted, so originals stay intact. System accounts (AR, AP, Bank, Clearing, Contribution Revenue, Expense Claims Payable) never appear, and locked years are respected.</p>
+    </div>
+
+    <div class="area" id="gift-postings">
+      <div class="area-head"><h3 class="area-title">Gift Postings</h3><span class="badge core">Live</span></div>
+      <p>Where gifts recorded in Funding become ledger entries, once someone in Accounting reviews them. <b>In-kind gifts</b> (with a description, valuation method, and revenue and expense accounts) and <b>pledges</b> land here unposted; review the coding, then post or void. <b>Run pledge accretion…</b> posts the periodic accretion on discounted multi-year pledges, and <b>Run indirect cost recovery…</b> calculates recovery for grants that carry an indirect rate, from the grant's direct-cost base, excluding flagged accounts.</p>
+      <p>Cash donations, cash grants, and dues are not listed here. They reach the ledger through bank deposit coding. A cash grant gift shows up as a Match candidate when the deposit arrives, and if the deposit was already coded, a link action ties the gift to that transaction without posting again.</p>
+    </div>
+
+    <div class="area" id="contacts">
+      <div class="area-head"><h3 class="area-title">Contacts</h3><span class="badge core">Live</span></div>
+      <p>One contact list (its own page under Records) serves donors, vendors, and customers, with independent role flags, so a board member who donates and gets reimbursed is one record. Bills and invoices join to the same record. Vendors carry tax ID and W-9 status, and an admin can export a calendar-year 1099 summary as CSV (tracking only, no e-filing). Pickers in Purchases, Sales, and Funding search this list and can add a contact on the spot.</p>
+    </div>
+  </section>
+
+  <section id="backend">
+    <h2><span class="num">Backend</span>How it fits together</h2>
+    <p class="section-intro">The design choices that make this safe to build without disrupting anything already working.</p>
+
+    <div class="spec">
+      <div class="spec-label">One integrated schema, not a connector stack</div>
+      Donors, grants, budget, and accounting are surfaces over one shared schema. Modules connect through a direct foreign key and a status field on a single row (a gift's posting status, a bank rule pre-filling Cash Coding, a grant's revenue account), never a mapping table and a sync job. Accounting posts only within this module: records from Funding, Membership, or Sponsorship land as pending and become ledger transactions once someone reviews and confirms them here, the way a bank feed's transactions are posted in Reconciliation.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Xero coexistence, not replacement</div>
+      Every organization has a single switch determining whether Xero or Causal's own ledger is its system of record for actuals. Xero stays fully connected either way. When the Causal ledger is switched on, it writes its own summarized actuals into the same table Xero and CSV imports already write into. Every existing budget-vs-actual report, 990 export, and balance sheet view keeps working unchanged, because none of them needed to know where the numbers came from.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Shared with Budget, not duplicated</div>
+      Accounts, programs, and grants are the same records Budget already uses. A ledger line and a budget line reference the identical rows, with no second chart of accounts or parallel grant list to keep in sync.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Financial statements come from the ledger</div>
+      Reports produces the Statement of Financial Position, Statement of Activities, Statement of Functional Expenses, and Statement of Cash Flows live from posted ledger data, not from stored snapshots, with net assets presented as without and with donor restrictions.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Tenant isolation, roles, and period locking</div>
+      Every table in this module enforces row-level security from the moment it's created, so one organization's ledger is structurally invisible to another's, not just filtered out in application code. Program-linked tables add a second, program-level policy for the Program role. Closing a fiscal year uses the same locking mechanism Budget already relies on, rather than a second lock of its own.
+    </div>
+  </section>
+
+  <section id="rough-edges">
+    <div class="callout">
+      <h2>Rough edges and what's next</h2>
+      <p style="margin:12px 0 0;"><b>Rough today</b></p>
+      <ul>
+        <li>The Plaid webhook check has not been run against a real delivery, which needs a public HTTPS callback URL. Manual sync, the same code path, is verified. Worth a live check before relying on webhook-driven sync.</li>
+        <li>Switching from Xero to the Causal ledger is straightforward, but switching back isn't a clean undo: the period switched away from comes back empty and would need a re-import.</li>
+        <li>Two people approving or voiding the same item at the same instant is handled safely but not optimized.</li>
+        <li>There is no general account-edit screen. A cash account's flag can only be set from chart templates or the Plaid mapping panel's inline create.</li>
+      </ul>
+      <p style="margin:16px 0 0;"><b>Next</b></p>
+      <ul>
+        <li><b>Fuller coding memory.</b> Today the suggestion is the single most recent coding for a payee, on the Create tab only. A version weighted across several past codings and applied to Match as well is still open.</li>
+        <li><b>Batch deposits.</b> Splitting one bank line across several allocations is built. Reconciling several separate bank lines as one batch, in the sense of Xero's own batch deposit, is not, and is worth clarifying before building.</li>
+        <li><b>Rules that apply on import.</b> Rules only pre-fill for a person to confirm. Applying them silently as statements are imported is a bigger trust step, left for later once rules have a track record.</li>
+        <li><b>Line-level coding from scanned bills.</b> Scanned bills and invoices prefill header fields only. Account and program coding stays a suggestion from vendor history.</li>
+        <li><b>Per-action role checks.</b> The new roles narrow bill approval and budget promotion. Checks for the rest of Accounting, such as fixed assets and fiscal-year locks, are still to do.</li>
+      </ul>
+      <p style="margin:16px 0 0;font-size:14px;">Deliberately not built: paying a scheduled bill automatically, since it would move money unattended.</p>
+    </div>
+  </section>
+
+  <footer>
+    See the <a href="/docs/organizational-app-guide.html" target="_blank" rel="noopener">Cooperative app guide</a> for how Accounting fits alongside Budget, Funding, and Compliance.
+  </footer>
+
+</div>

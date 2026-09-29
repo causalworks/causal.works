@@ -1,0 +1,4 @@
+display_name,type,email,phone,mailing_address,website,notes,tags
+Smith Family Foundation,foundation,grants@smithfamilyfoundation.org,555-123-4567,"123 Main St, New York NY 10001",https://smithfamilyfoundation.org,Lead contact: Jane Smith,"major-donor,foundation"
+City Community Fund,foundation,info@citycommunityfund.org,,,,Applied for general operating support,government
+Jane Doe,individual,jane@example.com,555-987-6543,,,,board-member

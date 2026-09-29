@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>causalworks</title>
+    <meta name="theme-color" content="#3c1416">
+    <link rel="stylesheet" href="/shared/css/tokens.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--surface-page);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--brand);
+            color: #fff;
+            min-height: 56px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            padding: 20px 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            line-height: 0;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .brand-causal { color: rgba(255, 255, 255, 0.92); }
+        .brand-works { color: #c96b72; }
+
+        main {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 56px 24px 64px;
+        }
+
+        .intro {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .intro .eyebrow {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .intro h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .intro p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        @media (max-width: 680px) {
+            .workspace-grid { grid-template-columns: 1fr; }
+        }
+
+        .workspace-card {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 28px 28px 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .workspace-card:hover { text-decoration: none; }
+
+        .workspace-card .tagline {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 12px;
+        }
+
+        .workspace-card .enter-btn {
+            background: var(--brand-dark);
+            color: #fff;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 9px 18px;
+            border-radius: var(--radius-md);
+        }
+
+
+        .access-request {
+            max-width: 560px;
+            margin: 32px auto 0;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .access-request form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .access-request input {
+            flex: 1;
+            font: inherit;
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--surface-card);
+            color: var(--text-primary);
+        }
+
+        .access-request button {
+            font: inherit;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 0;
+            border: 0;
+            background: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .access-request button:hover {
+            text-decoration: underline;
+        }
+
+        .access-request-msg { margin-top: 10px; min-height: 1.2em; }
+
+        .project-brief-link {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 13px;
+        }
+
+        .project-brief-link a {
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .project-brief-link a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding-bottom: 32px;
+        }
+
+        footer a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        footer .footer-sep {
+            margin: 0 6px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><span class="brand-causal">causal</span><span class="brand-works">works</span></div>
+</header>
+
+<main id="workspace-main" style="visibility:hidden;">
+    <div class="intro">
+        <div class="eyebrow">CausalWorks Platform Coop Initiative</div>
+        <h1>Choose a workspace</h1>
+    </div>
+
+    <div class="workspace-grid">
+        <a class="workspace-card" id="card-coop" href="/demo-coop" target="_blank" rel="noopener">
+            <span class="enter-btn" id="btn-coop">Enter Cooperative (demo)</span>
+            <div class="tagline">Organization app</div>
+        </a>
+
+        <a class="workspace-card" id="card-agency" href="/demo" target="_blank" rel="noopener">
+            <span class="enter-btn" id="btn-agency">Enter Agency (demo)</span>
+            <div class="tagline">Personal app</div>
+        </a>
+    </div>
+
+    <p class="project-brief-link"><a href="/shared/project-brief/#project-brief" target="_blank" rel="noopener">Read the project brief &rarr;</a></p>
+
+    <div class="access-request" id="access-request" hidden>
+        <p>Enter your email to try the setup process for yourself.</p>
+        <form id="access-request-form">
+            <input type="email" id="access-request-email" placeholder="you@example.org" required autocomplete="email" aria-label="Email address">
+            <button type="submit">Request access &rarr;</button>
+        </form>
+        <div class="access-request-msg" id="access-request-msg" role="status"></div>
+    </div>
+</main>
+
+<footer>causalworks<span class="footer-sep">&middot;</span><a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy policy</a></footer>
+
+<script>
+// The shared demo user sees demo cards plus the access-request form. Anyone with their own
+// account gets their own workspaces (Agency onboarding / the Cooperative org setup page).
+(function () {
+    // Aggregate-only entry-point logging -- no credentials, no viewer identity, just a count
+    // of splash-page views for the review period. See /api/public/log-view in server.js.
+    fetch('/api/public/log-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: '/shared/select-workspace.html' }),
+    }).catch(function () {});
+    var main = document.getElementById('workspace-main');
+    function show() { main.style.visibility = 'visible'; }
+    fetch('/api/me', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (me) {
+            if (me && me.user_type === 'demo') {
+                document.getElementById('access-request').hidden = false;
+            } else if (me) {
+                document.getElementById('card-coop').href = '/organizational/';
+                document.getElementById('card-agency').href = '/individual/';
+                document.getElementById('btn-coop').textContent = 'Enter Cooperative';
+                document.getElementById('btn-agency').textContent = 'Enter Agency';
+            }
+            show();
+        })
+        .catch(show);
+})();
+document.getElementById('access-request-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('access-request-msg');
+    var btn = e.target.querySelector('button');
+    btn.disabled = true;
+    msg.textContent = '';
+    try {
+        var res = await fetch('/api/access-request', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: document.getElementById('access-request-email').value })
+        });
+        var data = await res.json().catch(function () { return {}; });
+        if (!res.ok) msg.textContent = data.error || 'Something went wrong. Please try again.';
+        else if (data.status === 'approved') msg.textContent = 'Check your email for a link to set your password.';
+        else msg.textContent = "Thanks. We'll email you access.";
+    } catch (err) {
+        msg.textContent = 'Something went wrong. Please try again.';
+    }
+    btn.disabled = false;
+});
+</script>
+
+</body>
+</html>

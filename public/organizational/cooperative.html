@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="cooperative">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading cooperative…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom: 24px;">
+            <h1 class="organizational-org-dashboard-title" id="organizational-org-title" style="margin: 0;">Cooperative | Workshop</h1>
+            <button type="button" class="organizational-btn" id="organizational-workshop-propose-btn" style="padding: 10px 18px; flex-shrink: 0;" hidden>+ Propose a workshop →</button>
+          </div>
+
+          <!-- Workshop Tab -->
+          <div id="organizational-organizational-panel-workshop" class="organizational-settings-panel" data-organizational-panel="workshop">
+            <!-- Workshop project list -->
+            <section class="organizational-card" style="margin-bottom: 24px;" id="organizational-workshop-projects-section">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 16px 0;">Workshop projects</h3>
+              <div id="organizational-workshop-projects-list" style="display: grid; gap: 12px;">
+                <p class="organizational-empty">Loading workshop projects…</p>
+              </div>
+            </section>
+
+            <!-- Workshop project detail -->
+            <section class="organizational-card organizational-workshop-detail" id="organizational-workshop-detail-section" style="margin-bottom: 24px;" hidden>
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 16px; flex-wrap: wrap;">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-workshop-detail-back" style="margin:0;">← Back to workshop projects</button>
+                <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-workshop-sync-pod-btn" title="Sync Interventions + Systems Map to this org's Solid pod">Sync to pod</button>
+                  <select class="organizational-input" id="organizational-workshop-tools-dropdown" style="max-width: 220px;" title="Coming soon">
+                    <option>Systems tools</option>
+                    <option>🔁 Causal loop diagram tool — Coming soon</option>
+                    <option>📈 Stock-flow mapper — Coming soon</option>
+                    <option>🧑‍🤝‍🧑 Stakeholder mapper — Coming soon</option>
+                    <option>🕸️ Cross-turnaround cascade mapping — Coming soon</option>
+                    <option>📋 Policy impact tracker — Coming soon</option>
+                  </select>
+                </div>
+              </div>
+              <p id="organizational-workshop-sync-pod-result" class="organizational-hint" hidden></p>
+              <div>
+                <h2 class="organizational-subheading" id="organizational-workshop-detail-title" style="margin-top:0;"></h2>
+                <p class="organizational-hint" id="organizational-workshop-detail-description"></p>
+              </div>
+
+              <div class="organizational-workshop-rail-row">
+                <nav class="organizational-workshop-rail" id="organizational-workshop-rail">
+                  <button type="button" class="organizational-workshop-rail__link organizational-workshop-rail__link--active" data-organizational-workshop-section="overview">Overview</button>
+                  <button type="button" class="organizational-workshop-rail__link" data-organizational-workshop-section="systems-map">Systems Map</button>
+                  <button type="button" class="organizational-workshop-rail__link" data-organizational-workshop-section="interventions">Interventions</button>
+                  <button type="button" class="organizational-workshop-rail__link" data-organizational-workshop-section="actions">Actions</button>
+                  <button type="button" class="organizational-workshop-rail__link" data-organizational-workshop-section="participants">Participants</button>
+                  <button type="button" class="organizational-workshop-rail__link" data-organizational-workshop-section="discussion">Discussion</button>
+                </nav>
+                <div class="organizational-workshop-rail-content" id="organizational-workshop-rail-content"></div>
+              </div>
+            </section>
+
+          </div>
+
+          <!-- Engagement Tab -->
+          <div id="organizational-organizational-panel-activities" class="organizational-settings-panel" data-organizational-panel="activities" hidden>
+            <section class="organizational-card" style="margin-bottom: 24px;">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 16px 0;">Get involved</h3>
+              <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                <li><a href="#" data-organizational-engagement-tab="members" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 0.5px solid var(--organizational-border-subtle); border-radius: 8px; text-decoration: none; color: var(--organizational-text-primary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0; color: var(--organizational-accent);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span><span style="display:block; font-weight: 600;">Connect with peer orgs</span><span style="display:block; font-size: 0.8125rem; color: var(--organizational-text-secondary);">Browse the member directory.</span></span></a></li>
+                <li><a href="#" data-organizational-engagement-tab="library" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 0.5px solid var(--organizational-border-subtle); border-radius: 8px; text-decoration: none; color: var(--organizational-text-primary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0; color: var(--organizational-accent);"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span><span style="display:block; font-weight: 600;">Access shared resources</span><span style="display:block; font-size: 0.8125rem; color: var(--organizational-text-secondary);">Templates, policies and guides.</span></span></a></li>
+                <li><a href="#" data-organizational-engagement-tab="workshop" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 0.5px solid var(--organizational-border-subtle); border-radius: 8px; text-decoration: none; color: var(--organizational-text-primary);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0; color: var(--organizational-accent);"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span><span style="display:block; font-weight: 600;">Join working groups</span><span style="display:block; font-size: 0.8125rem; color: var(--organizational-text-secondary);">Take part in a workshop project.</span></span></a></li>
+              </ul>
+            </section>
+
+            <section class="organizational-card">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 16px 0;">Resources</h3>
+              <div id="organizational-engagement-resources" style="display: grid; gap: 12px;">
+                <p class="organizational-empty">Loading resources…</p>
+              </div>
+            </section>
+          </div>
+
+          <!-- Library Tab -->
+          <div id="organizational-organizational-panel-library" class="organizational-settings-panel" data-organizational-panel="library" hidden>
+            <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+              <button type="button" class="organizational-btn" id="organizational-library-subtab-cooperative" data-organizational-library-subtab="cooperative">Cooperative</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-library-subtab-management" data-organizational-library-subtab="management">Organization</button>
+            </div>
+
+            <!-- Cooperative sub-tab: workshop-organized library -->
+            <div id="organizational-library-subpanel-cooperative" data-organizational-library-subpanel="cooperative">
+              <div id="organizational-work-library-list">
+                <p class="organizational-empty">Loading cooperative work library…</p>
+              </div>
+            </div>
+
+            <!-- Management sub-tab: org-management library + submissions -->
+            <div id="organizational-library-subpanel-management" data-organizational-library-subpanel="management" hidden>
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 8px;">Pending submissions</h3>
+              <p class="organizational-hint" style="margin: 0 0 12px;">Contribute to the shared library: propose a new item or an edit, and the cooperative reviews it.</p>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-library-propose-btn" style="margin-bottom: 16px;">Propose a change</button>
+              <div id="organizational-library-submissions-list">
+                <p class="organizational-empty">Loading pending submissions…</p>
+              </div>
+              <div id="organizational-library-list" style="margin-top: 32px;">
+                <p class="organizational-empty">Loading library…</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Members Tab -->
+          <div id="organizational-organizational-panel-members" class="organizational-settings-panel" data-organizational-panel="members" hidden>
+            <div id="organizational-members-list">
+              <p class="organizational-empty">Loading member directory…</p>
+            </div>
+          </div>
+
+          <!-- Work Pool Tab -->
+          <div id="organizational-organizational-panel-work-pool" class="organizational-settings-panel" data-organizational-panel="work-pool" hidden>
+            <!-- Section A: Your org's posted needs -->
+            <section class="organizational-card" style="margin-bottom: 24px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 1rem; font-weight: 600; margin: 0;">Your organization's posted needs</h3>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-work-post-btn">Post a work need</button>
+              </div>
+              <div id="organizational-work-mine-list">
+                <p class="organizational-empty">Your organization hasn't posted any work needs yet.</p>
+              </div>
+            </section>
+
+            <!-- Section B: Cooperative work pool activity -->
+            <section class="organizational-card">
+              <h3 style="font-size: 1rem; font-weight: 600; margin: 0 0 16px 0;">Cooperative work pool activity</h3>
+              <div style="margin-bottom: 16px;">
+                <span class="organizational-badge organizational-badge--tag"><span class="organizational-badge-dot" style="background:#f59e0b;"></span>Coming soon — fulfillment via cooperative worker pool</span>
+              </div>
+              <div id="organizational-work-pool-list">
+                <p class="organizational-empty">Loading work pool activity…</p>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Work Request Modal -->
+  <div id="organizational-work-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-work-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-work-modal-title">Post a work need</h3>
+      <form id="organizational-work-form">
+        <input type="hidden" id="organizational-work-edit-id" value="">
+
+        <label for="organizational-work-category">Work category</label>
+        <select id="organizational-work-category" required>
+          <option value="">Select category</option>
+          <option value="bookkeeping">Bookkeeping</option>
+          <option value="grant_writing">Grant writing</option>
+          <option value="990_prep">990 preparation</option>
+          <option value="board_reporting">Board reporting</option>
+          <option value="financial_analysis">Financial analysis</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="organizational-work-title">Title</label>
+        <input id="organizational-work-title" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-work-description">Description</label>
+        <textarea id="organizational-work-description" rows="4" required maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <label for="organizational-work-hours">Hours estimate</label>
+        <input id="organizational-work-hours" type="number" required min="0.5" step="0.5" autocomplete="off">
+
+        <label for="organizational-work-needed-by">Needed by (optional)</label>
+        <input id="organizational-work-needed-by" type="date" autocomplete="off">
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-work-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-work-save">Post</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Propose Library Change Modal -->
+  <div id="organizational-library-propose-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-library-propose-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-library-propose-modal-title">Propose a change</h3>
+      <form id="organizational-library-propose-form">
+        <label for="organizational-library-propose-target">Editing an existing item? (optional)</label>
+        <select id="organizational-library-propose-target">
+          <option value="">— Propose a new item —</option>
+        </select>
+
+        <label for="organizational-library-propose-category">Category</label>
+        <select id="organizational-library-propose-category" required>
+          <option value="">Select category</option>
+          <option value="chart_of_accounts">Chart of Accounts</option>
+          <option value="templates_financial_reports">Financial Report Templates</option>
+          <option value="templates_grants">Grant Templates</option>
+          <option value="templates_board_materials">Board Materials</option>
+          <option value="policy_examples">Policy Examples</option>
+          <option value="methods_notes">Methods & Notes</option>
+        </select>
+
+        <label for="organizational-library-propose-title">Title</label>
+        <input id="organizational-library-propose-title" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-library-propose-description">Description</label>
+        <input id="organizational-library-propose-description" type="text" required maxlength="500" autocomplete="off">
+
+        <label for="organizational-library-propose-body">Content (Markdown)</label>
+        <textarea id="organizational-library-propose-body" rows="8" required style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-library-propose-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-library-propose-save">Submit for approval</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Propose Workshop Modal -->
+  <div id="organizational-workshop-propose-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-workshop-propose-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-workshop-propose-modal-title">Propose a workshop</h3>
+      <p class="organizational-hint" style="margin-top:-8px;">Invite-only for now — you'll be the convener, and it's visible only to you until you add members.</p>
+      <form id="organizational-workshop-propose-form">
+        <label for="organizational-workshop-propose-name">Name</label>
+        <input id="organizational-workshop-propose-name" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-workshop-propose-description">Description</label>
+        <textarea id="organizational-workshop-propose-description" rows="4" maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <label for="organizational-workshop-propose-turnarounds">Turnarounds (optional — ctrl/cmd-click to select more than one)</label>
+        <select id="organizational-workshop-propose-turnarounds" multiple size="5" style="width:100%; padding: 6px; margin-bottom: 12px;">
+          <option value="energy">Energy</option>
+          <option value="food">Food systems</option>
+          <option value="inequality">Inequality</option>
+          <option value="poverty">Poverty</option>
+          <option value="womens_empowerment">Women's empowerment</option>
+        </select>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-workshop-propose-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-workshop-propose-save">Create workshop</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Intervention Modal -->
+  <div id="organizational-intervention-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-intervention-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-intervention-modal-title">Propose an intervention</h3>
+      <form id="organizational-intervention-form">
+        <label for="organizational-intervention-title">Title</label>
+        <input id="organizational-intervention-title" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-intervention-description">Description</label>
+        <textarea id="organizational-intervention-description" rows="4" maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div style="margin: 4px 0 20px;">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-intervention-suggest-btn" style="padding: 6px 12px; font-size: 0.8125rem;">✨ Not sure? Suggest leverage level, turnarounds &amp; effect estimate</button>
+          <div id="organizational-intervention-suggest-result" style="display:none; margin-top: 10px; padding: 10px 12px; background: var(--organizational-surface-page); border-radius: 8px; font-size: 0.8125rem;"></div>
+        </div>
+
+        <label for="organizational-intervention-leverage">Leverage level (Meadows hierarchy)</label>
+        <select id="organizational-intervention-leverage" required>
+          <option value="">Select a leverage level</option>
+          <option value="12">12 — Numbers (least leverage)</option>
+          <option value="11">11 — Buffers and stocks</option>
+          <option value="10">10 — Material flow structure</option>
+          <option value="9">9 — Delays</option>
+          <option value="8">8 — Balancing feedbacks</option>
+          <option value="7">7 — Reinforcing feedbacks</option>
+          <option value="6">6 — Information flows</option>
+          <option value="5">5 — Rules</option>
+          <option value="4">4 — Self-organization</option>
+          <option value="3">3 — Goals</option>
+          <option value="2">2 — Paradigm</option>
+          <option value="1">1 — Transcending paradigms (most leverage)</option>
+        </select>
+
+        <label for="organizational-intervention-turnarounds">Turnarounds (ctrl/cmd-click to select more than one)</label>
+        <select id="organizational-intervention-turnarounds" multiple size="5" style="width:100%; padding: 6px; margin-bottom: 12px;">
+          <option value="energy">Energy</option>
+          <option value="food">Food systems</option>
+          <option value="inequality">Inequality</option>
+          <option value="poverty">Poverty</option>
+          <option value="womens_empowerment">Women's empowerment</option>
+        </select>
+
+        <label for="organizational-intervention-effect">Effect estimate</label>
+        <textarea id="organizational-intervention-effect" rows="3" maxlength="2000" placeholder="Your judgment call — how much difference could this realistically make, and what's uncertain about it?" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-intervention-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-intervention-save">Propose intervention</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/library-shared.js" defer></script>
+  <script src="/organizational/js/cooperative.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

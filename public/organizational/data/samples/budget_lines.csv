@@ -1,0 +1,85 @@
+fiscal_year,month,account_code,program_code,activity_code,grant_code,amount,notes
+2026,1,4000,P01,,G-NSF-01,5000,Revenue projection
+2026,2,4000,P01,,G-NSF-01,5500,Revenue projection
+2026,3,4000,P01,,G-NSF-01,6000,Revenue projection
+2026,4,4000,P01,,G-NSF-01,5800,Revenue projection
+2026,5,4000,P01,,G-NSF-01,6200,Revenue projection
+2026,6,4000,P01,,G-NSF-01,6500,Revenue projection
+2026,7,4000,P01,,,5000,Revenue projection
+2026,8,4000,P01,,,5200,Revenue projection
+2026,9,4000,P01,,,5400,Revenue projection
+2026,10,4000,P01,,,5600,Revenue projection
+2026,11,4000,P01,,,5300,Revenue projection
+2026,12,4000,P01,,,5100,Revenue projection
+2026,1,5000,P01,,G-NSF-01,3000,Individual donations
+2026,2,5000,P01,,G-NSF-01,3200,Individual donations
+2026,3,5000,P01,,G-NSF-01,3400,Individual donations
+2026,4,5000,P01,,G-NSF-01,3100,Individual donations
+2026,5,5000,P01,,G-NSF-01,3500,Individual donations
+2026,6,5000,P01,,G-NSF-01,3800,Individual donations
+2026,7,5000,P01,,,2500,Individual donations
+2026,8,5000,P01,,,2700,Individual donations
+2026,9,5000,P01,,,2900,Individual donations
+2026,10,5000,P01,,,3100,Individual donations
+2026,11,5000,P01,,,3000,Individual donations
+2026,12,5000,P01,,,3200,Individual donations
+2026,1,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,2,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,3,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,4,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,5,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,6,6000,P01,,G-NSF-01,8000,Program staff salaries
+2026,7,6000,P01,,,8000,Program staff salaries
+2026,8,6000,P01,,,8000,Program staff salaries
+2026,9,6000,P01,,,8000,Program staff salaries
+2026,10,6000,P01,,,8000,Program staff salaries
+2026,11,6000,P01,,,8000,Program staff salaries
+2026,12,6000,P01,,,8000,Program staff salaries
+2026,1,6100,P04,,G-UNITED-02,4500,Admin salaries
+2026,2,6100,P04,,G-UNITED-02,4500,Admin salaries
+2026,3,6100,P04,,G-UNITED-02,4500,Admin salaries
+2026,4,6100,P04,,,4500,Admin salaries
+2026,5,6100,P04,,,4500,Admin salaries
+2026,6,6100,P04,,,4500,Admin salaries
+2026,7,6100,P04,,,4500,Admin salaries
+2026,8,6100,P04,,,4500,Admin salaries
+2026,9,6100,P04,,,4500,Admin salaries
+2026,10,6100,P04,,,4500,Admin salaries
+2026,11,6100,P04,,,4500,Admin salaries
+2026,12,6100,P04,,,4500,Admin salaries
+2026,1,6150,P04,,G-UNITED-02,1200,Payroll taxes and benefits
+2026,2,6150,P04,,G-UNITED-02,1200,Payroll taxes and benefits
+2026,3,6150,P04,,G-UNITED-02,1200,Payroll taxes and benefits
+2026,4,6150,P04,,,1200,Payroll taxes and benefits
+2026,5,6150,P04,,,1200,Payroll taxes and benefits
+2026,6,6150,P04,,,1200,Payroll taxes and benefits
+2026,7,6150,P04,,,1200,Payroll taxes and benefits
+2026,8,6150,P04,,,1200,Payroll taxes and benefits
+2026,9,6150,P04,,,1200,Payroll taxes and benefits
+2026,10,6150,P04,,,1200,Payroll taxes and benefits
+2026,11,6150,P04,,,1200,Payroll taxes and benefits
+2026,12,6150,P04,,,1200,Payroll taxes and benefits
+2026,1,6500,P02,,,2500,Office rent
+2026,2,6500,P02,,,2500,Office rent
+2026,3,6500,P02,,,2500,Office rent
+2026,4,6500,P02,,,2500,Office rent
+2026,5,6500,P02,,,2500,Office rent
+2026,6,6500,P02,,,2500,Office rent
+2026,7,6500,P02,,,2500,Office rent
+2026,8,6500,P02,,,2500,Office rent
+2026,9,6500,P02,,,2500,Office rent
+2026,10,6500,P02,,,2500,Office rent
+2026,11,6500,P02,,,2500,Office rent
+2026,12,6500,P02,,,2500,Office rent
+2026,1,6600,P04,,G-UNITED-02,800,Software and IT
+2026,2,6600,P04,,G-UNITED-02,800,Software and IT
+2026,3,6600,P04,,G-UNITED-02,800,Software and IT
+2026,4,6600,P04,,,800,Software and IT
+2026,5,6600,P04,,,800,Software and IT
+2026,6,6600,P04,,,800,Software and IT
+2026,7,6600,P04,,,800,Software and IT
+2026,8,6600,P04,,,800,Software and IT
+2026,9,6600,P04,,,800,Software and IT
+2026,10,6600,P04,,,800,Software and IT
+2026,11,6600,P04,,,800,Software and IT
+2026,12,6600,P04,,,800,Software and IT

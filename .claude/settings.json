@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql -U:*)",
+      "Bash(pm2 logs causal-app --lines 5 --nostream)",
+      "Bash(node -e \"require\\(''./ai-service.js''\\); console.log\\(''✅ ai-service loads OK''\\)\")",
+      "Bash(pm2 logs causal-app --lines 4 --nostream)",
+      "Bash(curl -s -X POST http://localhost:3000/inbound -H \"Content-Type: application/json\" -d '{:*)",
+      "Bash(pm2 logs causal-app --lines 20 --nostream)",
+      "Bash(pm2 restart causal-app)",
+      "Bash(mkdir -p /root/causal-app/.claude/plans)",
+      "Bash(cp /root/.claude/plans/eager-gathering-giraffe.md /root/causal-app/.claude/plans/2026-08-15-multiyear-cashflow-balance-sheet.md)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // \"\"'); echo \"$f\" | grep -q '/server/' && pm2 restart causal-app && pm2 status || true",
+            "timeout": 15,
+            "statusMessage": "Restarting server..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Pod Management — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div class="organizational-workspace-main" style="margin-left: 0;">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+
+        <h1 class="organizational-org-dashboard-title">Pod Management</h1>
+        <p class="organizational-hint" style="margin-top: -8px;">Platform-wide view of every organization's Solid pod status. Not scoped to a single organization — visible to platform admins only.</p>
+
+        <section class="organizational-card" style="margin: 20px 0 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <p class="organizational-hint" style="margin: 0;">Runs a sync for every organization that already has a pod provisioned, one at a time.</p>
+            <button type="button" class="organizational-btn" id="pod-mgmt-sync-all-btn">Sync all</button>
+          </div>
+          <p id="pod-mgmt-sync-all-result" class="organizational-hint" style="margin: 12px 0 0;" hidden></p>
+        </section>
+
+        <section class="organizational-card">
+          <div id="pod-mgmt-table">
+            <p class="organizational-empty">Loading…</p>
+          </div>
+        </section>
+
+        <h2 style="margin: 28px 0 8px; font-size: 1.125rem;">Coop pod</h2>
+        <p class="organizational-hint" style="margin-top: -4px;">A separate, singleton pod for genuinely coop-owned content with no single owning org — the shared library only, not per-workshop output (that stays in the creating org's own pod).</p>
+        <section class="organizational-card" style="margin-top: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <span id="pod-mgmt-coop-status" style="font-weight: 600;">Loading…</span>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="organizational-btn organizational-btn-outline" id="pod-mgmt-coop-provision-btn" hidden>Provision coop pod</button>
+              <button type="button" class="organizational-btn" id="pod-mgmt-coop-sync-btn" hidden>Sync library</button>
+            </div>
+          </div>
+          <p id="pod-mgmt-coop-result" class="organizational-hint" style="margin: 12px 0 0;" hidden></p>
+        </section>
+
+        <h2 style="margin: 28px 0 8px; font-size: 1.125rem;">Causal sync/fetch service</h2>
+        <p class="organizational-hint" style="margin-top: -4px;">Causal's own stable identity that automated sync and document downloads act as — a single, platform-wide account, provisioned once. Each org explicitly gives (and can revoke) it a scoped permission on its own pod from its Solid Pod page; this identity holds no standing access on its own.</p>
+        <section class="organizational-card" style="margin-top: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <span id="pod-mgmt-sync-service-status" style="font-weight: 600;">Loading…</span>
+            <button type="button" class="organizational-btn organizational-btn-outline" id="pod-mgmt-sync-service-provision-btn" hidden>Provision sync service</button>
+          </div>
+          <p id="pod-mgmt-sync-service-result" class="organizational-hint" style="margin: 12px 0 0;" hidden></p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/pod-management.js" defer></script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

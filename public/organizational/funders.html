@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="grants">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Funders | Grants</h1>
+
+          <div class="organizational-tabs" id="organizational-funders-workspace-tabs">
+            <button type="button" class="organizational-tab active" data-section="grants">Grants</button>
+            <button type="button" class="organizational-tab" data-section="donors">Contributions</button>
+          </div>
+
+          <!-- Grants tab -->
+          <div id="organizational-funders-tab-grants">
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:flex-end;">
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-grant-add">+ Add grant</button>
+                  <div style="position:relative;display:inline-flex;align-items:center;gap:4px;">
+                    <a href="/organizational/data/templates/grants.template.csv" download="grants-import-template.csv" class="organizational-btn organizational-btn-outline" style="font-size:0.8125rem;">Download template</a>
+                    <button type="button" id="organizational-template-help-btn" title="Field guidance" style="background:none;border:1px solid var(--border);border-radius:50%;width:18px;height:18px;font-size:0.7rem;cursor:pointer;color:var(--text-secondary);line-height:1;padding:0;flex:none;">?</button>
+                    <div id="organizational-template-help" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-size:0.8125rem;box-shadow:var(--shadow-lg);z-index:200;line-height:1.5;">
+                      <strong>status</strong> — prospect · applied · awarded · declined · closed<br>
+                      <strong>type</strong> — restricted · unrestricted · temporarily_restricted<br>
+                      <strong>institution_type</strong> — Private Foundation · Government · Corporate · Community Foundation · Individual<br>
+                      <strong>forecast_amount</strong> — likelihood-adjusted number used for budget planning<br>
+                      <strong>Dates</strong> — YYYY-MM-DD format<br>
+                      <strong>grant_code</strong> — auto-assigned if left blank
+                    </div>
+                  </div>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-grant-import-btn" style="font-size:0.8125rem;">Import CSV</button>
+                  <input type="file" id="organizational-grant-import-file" accept=".csv" style="display:none;">
+                </div>
+                <p style="font-size:0.78rem;color:var(--text-secondary);margin:0;">fill out the template or upload your existing grant file</p>
+              </div>
+            </div>
+            <section class="organizational-card organizational-card-flush">
+              <div id="organizational-grants-filter-bar" style="padding:8px 16px;display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--border);">
+                <input type="search" id="organizational-filter-search" class="organizational-input" placeholder="Search…" style="width:140px;min-width:0;flex:none;font-size:0.8125rem;padding:4px 7px;">
+                <select id="organizational-filter-status" class="organizational-input" style="width:130px;min-width:0;flex:none;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="">All statuses</option>
+                  <option value="prospect">Prospect</option>
+                  <option value="applied">Applied</option>
+                  <option value="awarded">Awarded</option>
+                  <option value="declined">Declined</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select id="organizational-filter-type" class="organizational-input" style="width:150px;min-width:0;flex:none;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="">All grant types</option>
+                  <option value="restricted">Restricted</option>
+                  <option value="unrestricted">Unrestricted</option>
+                  <option value="temporarily_restricted">Temp. restricted</option>
+                </select>
+                <select id="organizational-filter-inst" class="organizational-input" style="width:150px;min-width:0;flex:none;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="">All institutions</option>
+                </select>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table organizational-grants-table" aria-label="Grants">
+                  <thead>
+                    <tr>
+                      <th data-sort-col="funder" style="cursor:pointer;user-select:none;white-space:nowrap;">Funder <span class="organizational-sort-icon" data-sort-icon="funder">⇅</span></th>
+                      <th class="organizational-grants-col-secondary" data-sort-col="institution_type" style="cursor:pointer;user-select:none;white-space:nowrap;">Institution <span class="organizational-sort-icon" data-sort-icon="institution_type">⇅</span></th>
+                      <th data-sort-col="name" style="cursor:pointer;user-select:none;white-space:nowrap;">Grant <span class="organizational-sort-icon" data-sort-icon="name">⇅</span></th>
+                      <th data-sort-col="amount" style="cursor:pointer;user-select:none;white-space:nowrap;">Award <span class="organizational-sort-icon" data-sort-icon="amount">⇅</span></th>
+                      <th class="organizational-grants-col-secondary">Requested</th>
+                      <th class="organizational-grants-col-secondary" data-sort-col="forecast_amount" style="cursor:pointer;user-select:none;white-space:nowrap;">Forecast <span class="organizational-sort-icon" data-sort-icon="forecast_amount">⇅</span></th>
+                      <th class="organizational-grants-col-secondary">Program</th>
+                      <th class="organizational-grants-col-secondary">Type</th>
+                      <th class="organizational-grants-col-secondary">Period</th>
+                      <th data-sort-col="status" style="cursor:pointer;user-select:none;white-space:nowrap;">Status <span class="organizational-sort-icon" data-sort-icon="status">⇅</span></th>
+                      <th>Next report</th>
+                      <th class="organizational-grants-col-secondary">Report</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-grants-tbody">
+                    <tr class="organizational-table-empty">
+                      <td colspan="12">No grants yet. Add a grant or sync from your accounting tool when available.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p id="organizational-grants-freshness" class="organizational-data-freshness" style="padding:6px 16px;margin:0;" hidden></p>
+            </section>
+
+          </div>
+
+          <!-- Donors tab -->
+          <div id="organizational-funders-tab-donors" hidden>
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:flex-end;">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="/organizational/data/templates/constituents.template.csv" download="funders-import-template.csv" class="organizational-btn organizational-btn-outline" style="font-size:0.8125rem;">Download template</a>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-constituents-import-btn" style="font-size:0.8125rem;">Import CSV</button>
+                <input type="file" id="organizational-constituents-import-file" accept=".csv" style="display:none;">
+                <button type="button" class="organizational-btn" id="organizational-funder-add">+ New donor</button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0 4px;">
+              <input type="search" id="organizational-donors-search" class="organizational-input" placeholder="Search donors…" style="width:180px;">
+              <button type="button" class="organizational-btn organizational-btn-outline organizational-type-filter active" data-type="all">All</button>
+              <button type="button" class="organizational-btn organizational-btn-outline organizational-type-filter" data-type="individual">Individuals</button>
+              <button type="button" class="organizational-btn organizational-btn-outline organizational-type-filter" data-type="board">Board</button>
+              <button type="button" class="organizational-btn organizational-btn-outline organizational-type-filter" data-type="prospect">Prospects</button>
+              <input type="search" id="organizational-tag-filter" class="organizational-input" placeholder="Tag filter…" style="width:130px;" list="organizational-tag-datalist">
+              <datalist id="organizational-tag-datalist"></datalist>
+              <a id="organizational-export-csv-link" href="#" download class="organizational-btn organizational-btn-outline" style="font-size:0.8125rem;">Export CSV</a>
+            </div>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Donors">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Total given</th>
+                      <th>Last gift</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-donors-tbody">
+                    <tr class="organizational-table-empty">
+                      <td colspan="5">No donors yet. Add a donor to get started.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Auto-map import modal -->
+  <div id="organizational-automap-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1100;overflow-y:auto;padding:40px 16px;">
+    <div style="background:#fff;border-radius:8px;max-width:760px;margin:0 auto;padding:28px 32px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;font-size:1.05rem;font-weight:700;">Map your CSV columns</h3>
+        <button type="button" id="organizational-automap-close" style="background:none;border:none;font-size:1.25rem;cursor:pointer;color:var(--text-secondary);">✕</button>
+      </div>
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 18px;">We detected your column headers below. Match each one to a grant field, or leave it as <em>Skip</em>.</p>
+      <div id="organizational-automap-table-wrap" style="overflow-x:auto;"></div>
+      <div id="organizational-automap-status" style="margin-top:14px;font-size:0.85rem;color:var(--text-secondary);"></div>
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-automap-cancel">Cancel</button>
+        <button type="button" class="organizational-btn" id="organizational-automap-confirm">Import mapped data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grants sliding panel overlay -->
+  <div id="organizational-grants-panel-overlay" class="organizational-panel-overlay"></div>
+
+  <!-- Grant detail / allocation panel -->
+  <aside id="organizational-grant-panel" class="organizational-grant-panel" aria-label="Grant details">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-grants-panel-title">Grant</h3>
+      <button type="button" id="organizational-grants-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-grants-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-grants-panel-body"></div>
+  </aside>
+
+  <!-- Donors sliding panel overlay -->
+  <div id="organizational-donors-panel-overlay" class="organizational-panel-overlay"></div>
+
+  <!-- Funder detail panel -->
+  <aside id="organizational-donor-panel" class="organizational-grant-panel" aria-label="Funder details">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-donors-panel-title">Funder</h3>
+      <button type="button" id="organizational-donors-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-donors-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-donors-panel-body"></div>
+  </aside>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/grants.js" defer></script>
+  <script src="/organizational/js/donors.js" defer></script>
+  <script src="/organizational/js/donors-import.js" defer></script>
+  <script src="/organizational/js/funders-workspace.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+-- no-op: duplicate of 079_volunteer_opportunities.sql
+-- Table was created by 079 with IF NOT EXISTS and stronger constraints
+-- (NOT NULL on submitted_by_user_id, updated_at column, CASCADE delete).
+-- This file is intentionally empty to avoid re-apply errors.

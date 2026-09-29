@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+
+  <main class="organizational-workspace">
+    <p id="organizational-org-error" class="organizational-error" hidden></p>
+
+    <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+    <div id="organizational-org-dashboard" hidden>
+      <div id="organizational-onboarding-banner" class="organizational-onboarding-banner" hidden>
+        <a id="organizational-onboarding-banner-link" href="#">Finish setting up your workspace →</a>
+      </div>
+      <h1 class="organizational-org-dashboard-title" id="organizational-org-title">—</h1>
+      <nav class="organizational-subnav" aria-label="Organization sections">
+        <a class="organizational-nav-link active" id="organizational-nav-dashboard" href="#">Dashboard</a>
+        <a class="organizational-nav-link" id="organizational-nav-budget" href="#">Budget</a>
+        <a class="organizational-nav-link" id="organizational-nav-grants" href="#">Grants</a>
+        <a class="organizational-nav-link" id="organizational-nav-reports" href="#">Reports</a>
+      </nav>
+
+      <div class="organizational-section-title">Overview</div>
+      <div class="home-stat-row" aria-label="Financial summary">
+        <div class="home-stat-tile">
+          <div class="home-stat-value" id="organizational-m-runway">0 mo</div>
+          <div class="home-stat-label">Months of cash</div>
+        </div>
+        <div class="home-stat-tile">
+          <div class="home-stat-value" id="organizational-m-revenue">$0</div>
+          <div class="home-stat-label">Revenue YTD</div>
+        </div>
+        <div class="home-stat-tile">
+          <div class="home-stat-value" id="organizational-m-expenses">$0</div>
+          <div class="home-stat-label">Expenses YTD</div>
+        </div>
+        <div class="home-stat-tile">
+          <div class="home-stat-value" id="organizational-m-grants">0</div>
+          <div class="home-stat-label">Active grants</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/org.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+</body>
+</html>

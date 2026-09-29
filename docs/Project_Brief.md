@@ -1,0 +1,117 @@
+# Causal — Project Brief
+
+*Editable source for the content that renders live at `public/shared/project-brief/` (`#project-brief`). Edit here; mirror changes back into that HTML page so the two don't drift.*
+
+Causal is creating tooling for groups to launch and run their own platform cooperatives. Most software available to nonprofits and grassroots groups is rented from vendors with no stake in their mission, and the records inside it live in the vendor's database. Causal aims to replace that arrangement with shared infrastructure that the groups own and govern themselves. Causal itself is an initiative, not a cooperative. The groups that adopt the tooling form and govern their own.
+
+The organizations it serves are any nonprofits, or coalitions forming around collaborative work and common needs. That includes climate action, civic action, social work, cultural work, and other fields. What they share is a common set of operational needs, and shared work they want to do together.
+
+The shift from rented software to shared ownership rests on three changes:
+
+- **Data sovereignty** — Each organization holds full control of its own records. Documents live in the organization's own Solid pod, not only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw.
+- **Common needs framework** — The management tools (budgeting, grants, accounting, compliance) are built around the operational needs nonprofits share, so groups work from common structures instead of each improvising their own. Every organization's instance is completely private to it.
+- **Cooperative structure** — Collaboration happens in Workshop and the shared cooperative resources: the peer network, the work library, and the work pool. The organizations that use the tools shape those resources and, over time, help govern the platform. They are not a customer base a vendor draws revenue from.
+
+This is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure. That is how Causal itself is being built.
+
+The current live build has two parts. **Cooperative** is the sector-neutral operational core. **Agency** is the first instance built on it, for grassroots advocacy and climate action. Agency shows what the underlying infrastructure produces when it is worked out fully within one field: it connects individual decision-making to leverage points and system-level intervention models grounded in these frameworks.
+
+## The Operational Model
+
+Every instance running on Causal draws from one architecture, split into core infrastructure that any group can adapt and field-specific applications built on top of it.
+
+### Cooperative (Platform Core)
+
+Nothing in Cooperative's core modules requires advocacy, climate, or political content. Any collective, fiscal sponsor, or community organization can use it to run its day-to-day operations:
+
+- **Workshop** — A collaborative workspace for mapping systemic problems, organizing projects, sharing documents, and modeling interventions. Still developing, and not yet reviewed by a systems-change practitioner.
+- **Peer Network & Work Pool** — A directory of participating organizations, a shared knowledge library, and work-request exchange across organizations.
+- **Budget, Funders & Accounting** — Multi-program budgeting, grant allocations, donor tracking, and projections, alongside an internal accounting ledger with bills, invoices, bank reconciliation, expense claims, and fixed assets, plus membership tracking and fiscal sponsorship support. Syncs with Xero for actuals comparison and cashflow forecasting. Each organization's data is private to it.
+- **Compliance & Reporting** — IRS Form 990 functional expense tracking, governance obligations, an audit-readiness check of documents against what an audit will ask for, and board and funder reports.
+- **Roles & access** — Admin, finance, program, and fundraising roles, with program-level scoping enforced in the database, so people see only the budgets and personnel data their role covers.
+
+### Agency (First Instance)
+
+Agency is the platform's first fully worked-out application, and a proof of concept for how Causal's general infrastructure extends into public-facing civic engagement. Its features are a mix of live, scaffolded, and aspirational:
+
+- **Action** — A unified decision feed of actions you can take: petitions, public-comment filings, events, volunteer positions, donations, and bank-divestment steps. Sorted by urgency, location relevance, and system leverage points. You see the organizations you follow, and each action shows which systemic lever it pulls.
+- **Proxies** — Who is representing your interests and what they are doing: federal, state, and local elected officials, financial institutions, and advocacy organizations, based on your settings.
+- **Ledger** — A personal record of completed actions, direct giving, and moved capital such as bank transfers or divestment pledges.
+- **Systems** — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of leverage points.
+
+## How Groups Launch Their Own
+
+The intended rollout is decentralized. A short-term startup team builds and hands over the tooling, rather than becoming a permanent administrative entity. Multiple cooperatives can then adopt it and fork the shared codebase for their own use cases. This also supports more complex structures, such as a worker cooperative serving the needs of a nonprofit cooperative.
+
+A fork is not just a copy of the code. It needs its own mapping onto Earth4All's turnarounds, decided by the people forming around it, with the same rigor Agency applies to planetary boundaries science. Systems thinking alone is a method, not a position: it can organize a supply chain as easily as a movement. What makes an instance trustworthy is that its actions are checked against measures of human wellbeing.
+
+Deciding whether a proposed instance serves the turnarounds, rather than borrowing their language without their substance, is a governance question. A platform agent is meant to recommend whether a proposed instance fits, checked by a human advisory group that grows out of the adopters themselves. The first adopters would be advised by that agent and then take on advising later ones. How advisors are admitted and held accountable is not yet decided.
+
+The design under discussion is that Agency follows organizations from many Cooperative instances and pulls from them, rather than every organization pushing into one shared feed. Which instances and organizations Agency includes would be a curated, human-approved list. This is documented but not built.
+
+## Platform Logic & Intellectual Rigor
+
+In the Agency instance, Earth4All's five turnarounds (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.
+
+Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is rudimentary today and could improve a great deal, ideally with direct input from the groups that produce these frameworks.
+
+The framework has clear limits:
+
+- **Framework boundaries** — Earth4All does not claim completeness by its own account. The Earth Commission, the research body behind planetary boundaries, now frames the boundaries as "safe and just," building distributive and procedural justice into where the lines sit. Dimensions such as racial, colonial, or historical equity sit near the open edge of current models, not fully inside the five turnarounds as originally published.
+- **Sector frameworks** — Other instances rely on equivalent peer-reviewed or field-tested standards for their own field, and can draw on the same underlying logic without surfacing the ecological detail Agency does.
+
+## Core Approach
+
+- **Sovereignty first** — Data ownership belongs to the person and the collective. Documents and choices live in user-controlled stores, not locked inside a central system.
+- **Sector frameworks grounded in evidence** — Every instance uses frameworks grounded in expert research to identify high-leverage interventions for its area.
+- **Systems & leverage dynamics** — Tools use system-dynamics methods to map root causes, locate intervention points, and redirect institutional capital toward mission-aligned outcomes.
+- **Ownership by adopters** — Each group that launches on Causal owns and governs its own platform. Causal supplies the tooling and a starting codebase.
+
+## Technical Stack & Sovereignty
+
+The codebase runs on a Hetzner VPS with Node.js/Express and PostgreSQL, supporting invited demo users and live data. It has these main layers:
+
+- **Relational core** — Multi-tenant PostgreSQL with row-level security hosts organizational budgets, compliance obligations, audit logs, and the internal accounting ledger.
+- **Solid pod sovereignty (underway)** — Each organization can hold its documents in its own self-hosted Solid pod (Community Solid Server), outside Causal's database. Built today: per-document sync with confirmation, scoped and expiring access permissions, standing access groups, a revocable sync service the organization grants and can withdraw, and link sharing for people without a Solid identity that checks the recipient's email with a one-time code before opening the document. A Solid-OIDC login lets a person use their own identity, as a prototype not yet tied to organization roles.
+- **Identity boundary** — Making the organization's own admin, via their own Solid-OIDC identity, the pod's actual controlling account (replacing the service credential the platform currently holds) is a near-term goal, not deferred. Broader identity work — deriving per-member pod permissions from internal roles, and personal pods for individual Agency users — remains longer-range. Pod storage covers organization documents only; budget, compliance, and the rest of Cooperative stay in PostgreSQL, with periodic pod copies planned for live data.
+- **Integrations** — Xero (chart of accounts and profit-and-loss data, with account-name updates written back and nothing more), Plaid bank feeds, Postmark email, and Gemini for turning organization emails into feed cards and reading receipts and contracts. Agency draws on the FEC, Federal Register, and Google Civic Information APIs, ProPublica Nonprofit Explorer for verifying organizations, EIP Oil & Gas Watch for permitting alerts, and Mobilize for local events.
+
+Federal data sources are not guaranteed stable. Nearly 400 US government datasets have been deleted or altered since January 2025, and the platform's dependence on FEC, Federal Register, and Civic Information API data reflects that risk. A citizen-led data rescue movement is archiving public data outside government control, the same instinct behind Causal's approach to data sovereignty.
+
+[GitHub repository](https://github.com/causalworks/causal.works)
+
+## Platform Rollout & Candidate Cohorts
+
+Because the core operational modules are sector-neutral, the infrastructure supports different organizational models across fields:
+
+### 1. Grassroots Climate & Advocacy (Agency Cohort)
+
+The initial deployment scales through grassroots climate groups and advocacy networks, connecting civic action feeds to institutional decision-makers.
+
+### 2. Community Development & Fiscal Sponsorship Networks
+
+A second candidate cohort exists within fiscally-sponsored networks and their partner organizations:
+
+- **Arts & place-based development** — Combining arts, environmental stewardship, and economic development in underserved neighborhoods, requiring flexible program-level budgeting and cross-initiative compliance.
+- **Civic & mutual-aid networks** — A civic-engagement and mutual-aid network operating on a "spoke and wheel" model to connect residents with local civic engagement, a structure that mirrors the Action and Proxies architecture.
+
+### 3. Federated Membership & Legal Advocacy
+
+Institutional leadership experience at federated legal advocacy organizations points to clear infrastructure uses for federated legal networks:
+
+- **Cooperative fit** — High alignment for multi-entity financial tracking, member-dues management, and shared operational compliance across regional chapters.
+- **Agency caution** — Direct civic action tools in sensitive contexts need careful design boundaries. Where the interaction involves government policy rather than elected officials, persistent digital records of immigration-related advocacy carry safety and privacy risks that need tailored security models rather than standard public feeds.
+
+## Unbuilt & Active Development Pipeline
+
+These are active engineering priorities or capabilities not yet built:
+
+- **Pod sync beyond documents** — Generated reports are the next candidate; live data such as budgets would sync as periodic pod copies rather than being removed from Causal's database. Co-owned Workshop content would sync a copy to each participating organization's pod.
+- **Per-user Solid identity tied to roles** — Deriving an individual's pod permissions from their organization role and program scope, and verifying link recipients by Solid identity rather than email.
+- **Agency personal pods** — Extending Solid sovereignty to Agency users' own civic-action records (actions, pledges), held in each person's own pod.
+- **Curated multi-instance feeds and instance governance** — Agency pulling from organizations on more than one Cooperative instance, and the advisory group that vets new instances.
+- **GL & accounting push** — Direct push of draft budget journal entries to general ledger systems (Xero).
+- **Audit-ready schedule reconciliation** — Automated monthly reconciliation between schedule projections and GL actuals.
+- **Agency financial and pledge tools** — Automated card and payee tracking for personal financial positions; aggregated bank and fund divestment pledges; bundled giving apportioned across followed organizations; user-added local and union officials.
+- **Worker cooperative and credit distribution** — Internal work-management and credit-tracking systems for worker cooperatives.
+- **Legislative and lobbying intelligence** — Professional-tier data services (Bloomberg Government, FiscalNote, Quorum), which need legal review of their display licensing before any integration.

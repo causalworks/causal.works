@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="projections">
+  <div id="app-header"></div>
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title">Distribution schedule editor</h1>
+          <section class="organizational-card">
+            <div class="organizational-grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+              <label class="organizational-budget-field"><span class="organizational-hint">Name</span><input id="organizational-alloc-name" type="text"></label>
+              <label class="organizational-budget-field"><span class="organizational-hint">Fiscal year</span><input id="organizational-alloc-fy" type="number" min="2000" max="2200"></label>
+              <label class="organizational-budget-field"><span class="organizational-hint">Total amount</span><input id="organizational-alloc-total" type="number" step="0.01" min="0"></label>
+              <label class="organizational-budget-field"><span class="organizational-hint">Source account id (optional)</span><input id="organizational-alloc-source-account-id" type="number" min="1"></label>
+            </div>
+            <label class="organizational-budget-field" style="margin-top:12px;"><span class="organizational-hint">Description</span><textarea id="organizational-alloc-description" rows="2"></textarea></label>
+            <div style="margin-top:12px;">
+              <label><input type="radio" name="organizational-alloc-dist" value="fixed_percent_by_program" checked> Percentage by program</label>
+              <label style="margin-left:12px;"><input type="radio" name="organizational-alloc-dist" value="fixed_amount_by_program"> Fixed amount by program</label>
+            </div>
+            <div style="margin-top:8px;">
+              <label><input type="radio" name="organizational-alloc-month" value="even" checked> Even across year</label>
+              <label style="margin-left:12px;"><input type="radio" name="organizational-alloc-month" value="monthly_custom"> Custom monthly</label>
+            </div>
+
+            <h3 class="organizational-subheading" style="margin-top:16px;">Program distribution</h3>
+            <div class="organizational-table-wrap">
+              <table class="organizational-table">
+                <thead><tr><th>Program</th><th>Account</th><th>Percent</th><th>Amount</th><th></th></tr></thead>
+                <tbody id="organizational-alloc-lines-tbody"></tbody>
+              </table>
+            </div>
+            <p class="organizational-hint" id="organizational-alloc-lines-sum">Sum: 0%</p>
+            <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-alloc-add-line">+ Add row</button>
+
+            <h3 class="organizational-subheading" style="margin-top:16px;">Monthly distribution</h3>
+            <div id="organizational-alloc-monthly-wrap" hidden>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table">
+                  <thead><tr><th>Month</th><th>Percent</th><th>Amount</th></tr></thead>
+                  <tbody id="organizational-alloc-monthly-tbody"></tbody>
+                </table>
+              </div>
+              <p class="organizational-hint" id="organizational-alloc-monthly-sum">Sum: 0%</p>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;">
+              <button type="button" class="organizational-btn organizational-btn-secondary" id="organizational-alloc-save">Save schedule</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-alloc-delete">Delete schedule</button>
+              <a class="organizational-btn organizational-btn-outline organizational-nav-link" id="organizational-alloc-back" href="#">Back to projections</a>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/allocation-edit.js" defer></script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

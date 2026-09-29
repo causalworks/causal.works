@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Cash Forecast — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="reports">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:8px;">
+            <div>
+              <h1 class="organizational-org-dashboard-title" style="margin-bottom:2px;">Cash forecast</h1>
+              <p class="organizational-hint" style="margin:0;">Rolling window from this month — actual where posted, forecast from budget where not. Same account rows as the budget grid.</p>
+            </div>
+            <a href="#" id="cf-back-link" class="organizational-nav-link" style="color:var(--brand-primary); font-weight:600;">← Reports</a>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label class="organizational-hint" for="cf-months-ahead">Months ahead</label>
+              <select id="cf-months-ahead" class="organizational-input" style="width:90px;">
+                <option value="6">6</option>
+                <option value="12" selected>12</option>
+                <option value="18">18</option>
+                <option value="24">24</option>
+              </select>
+            </div>
+            <div id="cf-legend" class="organizational-hint" style="display:flex; align-items:center; gap:14px;">
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:rgba(180,180,180,0.35); margin-right:4px; vertical-align:middle;"></span>Actual</span>
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:rgba(80,180,80,0.35); margin-right:4px; vertical-align:middle;"></span>Forecast</span>
+            </div>
+            <div style="flex:1;"></div>
+            <span id="cf-sync-note" class="organizational-hint"></span>
+          </div>
+
+          <!-- ── Cash position summary ── -->
+          <section class="organizational-card organizational-card-flush" style="margin-bottom:20px;">
+            <div style="padding:10px 16px; border-bottom:1px solid var(--border); font-weight:600; font-size:var(--text-sm);">Cash position</div>
+            <div class="organizational-table-wrap">
+              <table class="organizational-table organizational-budget-grid organizational-bv-grid" id="cf-cash-table">
+                <thead id="cf-cash-thead"></thead>
+                <tbody id="cf-cash-tbody"><tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ── Account grid ── -->
+          <section class="organizational-card organizational-card-flush">
+            <div style="padding:10px 16px; border-bottom:1px solid var(--border); font-weight:600; font-size:var(--text-sm);">Revenue &amp; expense — actual / forecast</div>
+            <div class="organizational-table-wrap">
+              <table class="organizational-table organizational-budget-grid organizational-bv-grid" id="cf-grid-table">
+                <thead id="cf-grid-thead"></thead>
+                <tbody id="cf-grid-tbody"><tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+        </div><!-- /organizational-org-dashboard -->
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/reports-cash-forecast.js" defer></script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

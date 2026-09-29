@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Solid Identity — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <h1 class="organizational-org-dashboard-title">Your Solid identity</h1>
+        <p class="organizational-hint" style="margin-top: -8px; max-width: 640px;">
+          Log in directly with your own Solid identity — your own account, your own WebID, on Causal's Solid pod server. This is separate from your Causal platform login: everything here happens in your browser only. Your password, access token, and refresh token are never sent to or stored by Causal's servers.
+        </p>
+        <section class="organizational-card" style="max-width: 640px; margin: 16px 0 24px; border-left: 3px solid var(--brand-mid);">
+          <p class="organizational-hint" style="margin: 0;"><strong style="color: var(--text-primary);">This is a working prototype, not yet wired to Causal's permission system.</strong> The login and the resource fetch below are real — a genuine Solid-OIDC handshake and a genuine ACP-scoped request using your own session, not a mock. What isn't built yet: nothing here derives your pod access from your Causal role (Admin/Finance/Program/Fundraising). An org still has to explicitly grant your WebID access first — from that org's Solid Pod page — before anything below can read it.</p>
+        </section>
+
+        <!-- Not logged in -->
+        <section class="organizational-card" id="solid-login-form-section" style="margin: 20px 0 24px;">
+          <h3 style="margin: 0 0 12px;">Log in</h3>
+          <form id="solid-login-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+            <div style="flex: 1 1 320px;">
+              <label for="solid-login-issuer" style="display:block; font-size:0.8125rem; color:var(--text-secondary); margin-bottom:4px;">Identity provider</label>
+              <input id="solid-login-issuer" type="text" required value="https://data.causal.works" style="width:100%; padding:8px 10px; border:0.5px solid var(--border-subtle); border-radius:6px;">
+            </div>
+            <button type="submit" class="organizational-btn" id="solid-login-submit">Log in with Solid</button>
+          </form>
+          <p id="solid-login-error" class="organizational-hint" style="margin: 12px 0 0; color:#ef4444;" hidden></p>
+        </section>
+
+        <!-- Logged in -->
+        <section class="organizational-card" id="solid-session-section" style="margin: 20px 0 24px;" hidden>
+          <h3 style="margin: 0 0 12px;">Signed in</h3>
+          <p class="organizational-hint" style="margin: 0 0 4px;">WebID</p>
+          <p style="margin: 0 0 16px; word-break: break-all;"><a id="solid-session-webid" href="#" target="_blank" rel="noopener"></a></p>
+          <button type="button" class="organizational-btn organizational-btn-outline" id="solid-logout-btn">Log out</button>
+        </section>
+
+        <!-- Test fetch -->
+        <section class="organizational-card" id="solid-test-fetch-section" style="margin: 20px 0 24px;" hidden>
+          <h3 style="margin: 0 0 4px;">Try it: read a resource you've been given access to</h3>
+          <p class="organizational-hint" style="margin: 0 0 12px;">Paste a pod resource URL an org has given your WebID access to (via an individual permission or Access Group, from that org's Solid Pod page) and fetch it using your own signed-in session — not a service credential.</p>
+          <form id="solid-test-fetch-form" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+            <div style="flex: 1 1 400px;">
+              <label for="solid-test-fetch-url" style="display:block; font-size:0.8125rem; color:var(--text-secondary); margin-bottom:4px;">Resource URL</label>
+              <input id="solid-test-fetch-url" type="text" required placeholder="https://data.causal.works/<org-slug>/documents/..." style="width:100%; padding:8px 10px; border:0.5px solid var(--border-subtle); border-radius:6px;">
+            </div>
+            <button type="submit" class="organizational-btn">Fetch</button>
+          </form>
+          <pre id="solid-test-fetch-result" style="margin: 12px 0 0; padding: 12px; background: var(--bg-secondary, #f9f9f9); border-radius: 8px; font-size: 0.8125rem; white-space: pre-wrap; word-break: break-all;" hidden></pre>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/solid-oidc-client.js"></script>
+  <script src="/organizational/js/solid-login.js" defer></script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

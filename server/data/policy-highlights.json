@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "note": "Hand-curated items merged with live Federal Register feed. Replace or trim as live data stabilizes.",
+    "sources": [
+      "https://www.federalregister.gov/reader-aids/developer-resources/rest-api"
+    ]
+  },
+  "items": [
+    {
+      "id": "curated-tsca-reporting-2026",
+      "source": "curated",
+      "title": "TSCA health and safety data reporting — comment extension (EPA)",
+      "agency_summary": "Environmental Protection Agency",
+      "abstract": "EPA extended the reporting deadline for certain chemical health and safety data under TSCA. Public comments were open on the Federal Register notice; use the official docket for the current status.",
+      "comment_close_on": "2026-04-29",
+      "comment_url": "https://www.regulations.gov/document/EPA-HQ-OPPT-2023-0360-0066",
+      "federal_register_url": "https://www.federalregister.gov/documents/2026/03/27/2026-06066/reporting-deadline-extension-for-the-health-and-safety-data-reporting-rule-under-toxic-substance",
+      "document_number": "2026-06066",
+      "turnaround_tag": "environment",
+      "why_it_matters": "Chemical reporting rules shape what communities and workers know about toxics — comment periods are a direct way to weigh in."
+    }
+  ]
+}

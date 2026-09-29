@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Documents — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="documents">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading documents…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Documents</h1>
+          <p class="organizational-hint" style="margin-top: -8px;">Track filed and signed documents your organization is required to keep for audit, tax, and legal purposes — and see what's missing before an audit.</p>
+
+          <div class="organizational-tabs" id="organizational-documents-tabs" style="margin-top: 20px;">
+            <button type="button" class="organizational-tab-trigger active" data-tab="tab-doc-all" id="tab-btn-doc-all">All documents</button>
+            <button type="button" class="organizational-tab-trigger" data-tab="tab-doc-binder" id="tab-btn-doc-binder">Audit binder</button>
+          </div>
+
+          <div id="tab-doc-all" class="organizational-tab-panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin: 16px 0;">
+              <select id="organizational-documents-category-filter">
+                <option value="">All categories</option>
+              </select>
+              <button type="button" class="organizational-btn" id="organizational-documents-upload-btn">Upload document</button>
+            </div>
+            <div id="organizational-documents-list">
+              <p class="organizational-empty">Loading documents…</p>
+            </div>
+          </div>
+
+          <div id="tab-doc-binder" class="organizational-tab-panel" hidden>
+            <div style="display:flex; align-items:center; gap:12px; margin: 16px 0;">
+              <label for="organizational-documents-binder-fy" style="font-size:0.875rem; font-weight:600;">Fiscal year</label>
+              <select id="organizational-documents-binder-fy"></select>
+            </div>
+            <div id="organizational-documents-binder-list">
+              <p class="organizational-empty">Loading audit binder…</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Upload / Edit Document Modal -->
+  <div id="organizational-documents-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-documents-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-documents-modal-title">Upload document</h3>
+      <form id="organizational-documents-form">
+        <input type="hidden" id="organizational-documents-form-id">
+        <input type="hidden" id="organizational-documents-form-mode" value="upload">
+
+        <label for="organizational-documents-form-category">Category</label>
+        <select id="organizational-documents-form-category" required></select>
+
+        <label for="organizational-documents-form-title">Title</label>
+        <input id="organizational-documents-form-title" type="text" maxlength="300" autocomplete="off" placeholder="Defaults to the file name">
+
+        <label for="organizational-documents-form-file">File</label>
+        <input id="organizational-documents-form-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.csv,.doc,.docx,.xls,.xlsx">
+        <p class="organizational-hint" id="organizational-documents-form-file-hint" style="margin-top:-8px;"></p>
+
+        <label for="organizational-documents-form-fiscal-year">Fiscal year</label>
+        <input id="organizational-documents-form-fiscal-year" type="number" min="1900" max="2200" placeholder="e.g. 2025">
+
+        <label for="organizational-documents-form-document-date">Document date</label>
+        <input id="organizational-documents-form-document-date" type="date">
+
+        <label for="organizational-documents-form-expiration-date">Expiration date (if applicable — insurance, registrations)</label>
+        <input id="organizational-documents-form-expiration-date" type="date">
+
+        <label for="organizational-documents-form-retention-class">Retention</label>
+        <select id="organizational-documents-form-retention-class">
+          <option value="permanent">Permanent</option>
+          <option value="fixed_term" selected>Fixed term</option>
+        </select>
+
+        <label for="organizational-documents-form-retention-years" id="organizational-documents-form-retention-years-label">Retain for how many years</label>
+        <input id="organizational-documents-form-retention-years" type="number" min="1" max="100" placeholder="e.g. 7">
+
+        <label for="organizational-documents-form-visibility">Visibility</label>
+        <select id="organizational-documents-form-visibility">
+          <option value="org_all" selected>All org members</option>
+          <option value="admins_only">Admins only</option>
+        </select>
+
+        <label for="organizational-documents-form-notes">Notes</label>
+        <input id="organizational-documents-form-notes" type="text" maxlength="500" autocomplete="off">
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-documents-form-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-documents-form-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Share Document Modal -->
+  <div id="organizational-documents-share-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-documents-share-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-documents-share-title">Share document</h3>
+      <p class="organizational-hint" id="organizational-documents-share-doc-name" style="margin-top:-8px;"></p>
+
+      <div class="organizational-tabs" style="margin: 12px 0;">
+        <button type="button" class="organizational-tab-trigger active" data-share-mode="individual">Individual</button>
+        <button type="button" class="organizational-tab-trigger" data-share-mode="group">Share with group</button>
+      </div>
+
+      <form id="organizational-documents-share-form">
+        <input type="hidden" id="organizational-documents-share-doc-id">
+
+        <label for="organizational-documents-share-recipient">External party (WebID or email)</label>
+        <input id="organizational-documents-share-recipient" type="text" required placeholder="https://... or name@example.com">
+
+        <label for="organizational-documents-share-expires">Expires</label>
+        <input id="organizational-documents-share-expires" type="datetime-local" required>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-documents-share-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-documents-share-submit">Share</button>
+        </div>
+      </form>
+
+      <form id="organizational-documents-share-group-form" hidden>
+        <label for="organizational-documents-share-group-select">Group</label>
+        <select id="organizational-documents-share-group-select" required></select>
+        <p class="organizational-hint" style="margin: 4px 0 0;">This creates an ongoing rule, not a one-time share: the selected group will have access to this document, including anyone added to the group later. Removing someone from the group revokes their access to this document too.</p>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-documents-share-group-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-documents-share-group-submit">Share with group</button>
+        </div>
+      </form>
+
+      <div id="organizational-documents-share-result" style="margin-top:12px;" hidden>
+        <p class="organizational-hint" id="organizational-documents-share-result-label" style="margin: 0 0 6px;">Access given. Copyable link for the recipient:</p>
+        <div id="organizational-documents-share-link-row" style="display:flex; gap:8px;">
+          <input id="organizational-documents-share-link" type="text" readonly style="flex:1; padding:8px 10px; border:0.5px solid var(--border-subtle); border-radius:6px;">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-documents-share-copy">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/documents.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

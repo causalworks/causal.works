@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="compliance">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading compliance dashboard…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Compliance | IRS Form 990</h1>
+
+          <!-- Horizontal tab nav -->
+          <nav class="organizational-subnav" style="margin-top: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 4px; margin-bottom: 0;">
+            <button type="button" class="organizational-nav-link organizational-tab-trigger active" data-tab="tab-990" id="tab-btn-990">IRS Form 990</button>
+            <button type="button" class="organizational-nav-link organizational-tab-trigger" data-tab="tab-obligations" id="tab-btn-obligations">Obligations</button>
+          </nav>
+
+          <!-- ─── Tab: IRS Form 990 ─── -->
+          <div id="tab-990" class="organizational-tab-panel">
+            <div style="display: flex; align-items: flex-start; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin: 20px 0 24px;">
+              <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+                <label for="organizational-990-fy" style="margin: 0; font-size: 0.875rem; font-weight: 600; white-space: nowrap;">Fiscal year</label>
+                <select id="organizational-990-fy" style="padding: 6px 10px; border: 0.5px solid var(--border-subtle); border-radius: 6px; font-size: 0.875rem; background: var(--bg-surface);">
+                  <option value="2026">FY 2026</option>
+                  <option value="2025" selected>FY 2025</option>
+                  <option value="2024">FY 2024</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Accordion: Part IX / Schedule D / Schedule J / Functional Expense Classification —
+                 collapsed by default, one open at a time (toggle990Accordion in compliance.js). -->
+            <div class="organizational-compliance-accordion" style="margin-bottom: 24px;">
+
+              <!-- Part IX: Functional Expenses -->
+              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="part-ix">
+                <button type="button" class="organizational-compliance-accordion-header">
+                  <span class="organizational-compliance-accordion-header-text">
+                    <h3 style="margin: 0 0 4px;">Part IX: Statement of Functional Expenses</h3>
+                    <p class="organizational-hint" style="margin: 0;">How expenses are allocated across Program Services, Management &amp; General, and Fundraising.</p>
+                    <div id="organizational-990-part-ix-meter"></div>
+                  </span>
+                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
+                </button>
+                <div class="organizational-compliance-accordion-body" hidden>
+                  <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+                    <a id="organizational-990-part-ix-csv" href="#" class="organizational-btn organizational-btn-outline" style="font-size: 0.8125rem; padding: 6px 12px; text-decoration: none;" onclick="event.stopPropagation()">Export CSV</a>
+                  </div>
+                  <div id="organizational-990-part-ix">
+                    <p class="organizational-empty">Select a fiscal year to load.</p>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Schedule D Part VI: Fixed Assets -->
+              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="schedule-d">
+                <button type="button" class="organizational-compliance-accordion-header">
+                  <span class="organizational-compliance-accordion-header-text">
+                    <h3 style="margin: 0 0 4px;">Schedule D, Part VI: Land, Buildings &amp; Equipment</h3>
+                    <p class="organizational-hint" style="margin: 0;">Fixed asset cost basis, accumulated depreciation, and book value as of the fiscal year-end balance sheet date.</p>
+                    <div id="organizational-990-schedule-d-meter"></div>
+                  </span>
+                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
+                </button>
+                <div class="organizational-compliance-accordion-body" hidden>
+                  <div id="organizational-990-schedule-d">
+                    <p class="organizational-empty">Select a fiscal year to load.</p>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Schedule J: Compensation -->
+              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="schedule-j">
+                <button type="button" class="organizational-compliance-accordion-header">
+                  <span class="organizational-compliance-accordion-header-text">
+                    <h3 style="margin: 0 0 4px;">Schedule J: Compensation of Officers &amp; Key Employees</h3>
+                    <p class="organizational-hint" style="margin: 0;">Officers, directors, trustees, and key employees with total compensation listed by fiscal year.</p>
+                    <div id="organizational-990-schedule-j-meter"></div>
+                  </span>
+                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
+                </button>
+                <div class="organizational-compliance-accordion-body" hidden>
+                  <div id="organizational-990-schedule-j">
+                    <p class="organizational-empty">Select a fiscal year to load.</p>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Functional Expense Classification editor — moved from Settings' "990 Expense" tab -->
+              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="classify">
+                <button type="button" class="organizational-compliance-accordion-header">
+                  <span class="organizational-compliance-accordion-header-text">
+                    <h3 style="margin: 0 0 4px;">Functional Expense Classification</h3>
+                    <p class="organizational-hint" style="margin: 0;">Split each expense account across Program Services, Management &amp; General, and Fundraising. Values must sum to 100%. Feeds the Part IX card above.</p>
+                  </span>
+                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
+                </button>
+                <div class="organizational-compliance-accordion-body" hidden>
+                  <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                    <label class="organizational-hint" for="organizational-990-classify-fy">Fiscal year</label>
+                    <input type="number" id="organizational-990-classify-fy" class="organizational-input" min="2000" max="2200" step="1" style="width:100px;" aria-label="Fiscal year for functional expense classification" onclick="event.stopPropagation()">
+                    <button type="button" class="organizational-btn organizational-btn-outline" onclick="event.stopPropagation(); load990Classifications()">Load</button>
+                    <a id="organizational-990-csv-link" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;" onclick="event.stopPropagation()">Export CSV</a>
+                  </div>
+                  <div class="organizational-table-wrap">
+                    <table class="organizational-table" aria-label="Functional expense classifications">
+                      <thead>
+                        <tr>
+                          <th>Code</th>
+                          <th>Account</th>
+                          <th>Program Services %</th>
+                          <th>Mgmt &amp; General %</th>
+                          <th>Fundraising %</th>
+                          <th style="text-align:center;">Sum</th>
+                        </tr>
+                      </thead>
+                      <tbody id="organizational-990-classify-tbody">
+                        <tr class="organizational-table-empty"><td colspan="6">Load a fiscal year to begin.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style="margin-top:16px; display:flex; gap:12px; align-items:center;">
+                    <button type="button" class="organizational-btn" id="organizational-990-save" onclick="event.stopPropagation(); save990Classifications()" disabled>Save classifications</button>
+                    <span class="organizational-hint" id="organizational-990-status"></span>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Stub schedules -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;">
+              <section class="organizational-card" style="opacity: 0.7;">
+                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule B: Schedule of Contributors</h3>
+                <p class="organizational-hint" style="margin: 0 0 8px;">Major donors contributing $5,000 or more.</p>
+                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
+              </section>
+              <section class="organizational-card" style="opacity: 0.7;">
+                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule G: Special Events &amp; Activities</h3>
+                <p class="organizational-hint" style="margin: 0 0 8px;">Gross receipts and expenses from fundraising events.</p>
+                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
+              </section>
+              <section class="organizational-card" style="opacity: 0.7;">
+                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule I: Grants to Other Organizations</h3>
+                <p class="organizational-hint" style="margin: 0 0 8px;">Grants and assistance made to other organizations.</p>
+                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
+              </section>
+              <section class="organizational-card" style="opacity: 0.7;">
+                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule O: Supplemental Information</h3>
+                <p class="organizational-hint" style="margin: 0 0 8px;">Additional explanations required by the 990.</p>
+                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
+              </section>
+            </div>
+          </div>
+
+          <!-- ─── Tab: Obligations ─── -->
+          <div id="tab-obligations" class="organizational-tab-panel" hidden>
+            <div class="organizational-compliance-head" style="margin-top: 20px;">
+              <p class="organizational-hint">Your organization's compliance obligations from the cooperative and your own additions.</p>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 24px;">
+              <button type="button" class="organizational-btn" id="organizational-compliance-add-obligation">Add custom obligation</button>
+            </div>
+
+            <!-- Coming up section -->
+            <section class="organizational-card" style="margin-bottom: 24px;">
+              <h3 style="margin: 0 0 16px 0;">Coming up</h3>
+              <div id="organizational-compliance-coming-up">
+                <p class="organizational-empty">Loading…</p>
+              </div>
+            </section>
+
+            <!-- Overdue section -->
+            <section class="organizational-card" style="margin-bottom: 24px; border-left: 4px solid #ef4444;">
+              <h3 style="margin: 0 0 16px 0; color: #ef4444;">Overdue</h3>
+              <div id="organizational-compliance-overdue">
+                <p class="organizational-empty">Loading…</p>
+              </div>
+            </section>
+
+            <!-- All obligations section -->
+            <section class="organizational-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0;">All obligations</h3>
+                <div style="display: flex; gap: 8px;">
+                  <select id="organizational-compliance-filter-category" style="padding: 6px 10px; border: 0.5px solid var(--border-subtle); border-radius: 6px;">
+                    <option value="">All categories</option>
+                    <option value="tax_filing">Tax filing</option>
+                    <option value="state_registration">State registration</option>
+                    <option value="governance">Governance</option>
+                    <option value="fiscal_sponsor_specific">Fiscal sponsor specific</option>
+                    <option value="federal_grants_specific">Federal grants specific</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="corporate_filing">Corporate filing</option>
+                  </select>
+                  <select id="organizational-compliance-filter-source" style="padding: 6px 10px; border: 0.5px solid var(--border-subtle); border-radius: 6px;">
+                    <option value="">All sources</option>
+                    <option value="base_template">From cooperative</option>
+                    <option value="org_extension">Org-specific</option>
+                  </select>
+                  <select id="organizational-compliance-filter-status" style="padding: 6px 10px; border: 0.5px solid var(--border-subtle); border-radius: 6px;">
+                    <option value="">All statuses</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="due_soon">Due soon</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="completed_this_cycle">Completed this cycle</option>
+                    <option value="not_applicable">Not applicable</option>
+                  </select>
+                </div>
+              </div>
+              <div id="organizational-compliance-all">
+                <p class="organizational-empty">Loading…</p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add/Edit Obligation Modal -->
+  <div id="organizational-compliance-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-compliance-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-compliance-modal-title">Add custom obligation</h3>
+      <form id="organizational-compliance-form">
+        <input type="hidden" id="organizational-compliance-edit-id" value="">
+
+        <label for="organizational-compliance-title">Title</label>
+        <input id="organizational-compliance-title" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-compliance-description">Description</label>
+        <textarea id="organizational-compliance-description" rows="3" required maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--border-subtle);border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <label for="organizational-compliance-category">Category</label>
+        <select id="organizational-compliance-category" required>
+          <option value="">Select category</option>
+          <option value="tax_filing">Tax filing</option>
+          <option value="state_registration">State registration</option>
+          <option value="governance">Governance</option>
+          <option value="fiscal_sponsor_specific">Fiscal sponsor specific</option>
+          <option value="federal_grants_specific">Federal grants specific</option>
+          <option value="insurance">Insurance</option>
+          <option value="corporate_filing">Corporate filing</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="organizational-compliance-frequency">Frequency</label>
+        <select id="organizational-compliance-frequency" required>
+          <option value="">Select frequency</option>
+          <option value="annual">Annual</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="monthly">Monthly</option>
+          <option value="one_time">One-time</option>
+          <option value="deadline_driven">Deadline-driven</option>
+        </select>
+
+        <label for="organizational-compliance-due-date">Next due date</label>
+        <input id="organizational-compliance-due-date" type="date" autocomplete="off">
+
+        <label for="organizational-compliance-notes">Notes</label>
+        <textarea id="organizational-compliance-notes" rows="2" maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--border-subtle);border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-compliance-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-compliance-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Obligation Detail Modal -->
+  <div id="organizational-compliance-detail-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-compliance-detail-title" hidden>
+    <div class="organizational-modal organizational-modal-large" onclick="event.stopPropagation()">
+      <h3 id="organizational-compliance-detail-title">—</h3>
+      <div id="organizational-compliance-detail-content"></div>
+      <div class="organizational-modal-actions">
+        <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-compliance-detail-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proposal Prompt Modal -->
+  <div id="organizational-compliance-proposal-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-compliance-proposal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-compliance-proposal-title">Share with the cooperative?</h3>
+      <p style="margin-bottom: 16px;">Would you like to share this obligation with the cooperative for possible inclusion in the shared template?</p>
+      <div class="organizational-modal-actions">
+        <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-compliance-proposal-no">No thanks</button>
+        <button type="button" class="organizational-btn" id="organizational-compliance-proposal-yes">Yes, share it</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/compliance.js?v=5" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

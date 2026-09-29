@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-landing">
+    <p id="organizational-error" class="organizational-error" hidden></p>
+
+    <p class="organizational-landing-eyebrow" id="organizational-landing-eyebrow">Welcome back</p>
+    <h1 class="organizational-landing-heading" id="organizational-landing-heading">—</h1>
+    <p class="organizational-landing-subhead" id="organizational-landing-subhead" hidden></p>
+
+    <section aria-labelledby="organizational-orgs-heading">
+      <h2 id="organizational-orgs-heading" class="visually-hidden">Your workspaces</h2>
+      <div id="organizational-org-list"></div>
+    </section>
+
+    <div class="organizational-landing-actions">
+      <button type="button" class="organizational-btn" id="organizational-create-toggle">+ Create workspace</button>
+      <a class="organizational-landing-manage-link" id="organizational-landing-manage-link" href="/organizational/account">Manage organizations</a>
+    </div>
+    <div id="organizational-create-panel" hidden>
+      <p class="organizational-hint" style="margin:8px 0 12px;">If someone just added you to a workspace, <strong>refresh this page</strong> before creating a new one — duplicate names can collide with an existing URL slug.</p>
+      <section class="organizational-card">
+        <form id="organizational-create-org">
+          <label for="organizational-display-name">Organization name</label>
+          <input id="organizational-display-name" name="display_name" type="text" autocomplete="organization" required maxlength="200" placeholder="e.g. River Valley Food Pantry">
+
+          <label for="organizational-ein">EIN <span class="organizational-label-soft">(optional; required for 990 support)</span></label>
+          <input id="organizational-ein" name="ein" type="text" maxlength="32" placeholder="12-3456789" autocomplete="off">
+
+          <label for="organizational-fy-month">Fiscal year end month</label>
+          <select id="organizational-fy-month" name="fiscal_year_end_month" required aria-required="true">
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3">March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12" selected>December</option>
+          </select>
+          <p class="organizational-hint">We use this for reporting periods and the setup wizard.</p>
+
+          <label for="organizational-slug">URL slug <span class="organizational-label-soft">(optional)</span></label>
+          <input id="organizational-slug" name="slug" type="text" maxlength="128" placeholder="auto from name if empty">
+          <p class="organizational-hint">Lowercase letters, numbers, and hyphens. Used in links and integrations.</p>
+
+          <label for="organizational-org-search">Link to directory org <span class="organizational-label-soft">(optional)</span></label>
+          <input type="hidden" id="organizational-causal-org-id" name="causal_org_id" value="">
+          <input id="organizational-org-search" type="search" autocomplete="off" placeholder="Search by organization name…" maxlength="200">
+          <ul id="organizational-org-results" class="organizational-org-results" hidden></ul>
+          <div id="organizational-org-chip" class="organizational-org-chip" hidden>
+            <span id="organizational-org-chip-label"></span>
+            <button type="button" id="organizational-org-chip-clear" aria-label="Clear linked org">×</button>
+          </div>
+          <p class="organizational-hint">Search the Causal directory by name to link this workspace to an existing org.</p>
+
+          <div class="organizational-actions">
+            <button type="submit" class="organizational-btn" id="organizational-create-submit">Create workspace</button>
+            <button type="button" class="organizational-btn organizational-btn-secondary" id="organizational-create-cancel">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="organizational-landing-divider" role="separator"></div>
+
+    <section class="organizational-landing-sandbox" aria-labelledby="organizational-sandbox-heading">
+      <h2 id="organizational-sandbox-heading" class="visually-hidden">Sandbox</h2>
+      <div class="organizational-section-title">Sandbox</div>
+      <a class="organizational-org-card-link" href="/organizational/o/demo-company/">
+        <div class="organizational-landing-org-row organizational-landing-sandbox-row">
+          <div class="organizational-org-row-main">
+            <div class="organizational-org-name">CommunityOrg</div>
+            <div class="organizational-org-status-line">Explore the platform with sample data — nothing here affects your orgs</div>
+          </div>
+          <div class="organizational-org-row-side">Open →</div>
+        </div>
+      </a>
+    </section>
+
+      </main>
+    </div>
+  </div>
+  <style>
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .organizational-label-soft { font-weight: 400; color: var(--text-secondary); }
+  </style>
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/dashboard.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+    // Load coop overlay
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

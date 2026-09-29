@@ -1,0 +1,309 @@
+<title>The Causal Platform, Explained</title>
+<style>
+  :root{
+    --paper:#eef1ea;
+    --paper-raised:#ffffff;
+    --ink:#1c2622;
+    --ink-soft:#4b5750;
+    --line:#c9d0c3;
+    --accent:#2f6f5e;
+    --accent-soft:#dce9e3;
+    --amber:#b5792f;
+    --amber-soft:#f1e3cd;
+    --violet:#5b4b8a;
+    --violet-soft:#e6e1f2;
+    --blue:#3d6b96;
+    --blue-soft:#dbe6ee;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+      --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+      --violet:#a698d8; --violet-soft:#2a2440; --blue:#7fa8c9; --blue-soft:#1e2c36;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+    --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+    --violet:#a698d8; --violet-soft:#2a2440; --blue:#7fa8c9; --blue-soft:#1e2c36;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"]{
+    --paper:#eef1ea; --paper-raised:#ffffff; --ink:#1c2622; --ink-soft:#4b5750;
+    --line:#c9d0c3; --accent:#2f6f5e; --accent-soft:#dce9e3; --amber:#b5792f; --amber-soft:#f1e3cd;
+    --violet:#5b4b8a; --violet-soft:#e6e1f2; --blue:#3d6b96; --blue-soft:#dbe6ee;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased;}
+
+  .page{max-width:960px; margin:0 auto; padding:56px 24px 96px;}
+
+  header.masthead{border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:40px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin:0 0 12px;}
+  h1{font-family:var(--serif); font-weight:400; font-size:clamp(32px,4.2vw,46px); line-height:1.1; margin:0 0 14px; text-wrap:balance; color:var(--ink);}
+  .dek{font-size:17px; color:var(--ink-soft); max-width:68ch; margin:0;}
+
+  h2{font-family:var(--serif); font-weight:400; font-size:26px; margin:0 0 6px; color:var(--ink);}
+  h2 .num{font-family:var(--mono); font-size:14px; color:var(--ink-soft); margin-right:10px;}
+  .section-intro{color:var(--ink-soft); font-size:15px; margin:0 0 20px; max-width:68ch;}
+
+  section{margin-bottom:56px;}
+  section.lede{margin-bottom:48px;}
+  .lede p{font-size:17px; max-width:70ch;}
+
+  .map-frame{background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:20px; overflow-x:auto;}
+
+  .sitemap-svg{width:100%; height:auto; min-width:720px; display:block;}
+  .sitemap-svg .box{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.3;}
+  .sitemap-svg .box-violet{fill:var(--violet-soft); stroke:var(--violet); stroke-width:1.3; stroke-dasharray:4 3;}
+  .sitemap-svg .box-blue{fill:var(--blue-soft); stroke:var(--blue); stroke-width:1.3;}
+  .sitemap-svg .box-dim{fill:var(--paper); stroke:var(--line); stroke-dasharray:4 3;}
+  .sitemap-svg .title{font-family:var(--sans); font-size:13px; font-weight:600; fill:var(--ink);}
+  .sitemap-svg .subt{font-family:var(--mono); font-size:9.5px; fill:var(--ink-soft);}
+  .sitemap-svg .caption{font-family:var(--mono); font-size:10px; fill:var(--ink-soft);}
+  .sitemap-svg .conn{stroke:var(--line); stroke-width:1.4; fill:none;}
+  .sitemap-svg .conn-dashed{stroke-dasharray:3 3;}
+  .sitemap-svg .conn-violet{stroke:var(--violet); stroke-width:1.4; stroke-dasharray:3 3; fill:none;}
+
+  .toc{display:flex; flex-wrap:wrap; gap:8px; margin:24px 0 0; padding:0; list-style:none;}
+  .toc a{display:inline-block; font-family:var(--mono); font-size:12px; letter-spacing:0.02em; color:var(--ink-soft); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--paper-raised); transition:border-color .15s ease, color .15s ease;}
+  .toc a:hover, .toc a:focus-visible{border-color:var(--accent); color:var(--accent); outline:none;}
+
+  .area{background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:26px 28px; margin-bottom:18px; scroll-margin-top:20px;}
+  .area-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:10px;}
+  .area-title{font-family:var(--serif); font-size:21px; margin:0; color:var(--ink);}
+  .area p{margin:0 0 10px; color:var(--ink);}
+  .area ul{margin:8px 0 0; padding-left:20px;}
+  .area li{margin-bottom:6px;}
+  .area li b{color:var(--ink); font-weight:600;}
+
+  .callout{border:1px solid var(--amber); background:var(--amber-soft); border-radius:6px; padding:22px 26px;}
+  .callout h2{font-size:20px; color:var(--ink);}
+  .callout ul{margin:12px 0 0; padding-left:20px;}
+  .callout li{margin-bottom:10px; color:var(--ink);}
+
+  .spec{border:1px dashed var(--line); border-radius:6px; padding:12px 16px; margin:12px 0; background:color-mix(in srgb, var(--paper) 55%, transparent);}
+  .spec-label{font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
+  .spec code, .area code{font-family:var(--mono); font-size:12.5px; background:var(--accent-soft); color:var(--accent); padding:1px 6px; border-radius:4px;}
+
+  table.api-table{width:100%; border-collapse:collapse; font-size:14px;}
+  table.api-table th, table.api-table td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.api-table th{font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  table.api-table td.svc{font-weight:600; white-space:nowrap;}
+  table.api-table tr:last-child td{border-bottom:none;}
+
+  footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink-soft);}
+  a{color:var(--accent);}
+
+  @media (max-width:600px){
+    .page{padding:36px 16px 72px;}
+    .area{padding:20px 18px;}
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Causal · platform · Last updated September 24, 2026</p>
+    <h1>The Causal Platform, Explained</h1>
+    <p class="dek">Two apps, one platform: what they share, who can do what, and how the pieces connect.</p>
+  </header>
+
+  <section class="lede">
+    <p>Causal is creating tooling for groups to launch and run their own platform cooperatives. Causal itself is a startup, not a cooperative. The platform today is one account system with two apps: <b>Cooperative</b>, the sector-neutral operational core for nonprofits and coalitions in any field, and <b>Agency</b>, the first instance built on it, for grassroots advocacy and climate action. A person with Cooperative access moves between both with the same login. Underneath Cooperative, each organization's documents can live in its own Solid pod, under permissions the organization grants and can withdraw.</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">Map</span>How the pieces connect</h2>
+    <p class="section-intro">One platform login opens both apps. A person's own Solid identity is a separate login that doesn't go through Causal's, and only Cooperative uses Solid pods today.</p>
+    <div class="map-frame">
+      <svg class="sitemap-svg" viewBox="0 0 980 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagram: Causal Platform Login leads to the Agency and Cooperative apps. Cooperative leads to the Solid Pod Layer (org pods, ACP permissions and Access Groups, sync service). A separate box, Your Own Solid Identity, connects directly and independently to the Solid Pod Layer, bypassing the platform login.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink-soft)"></path>
+          </marker>
+          <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" style="fill:var(--violet)"></path>
+          </marker>
+        </defs>
+
+        <!-- platform login -> agency, cooperative -->
+        <line x1="400" y1="70" x2="270" y2="110" class="conn" marker-end="url(#arrow)"></line>
+        <line x1="440" y1="70" x2="570" y2="110" class="conn" marker-end="url(#arrow)"></line>
+
+        <!-- cooperative -> solid pod layer -->
+        <line x1="570" y1="160" x2="570" y2="200" class="conn" marker-end="url(#arrow)"></line>
+
+        <!-- solid pod layer -> sub-items -->
+        <line x1="440" y1="250" x2="440" y2="270" class="conn"></line>
+        <line x1="570" y1="250" x2="570" y2="270" class="conn"></line>
+        <line x1="700" y1="250" x2="700" y2="270" class="conn"></line>
+
+        <!-- own solid identity -> solid pod layer (bypasses platform login entirely) -->
+        <path d="M 180 330 C 180 260, 300 220, 415 225" class="conn-violet" marker-end="url(#arrow-violet)" fill="none"></path>
+
+        <!-- platform login -->
+        <g><rect x="340" y="20" width="160" height="50" rx="6" class="box"></rect>
+          <text x="420" y="41" class="title" text-anchor="middle">Causal Platform Login</text>
+          <text x="420" y="56" class="subt" text-anchor="middle">one shared session</text>
+        </g>
+
+        <!-- agency -->
+        <g><rect x="150" y="110" width="160" height="50" rx="6" class="box"></rect>
+          <text x="230" y="131" class="title" text-anchor="middle">Agency</text>
+          <text x="230" y="146" class="subt" text-anchor="middle">first instance</text>
+        </g>
+
+        <!-- cooperative -->
+        <g><rect x="490" y="110" width="160" height="50" rx="6" class="box"></rect>
+          <text x="570" y="131" class="title" text-anchor="middle">Cooperative</text>
+          <text x="570" y="146" class="subt" text-anchor="middle">operational core</text>
+        </g>
+
+        <!-- solid pod layer -->
+        <g><rect x="380" y="200" width="380" height="50" rx="6" class="box-blue"></rect>
+          <text x="570" y="221" class="title" text-anchor="middle">Solid Pod Layer</text>
+          <text x="570" y="236" class="subt" text-anchor="middle">each org's own pod, outside Causal's database</text>
+        </g>
+
+        <!-- sub-items -->
+        <g><rect x="370" y="270" width="140" height="46" rx="6" class="box-blue"></rect>
+          <text x="440" y="290" class="title" text-anchor="middle">Org pods</text>
+          <text x="440" y="304" class="subt" text-anchor="middle">documents, per-doc sync</text>
+        </g>
+        <g><rect x="510" y="270" width="120" height="46" rx="6" class="box-blue"></rect>
+          <text x="570" y="290" class="title" text-anchor="middle">ACP permissions</text>
+          <text x="570" y="304" class="subt" text-anchor="middle">+ Access Groups</text>
+        </g>
+        <g><rect x="640" y="270" width="140" height="46" rx="6" class="box-blue"></rect>
+          <text x="710" y="290" class="title" text-anchor="middle">Sync service</text>
+          <text x="710" y="304" class="subt" text-anchor="middle">org-given, not held</text>
+        </g>
+
+        <!-- own solid identity -->
+        <g><rect x="30" y="330" width="220" height="56" rx="6" class="box-violet"></rect>
+          <text x="140" y="352" class="title" text-anchor="middle" style="fill:var(--violet)">Your Own Solid Identity</text>
+          <text x="140" y="367" class="subt" text-anchor="middle">separate login — never touches Causal's session</text>
+        </g>
+
+        <text x="30" y="410" class="caption">Solid lines show the platform login flow. Dashed violet lines show a person's own Solid-OIDC identity, a second, independent login not scoped to either app.</text>
+        <text x="30" y="424" class="caption">Agency has no Solid pod integration yet. The Solid Pod Layer is reachable only through Cooperative today.</text>
+      </svg>
+    </div>
+
+    <ul class="toc">
+      <li><a href="#private-shared">Private tools, shared collaboration</a></li>
+      <li><a href="#login">Platform login</a></li>
+      <li><a href="#identity">Your own Solid identity</a></li>
+      <li><a href="#roles">Roles &amp; access</a></li>
+      <li><a href="#guides">App guides</a></li>
+      <li><a href="#solid-pod">Solid Pod Layer</a></li>
+            <li><a href="#shared">Shared infrastructure</a></li>
+      <li><a href="#rough-edges">Rough edges and what's next</a></li>
+    </ul>
+  </section>
+
+  <section id="areas">
+    <h2><span class="num">Areas</span>Platform-level pieces, one at a time</h2>
+
+    <div class="area" id="private-shared">
+      <div class="area-head"><h3 class="area-title">Private tools, shared collaboration</h3></div>
+      <ul>
+        <li><b>Common needs framework.</b> Each organization's management tools (budgeting, grants, accounting, compliance) are built around the operational needs nonprofits share, and every organization's instance is completely private to it. Access is strictly per organization.</li>
+        <li><b>Cooperative structure.</b> Collaboration happens only in Workshop and the shared cooperative resources: the peer network, work library, and work pool.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="login">
+      <div class="area-head"><h3 class="area-title">Causal Platform Login</h3></div>
+      <p>One account system and one session cookie for the whole platform. Login lands on the Cooperative workspace picker; an account without Cooperative access lands on Agency, and the sidebar links between the two. Login is by password or magic-link email, and an org invite (a hashed, expiring token) also starts a session.</p>
+      <p>Sessions last 30 minutes past the last activity by default. An organization admin can lengthen that (15 minutes to 8 hours) under Settings → Security. Separately, a fixed 15-minute unattended-browser auto-logout runs in both apps and is never relaxed. This login has no relationship to any Solid pod identity below.</p>
+    </div>
+
+    <div class="area" id="identity">
+      <div class="area-head"><h3 class="area-title">Your Own Solid Identity <span style="font-family:var(--mono);font-size:12px;color:var(--violet);font-weight:400;">prototype</span></h3></div>
+      <p>A different kind of login from a Causal account. A person can log into their own Solid identity (a WebID) on Causal's Solid server, directly in the browser, using the Solid-OIDC standard. Causal's server never sees the password or tokens; they stay in the browser.</p>
+      <ul>
+        <li>Logging in does nothing by itself. What that identity can read or write in an org's pod depends entirely on what an org admin has explicitly given that WebID.</li>
+        <li>It is not connected to Causal's roles, and it is reachable by anyone with a Causal login. Restricting it to a designated org admin, and deriving pod access from roles, are planned, not built.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="roles">
+      <div class="area-head"><h3 class="area-title">Roles &amp; access</h3></div>
+      <table class="api-table">
+        <thead><tr><th>Role</th><th>Scope</th><th>What it can do</th></tr></thead>
+        <tbody>
+          <tr><td class="svc">Platform admin</td><td>spans every org</td><td>Platform-wide Pod Management: sync every pod, and set up the shared cooperative pod and Causal's own sync service</td></tr>
+          <tr><td class="svc">Org admin</td><td>one org</td><td>Everything, plus members and roles, pod access, fiscal-year lock and reopen, org settings</td></tr>
+          <tr><td class="svc">Finance</td><td>one org</td><td>All financial work including personnel costs; approves bills and can promote a budget scenario to live</td></tr>
+          <tr><td class="svc">Program</td><td>one org, assigned programs only</td><td>Budgets, grants, and accounting for the programs an admin assigns. Enforced by the database's row-level security, not only by the screens</td></tr>
+          <tr><td class="svc">Fundraising</td><td>one org</td><td>Donor and gift data</td></tr>
+          <tr><td class="svc">Staff (older accounts)</td><td>one org</td><td>Treated as Finance until moved to a current role; not given to new members</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:10px;">The role model is new and unfinished: per-action role checks for much of the app (grants, personnel, fixed assets, fiscal-year locks, vendor compliance, integrations) are still to do. A person outside the organization who has been given access to a document, such as an auditor, holds no platform role.</p>
+    </div>
+
+    <div class="area" id="guides">
+      <div class="area-head"><h3 class="area-title">The app guides</h3></div>
+      <ul>
+        <li><a href="/docs/individual-app-guide.html" target="_blank" rel="noopener">Agency app guide</a>: the first instance built on the platform, for individual civic action</li>
+        <li><a href="/docs/organizational-app-guide.html" target="_blank" rel="noopener">Cooperative app guide</a>: the sector-neutral operational core for nonprofits and coalitions</li>
+        <li><a href="/docs/accounting-module-guide.html" target="_blank" rel="noopener">Accounting guide</a>: the Accounting area of Cooperative, tab by tab</li>
+      </ul>
+    </div>
+
+    <div class="area" id="solid-pod">
+      <div class="area-head"><h3 class="area-title">Solid Pod Layer</h3></div>
+      <p>Data sovereignty in practice: each organization's documents can live in its own Solid pod (Community Solid Server), outside Causal's database. Only the Document Vault is in the pod today. Budget and the rest of Cooperative stay in Postgres.</p>
+      <ul>
+        <li><b>Per-document sync</b>: nightly and on demand, with a confirmed-synced fact per document. The local copy is purged only after confirmation.</li>
+        <li><b>ACP permissions</b>: scoped, time-limited or indefinite access on a document for a WebID, backed by real access-control policies in the pod.</li>
+        <li><b>Link sharing without a Solid identity</b>: the recipient opens a Causal page and enters a one-time code emailed to the address the share was made for. The pod copy is private, and revoking or expiring the share stops access at once and deletes the copy. This proves control of a mailbox, not a Solid identity. Links made before September 24, 2026 stay open to anyone with the URL until revoked.</li>
+        <li><b>Access Groups</b>: standing named groups (for example "Board") whose permissions cascade automatically through a transactional outbox.</li>
+        <li><b>Sync service, org-given</b>: Causal's automated sync holds only a container-level permission on each org's own documents folder. It is revocable at any time, with no fallback credential.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="shared">
+      <div class="area-head"><h3 class="area-title">Shared infrastructure</h3></div>
+      <p>Node.js / Express 5 / PostgreSQL on one VPS under PM2. Isolation is enforced in the database: every organization's tables use row-level security, and program-linked tables add a program-level policy. Postmark sends all transactional email. Both apps share one stylesheet of design tokens and one PWA manifest.</p>
+    </div>
+  </section>
+
+  <section id="rough-edges">
+    <div class="callout">
+      <h2>Rough edges and what's next</h2>
+      <p style="margin:12px 0 0;"><b>Rough today</b></p>
+      <ul>
+        <li>The Solid identity login is a prototype: it isn't restricted to org admins and isn't connected to roles.</li>
+        <li>Link recipients are verified by email, not by Solid identity. Shares made before September 24, 2026 stay open to anyone holding the URL until they are revoked.</li>
+        <li>No caching layer exists, so every read of a purged document fetches the pod fresh.</li>
+        <li>Encryption-at-rest for pod documents has a working prototype (AES-256-GCM, OpenBao-backed keys) but is a separate R&amp;D track, not in the production pod.</li>
+      </ul>
+      <p style="margin:16px 0 0;"><b>Next</b></p>
+      <ul>
+        <li><b>Pod sync beyond documents.</b> Generated reports come first. Live data such as budgets would sync as periodic pod copies, with Causal's working copy staying in place.</li>
+        <li><b>Solid identity tied to roles.</b> A person's pod access would follow from their role and programs, and link recipients could be verified by Solid identity, not only by email.</li>
+        <li><b>Finished roles.</b> Per-action role checks for grants, personnel, fixed assets, fiscal-year locks, vendor compliance, and integrations.</li>
+        <li><b>Following across instances.</b> Through Agency, individuals follow organizations on any Cooperative instance, chosen from a curated, human-approved list. Organizations already carry a stable external identifier for this.</li>
+        <li><b>New instances and governance.</b> A platform agent recommends whether a proposed instance fits, and a human advisory group drawn from the adopters decides. How advisors are admitted and held accountable is not yet decided.</li>
+        <li><b>Shared Workshop copies.</b> A Workshop stays in Causal's database as the one editable copy, and each participating organization's pod receives a one-way synced copy.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    The platform-level guide: what's shared, who can do what, and where the Agency, Cooperative, and Accounting guides pick up.
+  </footer>
+
+</div>

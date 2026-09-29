@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="dashboard">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide organizational-dash-page">
+        <p id="organizational-dash-error" class="organizational-error" hidden></p>
+        <div id="organizational-dash-loading" class="organizational-empty">Loading dashboard…</div>
+        <div id="organizational-dash-root" hidden>
+          <section class="organizational-dash-narrative-card" id="organizational-dash-narrative-wrap" aria-labelledby="organizational-dash-narrative-orgname">
+            <h1 class="organizational-dash-narrative-orgname" id="organizational-dash-narrative-orgname"></h1>
+            <div class="organizational-dash-narrative-kicker" id="organizational-dash-narrative-kicker">
+              <time class="organizational-dash-date" id="organizational-dash-date" datetime=""></time>
+            </div>
+          </section>
+
+          <div class="organizational-dash-metric-grid" id="organizational-dash-tiles" aria-label="Financial metrics"></div>
+
+          <section class="organizational-card" id="organizational-dash-coop-summary">
+            <h2 class="organizational-dash-coop-title">Cooperative</h2>
+            <div id="organizational-dash-coop-summary-body">
+              <p class="organizational-empty">Loading…</p>
+            </div>
+          </section>
+
+          <section class="organizational-dash-needs-attention" aria-labelledby="organizational-dash-needs-title">
+            <h2 class="organizational-dash-needs-title" id="organizational-dash-needs-title">Needs attention</h2>
+            <div class="organizational-dash-attention-list" id="organizational-dash-attention-list"></div>
+            <p class="organizational-dash-attention-empty organizational-hint" id="organizational-dash-attention-empty" hidden>Nothing needs attention right now.</p>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/dashboard-exec.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

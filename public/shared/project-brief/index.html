@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>causalworks brief</title>
+    <meta name="theme-color" content="#1a1a1a">
+    <link rel="stylesheet" href="/shared/css/tokens.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--surface-page);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--brand);
+            color: #fff;
+            padding: 20px 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            line-height: 0;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .brand-causal {
+            color: rgba(255, 255, 255, 0.92);
+        }
+
+        .brand-works {
+            color: #c96b72;
+        }
+
+        main {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 32px 24px 64px;
+        }
+
+        .layout {
+            display: flex;
+            align-items: flex-start;
+            gap: 28px;
+        }
+
+        nav.doc-nav {
+            flex: 0 0 200px;
+            position: sticky;
+            top: 24px;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 8px;
+        }
+
+        .brief-with-thumb {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        .brief-with-thumb .brief-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .brief-thumbs {
+            display: flex;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+
+        .brief-thumb {
+            width: 88px;
+            height: auto;
+            display: block;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: zoom-in;
+        }
+
+        @media (max-width: 560px) {
+            .brief-with-thumb {
+                flex-direction: column;
+            }
+            .brief-thumb {
+                width: 120px;
+            }
+        }
+
+        .screenshot-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            z-index: 100;
+            padding: 40px 24px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .screenshot-lightbox.open {
+            display: flex;
+        }
+
+        .screenshot-lightbox-inner {
+            max-width: min(1100px, 100%);
+            max-height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .screenshot-lightbox img {
+            max-width: 100%;
+            max-height: calc(100vh - 120px);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            cursor: default;
+        }
+
+        .screenshot-lightbox-caption {
+            color: #fff;
+            font-size: 13px;
+            opacity: 0.85;
+        }
+
+        .screenshot-lightbox-close {
+            position: fixed;
+            top: 18px;
+            right: 24px;
+            font-family: var(--font-sans);
+            font-size: 28px;
+            line-height: 1;
+            color: #fff;
+            background: none;
+            border: none;
+            cursor: pointer;
+            opacity: 0.8;
+        }
+
+        .screenshot-lightbox-close:hover {
+            opacity: 1;
+        }
+
+        nav.doc-nav a {
+            display: block;
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 9px 10px;
+            border-radius: var(--radius-sm);
+        }
+
+        nav.doc-nav a:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+        }
+
+        nav.doc-nav a.active {
+            background: var(--surface-active);
+            color: var(--brand-dark);
+        }
+
+        .doc-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .doc {
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            padding: 32px 36px;
+            margin-bottom: 32px;
+            display: none;
+        }
+
+        .doc.active {
+            display: block;
+        }
+
+        @media (max-width: 680px) {
+            .layout { flex-direction: column; }
+            nav.doc-nav { position: static; width: 100%; flex: none; }
+        }
+
+        .doc h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .doc .doc-subtitle {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+        }
+
+        .doc .subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .doc h2 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--brand-dark);
+            margin: 22px 0 4px;
+        }
+
+        .doc a {
+            color: var(--brand-dark);
+        }
+
+        .doc .role-dates {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+            float: right;
+        }
+
+        .doc h3 {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 16px 0 4px;
+        }
+
+        .doc p {
+            font-size: 13.5px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .doc ul {
+            margin: 4px 0 10px 18px;
+        }
+
+        .doc li {
+            font-size: 13.5px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .doc strong {
+            color: var(--text-primary);
+        }
+
+        .entry {
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 14px;
+            margin-bottom: 14px;
+        }
+
+        .entry:last-child {
+            border-bottom: none;
+        }
+
+        .doc-subhead {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin: 4px 0 6px;
+        }
+
+        .entry-title {
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding-bottom: 32px;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand"><span class="brand-causal">causal</span><span class="brand-works">works</span></div>
+</header>
+
+<main>
+    <div class="layout">
+        <nav class="doc-nav" id="doc-nav">
+            <a href="#project-brief" data-doc="project-brief" class="active">Project Brief</a>
+            <a href="/docs/platform-guide.html" target="_blank" rel="noopener">Platform Guides</a>
+            <a href="#resume" data-doc="resume">Developer Bio</a>
+        </nav>
+
+        <div class="doc-content">
+
+    <!-- Doc: Project Brief -->
+    <div class="doc active" id="project-brief">
+        <h1>Causal</h1>
+        <div class="doc-subtitle">Project Brief</div>
+
+        <p>Causal is creating tooling for groups to launch and run their own platform cooperatives. Most software available to nonprofits and grassroots groups is rented from vendors with no stake in their mission, and the records inside it live in the vendor's database. Causal aims to replace that arrangement with shared infrastructure that the groups own and govern themselves. Causal itself is an initiative, not a cooperative. The groups that adopt the tooling form and govern their own.</p>
+        <p>The organizations it serves are any nonprofits, or coalitions forming around collaborative work and common needs. That includes climate action, civic action, social work, cultural work, and other fields. What they share is a common set of operational needs, and shared work they want to do together.</p>
+        <p>The shift from rented software to shared ownership rests on three changes:</p>
+        <ul>
+            <li><strong>Data sovereignty</strong> — Each organization holds full control of its own records. Documents live in the organization's own Solid pod, not only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw.</li>
+            <li><strong>Common needs framework</strong> — The management tools (budgeting, grants, accounting, compliance) are built around the operational needs nonprofits share, so groups work from common structures instead of each improvising their own. Every organization's instance is completely private to it.</li>
+            <li><strong>Cooperative structure</strong> — Collaboration happens in Workshop and the shared cooperative resources: the peer network, the work library, and the work pool. The organizations that use the tools shape those resources and, over time, help govern the platform. They are not a customer base a vendor draws revenue from.</li>
+        </ul>
+        <p>This is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure. That is how Causal itself is being built.</p>
+        <p>The current live build has two parts. <strong>Cooperative</strong> is the sector-neutral operational core. <strong>Agency</strong> is the first instance built on it, for grassroots advocacy and climate action. Agency shows what the underlying infrastructure produces when it is worked out fully within one field: it connects individual decision-making to leverage points and system-level intervention models grounded in these frameworks.</p>
+
+        <h2>The Operational Model</h2>
+        <p>Every instance running on Causal draws from one architecture, split into core infrastructure that any group can adapt and field-specific applications built on top of it.</p>
+
+        <h3>Cooperative (Platform Core)</h3>
+        <p>Nothing in Cooperative's core modules requires advocacy, climate, or political content. Any collective, fiscal sponsor, or community organization can use it to run its day-to-day operations:</p>
+        <ul>
+            <li>
+                <div class="brief-with-thumb">
+                    <span class="brief-text"><strong>Workshop</strong> — A collaborative workspace for mapping systemic problems, organizing projects, sharing documents, and modeling interventions. Still developing, and not yet reviewed by a systems-change practitioner.</span>
+                    <span class="brief-thumbs">
+                        <img class="brief-thumb" src="screenshots/coop-workshop.png" alt="Cooperative — Workshop" data-caption="Cooperative — Workshop">
+                    </span>
+                </div>
+            </li>
+            <li><strong>Peer Network &amp; Work Pool</strong> — A directory of participating organizations, a shared knowledge library, and work-request exchange across organizations.</li>
+            <li>
+                <div class="brief-with-thumb">
+                    <span class="brief-text"><strong>Budget, Funders &amp; Accounting</strong> — Multi-program budgeting, grant allocations, donor tracking, and projections, alongside an internal accounting ledger with bills, invoices, bank reconciliation, expense claims, and fixed assets, plus membership tracking and fiscal sponsorship support. Syncs with Xero for actuals comparison and cashflow forecasting. Each organization's data is private to it.</span>
+                    <span class="brief-thumbs">
+                        <img class="brief-thumb" src="screenshots/coop-budget.png" alt="Cooperative — Budget" data-caption="Cooperative — Budget">
+                    </span>
+                </div>
+            </li>
+            <li><strong>Compliance &amp; Reporting</strong> — IRS Form 990 functional expense tracking, governance obligations, an audit-readiness check of documents against what an audit will ask for, and board and funder reports.</li>
+            <li><strong>Roles &amp; access</strong> — Admin, finance, program, and fundraising roles, with program-level scoping enforced in the database, so people see only the budgets and personnel data their role covers.</li>
+        </ul>
+
+        <h3>Agency (First Instance)</h3>
+        <p>Agency is the platform's first fully worked-out application, and a proof of concept for how Causal's general infrastructure extends into public-facing civic engagement. Its features are a mix of live, scaffolded, and aspirational:</p>
+        <ul>
+            <li>
+                <div class="brief-with-thumb">
+                    <span class="brief-text"><strong>Action</strong> — A unified decision feed of actions you can take: petitions, public-comment filings, events, volunteer positions, donations, and bank-divestment steps. Sorted by urgency, location relevance, and system leverage points. You see the organizations you follow, and each action shows which systemic lever it pulls.</span>
+                    <span class="brief-thumbs">
+                        <img class="brief-thumb" src="screenshots/agency-moves-sign.png" alt="Agency — Action, Sign tab" data-caption="Agency — Action · Sign">
+                        <img class="brief-thumb" src="screenshots/agency-moves-vest.png" alt="Agency — Action, Vest tab" data-caption="Agency — Action · Vest">
+                    </span>
+                </div>
+            </li>
+            <li><strong>Proxies</strong> — Who is representing your interests and what they are doing: federal, state, and local elected officials, financial institutions, and advocacy organizations, based on your settings.</li>
+            <li><strong>Ledger</strong> — A personal record of completed actions, direct giving, and moved capital such as bank transfers or divestment pledges.</li>
+            <li><strong>Systems</strong> — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of leverage points.</li>
+        </ul>
+
+        <h2>How Groups Launch Their Own</h2>
+        <p>The intended rollout is decentralized. A short-term startup team builds and hands over the tooling, rather than becoming a permanent administrative entity. Multiple cooperatives can then adopt it and fork the shared codebase for their own use cases. This also supports more complex structures, such as a worker cooperative serving the needs of a nonprofit cooperative.</p>
+        <p>A fork is not just a copy of the code. It needs its own mapping onto Earth4All's turnarounds, decided by the people forming around it, with the same rigor Agency applies to planetary boundaries science. Systems thinking alone is a method, not a position: it can organize a supply chain as easily as a movement. What makes an instance trustworthy is that its actions are checked against measures of human wellbeing.</p>
+        <p>Deciding whether a proposed instance serves the turnarounds, rather than borrowing their language without their substance, is a governance question. A platform agent is meant to recommend whether a proposed instance fits, checked by a human advisory group that grows out of the adopters themselves. The first adopters would be advised by that agent and then take on advising later ones. How advisors are admitted and held accountable is not yet decided.</p>
+        <p>The design under discussion is that Agency follows organizations from many Cooperative instances and pulls from them, rather than every organization pushing into one shared feed. Which instances and organizations Agency includes would be a curated, human-approved list. This is documented but not built.</p>
+
+        <h2>Platform Logic &amp; Intellectual Rigor</h2>
+        <p>In the Agency instance, Earth4All's five turnarounds (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.</p>
+        <p>Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is rudimentary today and could improve a great deal, ideally with direct input from the groups that produce these frameworks.</p>
+        <p>The framework has clear limits:</p>
+        <ul>
+            <li><strong>Framework boundaries</strong> — Earth4All does not claim completeness by its own account. The Earth Commission, the research body behind planetary boundaries, now frames the boundaries as "safe and just," building distributive and procedural justice into where the lines sit. Dimensions such as racial, colonial, or historical equity sit near the open edge of current models, not fully inside the five turnarounds as originally published.</li>
+            <li><strong>Sector frameworks</strong> — Other instances rely on equivalent peer-reviewed or field-tested standards for their own field, and can draw on the same underlying logic without surfacing the ecological detail Agency does.</li>
+        </ul>
+
+        <h2>Core Approach</h2>
+        <ul>
+            <li><strong>Sovereignty first</strong> — Data ownership belongs to the person and the collective. Documents and choices live in user-controlled stores, not locked inside a central system.</li>
+            <li><strong>Sector frameworks grounded in evidence</strong> — Every instance uses frameworks grounded in expert research to identify high-leverage interventions for its area.</li>
+            <li><strong>Systems &amp; leverage dynamics</strong> — Tools use system-dynamics methods to map root causes, locate intervention points, and redirect institutional capital toward mission-aligned outcomes.</li>
+            <li><strong>Ownership by adopters</strong> — Each group that launches on Causal owns and governs its own platform. Causal supplies the tooling and a starting codebase.</li>
+        </ul>
+
+        <h2>Technical Stack &amp; Sovereignty</h2>
+        <p>The codebase runs on a Hetzner VPS with Node.js/Express and PostgreSQL, supporting invited demo users and live data. It has these main layers:</p>
+        <ul>
+            <li><strong>Relational core</strong> — Multi-tenant PostgreSQL with row-level security hosts organizational budgets, compliance obligations, audit logs, and the internal accounting ledger.</li>
+            <li><strong>Solid pod sovereignty (underway)</strong> — Each organization can hold its documents in its own self-hosted Solid pod (Community Solid Server), outside Causal's database. Built today: per-document sync with confirmation, scoped and expiring access permissions, standing access groups, a revocable sync service the organization grants and can withdraw, and link sharing for people without a Solid identity that checks the recipient's email with a one-time code before opening the document. A Solid-OIDC login lets a person use their own identity, as a prototype not yet tied to organization roles.</li>
+            <li><strong>Identity boundary</strong> — Making the organization's own admin, via their own Solid-OIDC identity, the pod's actual controlling account (replacing the service credential the platform currently holds) is a near-term goal, not deferred. Broader identity work — deriving per-member pod permissions from internal roles, and personal pods for individual Agency users — remains longer-range. Pod storage covers organization documents only; budget, compliance, and the rest of Cooperative stay in PostgreSQL, with periodic pod copies planned for live data.</li>
+            <li><strong>Integrations</strong> — Xero (chart of accounts and profit-and-loss data, with account-name updates written back and nothing more), Plaid bank feeds, Postmark email, and Gemini for turning organization emails into feed cards and reading receipts and contracts. Agency draws on the FEC, Federal Register, and Google Civic Information APIs, ProPublica Nonprofit Explorer for verifying organizations, EIP Oil &amp; Gas Watch for permitting alerts, and Mobilize for local events.</li>
+        </ul>
+        <p>Federal data sources are not guaranteed stable. Nearly 400 US government datasets have been deleted or altered since January 2025, and the platform's dependence on FEC, Federal Register, and Civic Information API data reflects that risk. A citizen-led data rescue movement is archiving public data outside government control, the same instinct behind Causal's approach to data sovereignty.</p>
+        <p><a href="https://github.com/causalworks/causal.works" target="_blank" rel="noopener">GitHub repository</a></p>
+
+        <h2>Platform Rollout &amp; Candidate Cohorts</h2>
+        <p>Because the core operational modules are sector-neutral, the infrastructure supports different organizational models across fields:</p>
+
+        <h3>1. Grassroots Climate &amp; Advocacy (Agency Cohort)</h3>
+        <p>The initial deployment scales through grassroots climate groups and advocacy networks, connecting civic action feeds to institutional decision-makers.</p>
+
+        <h3>2. Community Development &amp; Fiscal Sponsorship Networks</h3>
+        <p>A second candidate cohort exists within fiscally-sponsored networks and their partner organizations:</p>
+        <ul>
+            <li><strong>Arts &amp; place-based development</strong> — Combining arts, environmental stewardship, and economic development in underserved neighborhoods, requiring flexible program-level budgeting and cross-initiative compliance.</li>
+            <li><strong>Civic &amp; mutual-aid networks</strong> — A civic-engagement and mutual-aid network operating on a "spoke and wheel" model to connect residents with local civic engagement, a structure that mirrors the Action and Proxies architecture.</li>
+        </ul>
+
+        <h3>3. Federated Membership &amp; Legal Advocacy</h3>
+        <p>Institutional leadership experience at federated legal advocacy organizations points to clear infrastructure uses for federated legal networks:</p>
+        <ul>
+            <li><strong>Cooperative fit</strong> — High alignment for multi-entity financial tracking, member-dues management, and shared operational compliance across regional chapters.</li>
+            <li><strong>Agency caution</strong> — Direct civic action tools in sensitive contexts need careful design boundaries. Where the interaction involves government policy rather than elected officials, persistent digital records of immigration-related advocacy carry safety and privacy risks that need tailored security models rather than standard public feeds.</li>
+        </ul>
+
+        <h2>Unbuilt &amp; Active Development Pipeline</h2>
+        <p>These are active engineering priorities or capabilities not yet built:</p>
+        <ul>
+            <li><strong>Pod sync beyond documents</strong> — Generated reports are the next candidate; live data such as budgets would sync as periodic pod copies rather than being removed from Causal's database. Co-owned Workshop content would sync a copy to each participating organization's pod.</li>
+            <li><strong>Per-user Solid identity tied to roles</strong> — Deriving an individual's pod permissions from their organization role and program scope, and verifying link recipients by Solid identity rather than email.</li>
+            <li><strong>Agency personal pods</strong> — Extending Solid sovereignty to Agency users' own civic-action records (actions, pledges), held in each person's own pod.</li>
+            <li><strong>Curated multi-instance feeds and instance governance</strong> — Agency pulling from organizations on more than one Cooperative instance, and the advisory group that vets new instances.</li>
+            <li><strong>GL &amp; accounting push</strong> — Direct push of draft budget journal entries to general ledger systems (Xero).</li>
+            <li><strong>Audit-ready schedule reconciliation</strong> — Automated monthly reconciliation between schedule projections and GL actuals.</li>
+            <li><strong>Agency financial and pledge tools</strong> — Automated card and payee tracking for personal financial positions; aggregated bank and fund divestment pledges; bundled giving apportioned across followed organizations; user-added local and union officials.</li>
+            <li><strong>Worker cooperative and credit distribution</strong> — Internal work-management and credit-tracking systems for worker cooperatives.</li>
+            <li><strong>Legislative and lobbying intelligence</strong> — Professional-tier data services (Bloomberg Government, FiscalNote, Quorum), which need legal review of their display licensing before any integration.</li>
+        </ul>
+
+    </div>
+    <!-- End Doc: Project Brief -->
+
+    <!-- Doc: Resume -->
+    <div class="doc" id="resume">
+        <h1>Guy Yarden</h1>
+        <div class="subtitle">Berlin, DE</div>
+
+        <p>Experienced administrator focused on improving the operations of nonprofits to realize their programmatic goals. Collaborative approach that embraces diverse and shared experiences. Specific interest in cooperative solutions to address shared challenges. Broad range of experience including financial forecasting and modeling, budget management, bookkeeping, grant writing, fundraising, audit &amp; tax support, board &amp; staff management and reporting, program management, and organizational startup and evolution.</p>
+
+        <h2>Professional Experience</h2>
+
+        <div class="entry">
+            <div class="entry-title">Interim Executive Director, National Immigration Project of the National Lawyers Guild <span class="role-dates">2019–2020</span></div>
+            <ul>
+                <li>Supported board and staff transitions, executive search, and fundraising during a complex juncture in organizational history. Coordinated a reduced staff, updated, upgraded and maintained financial and planning systems, and supported an 18-month audit. Migrated membership discussion forums to a new platform, worked with board members on fundraising and hiring, planned for the annual member conference. Supported new director, new staff hiring, and office relocation.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">CoFounder &amp; Manager, ArtsPool <span class="role-dates">2010–2017</span></div>
+            <ul>
+                <li>Conceived a shared infrastructure company for nonprofit organizations and formed the core team to develop ArtsPool with major support from the Rockefeller Foundation Cultural Innovation Fund, The Scherman Foundation, Rosin Fund, and New York Community Trust. In December 2014, ArtsPool spun off from A.R.T./New York and launched as an independent LLC. Currently, ArtsPool is a growing cooperative of more than 40 member companies. ArtsPool provides members with a range of financial, personnel, and compliance management services and is overseen by a committee structure comprised of member and staff representatives.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">Director of Finance, Alliance of Resident Theatres/New York <span class="role-dates">2009–2014</span></div>
+            <ul>
+                <li>Led financial management and planning for a $4 million annual budget membership organization that provides a wide range of services to more than 350 theater organizations.</li>
+                <li>Staff lead for design of new $15 million theater facility in collaboration with NYC government agencies. Developed reserve fund model to support sustainable operations of three facilities and subsidization of member theater rentals. Collaborated with consultants and staff to structure the fundraising campaign. Maintained investment policies and worked with fund managers.</li>
+                <li>Financial supervision of a $2 million member loan program and a $1.5 million shared facilities program that offers 45,000 square feet of office and studio space to member companies. Led staff in adoption of new facility management systems.</li>
+                <li>Ongoing review, analysis, and implementation of IT systems, including web-based software solutions for facilities, membership, scheduling, lending, grantmaking, fundraising and accounting.</li>
+                <li>Managed cash flow, prepared grant budgets and reports, supplemental grant writing, managed organizational budgeting process, managed payroll and human resources for staff of twenty, maintained regulatory compliance, supported annual audit and tax return process, and prepared financial reports for board of directors, finance, audit, and loan committees.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">Interim Executive Director, Danspace Project <span class="role-dates">2007</span></div>
+            <ul>
+                <li>Interim management of acclaimed contemporary dance presenting organization after departure of long-time Executive Director. Provided staff and board support; financial supervision, including management of annual budget and audit; lease negotiations; planning for presenting season; oversight of fundraising activities. Provided organizational leadership in ongoing strategic planning activities and negotiations with City of New York and local funders for development of choreographic center in Brooklyn.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">PARC Project Director, Danspace Project <span class="role-dates">2005–2007</span></div>
+            <ul>
+                <li>Conceived PARC, a timeshare choreographic workspace center. Worked with Danspace Project to merge the PARC concept with organizational goals to develop new performance space. Project was selected by the City of New York for development in the Downtown Brooklyn Cultural District. Approximately $25 million was designated for the project. Provided ongoing planning, fundraising, and project leadership, and coordinated with numerous project consultants and NYC government agencies. (project terminated)</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">Director of Finance &amp; Operations, Dance Theater Workshop <span class="role-dates">1998–2000, 2004–2006</span></div>
+            <ul>
+                <li>Supervised annual budget and financial planning during major transitional period of $2.3 million renowned performing arts organization. Worked on strategic planning for $10 million capital campaign, creation of endowment, and construction of new performing arts facility. Participated in negotiation of public/private partnership including sale of air rights. Recommended organizational restructuring to prepare for increased costs of new facility. Supervised implementation of new accounting system.</li>
+                <li>Participated in post-construction financial stabilization effort and management of $3.5 million annual expense budget. Developed new operating models and made recommendations on organizational structure, staffing, expense control, cost-cutting and debt management.</li>
+                <li>Maintained cash flow, managed investment activities, prepared grant budgets and reports. Supervised departmental budgets, internal reporting procedures, payroll, and human resources for staff of thirty. Supervised staff and board compliance in annual audit. Prepared monthly, quarterly and annual financial reports for board.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">Co Director, Movement Research <span class="role-dates">1991–1995</span></div>
+            <ul>
+                <li>Co-managed internationally acclaimed center for experimentation in dance and performance. Produced all programs including 30-week performance series; semiannual publication; award-winning symposia series; national and international artist exchange program; artist commissioning and residency program; year-round workshop and technique classes; dance education in local public schools. Managed aspects of all programs, financial management, board development, fundraising, marketing, press relations, and organizational planning.</li>
+            </ul>
+        </div>
+
+        <div class="entry">
+            <div class="entry-title">Performance Space 122 <span class="role-dates">1986–1991</span></div>
+            <ul>
+                <li>Curator of concert series, marketing manager, bookkeeper, and budget manager during early growth years of internationally renowned performance art center.</li>
+            </ul>
+        </div>
+
+        <h2>Other Professional Experience</h2>
+
+        <h3>Consulting services</h3>
+        <p>Asheville Creative Arts, New Federal Theatre, VisArt Video, AlterTheater, New York State Theater at Lincoln Center, Meet the Composer, American Museum of Natural History, Original Artists, Inc., Big Tree Productions, NY America, Human Future Dance Corps, LAVA, Urban Bush Women, David Dorfman Dance, Martha Graham School of Dance, Trisha Brown Company, Asian American Arts Alliance, Joffrey Ballet, Merce Cunningham Dance Foundation, Engine 27, Conway &amp; Pratt, John Jasperse Company, Doug Varone &amp; Dancers, CRI Recordings, American Composer's Alliance, Creative Capital MAP Fund, Rencontres Internationales des Oevres Chorégraphiques, Bessie Awards, Lower Manhattan Cultural Council, New Music America/NYC, Eyemag Media, American Composers Alliance and CRI Recordings.</p>
+
+        <h3>Board Member</h3>
+        <p>Movement Research, Inc. (1989–1991, 1995–1998, 2003–2014, 2015–2017)<br>Chashama, Inc. (1996–2000)</p>
+
+        <h3>Other Experience</h3>
+        <ul>
+            <li>Accounting and database applications including automations and integrations, new systems transition and implementation, general application and website development.</li>
+            <li>Multimedia design and staging; theatrical sound and lighting; multi-channel audio systems and recording; editing and graphic design; producing and catering large events.</li>
+            <li>Computing since the DOS era, with self-taught coding skills picked up along the way — particularly after the advent of HTML. Built small websites, contributed to app development projects.</li>
+        </ul>
+
+        <h3>Composer, Performer <span style="font-weight:400; color:var(--text-muted); font-size:12px;">1985–2005</span></h3>
+        <p>CV available upon request.</p>
+
+        <h2>Earlier</h2>
+        <ul>
+            <li>Bard College, B.A., Music, 1983</li>
+        </ul>
+    </div>
+    <!-- End Doc: Resume -->
+
+        </div>
+    </div>
+</main>
+
+<footer>causalworks — internal, not for distribution</footer>
+
+<div class="screenshot-lightbox" id="screenshot-lightbox">
+    <button type="button" class="screenshot-lightbox-close" aria-label="Close" onclick="closeScreenshotLightbox()">×</button>
+    <div class="screenshot-lightbox-inner">
+        <img id="screenshot-lightbox-img" src="" alt="">
+        <div class="screenshot-lightbox-caption" id="screenshot-lightbox-caption"></div>
+    </div>
+</div>
+
+<script>
+function selectDoc(name) {
+    document.querySelectorAll('.doc').forEach(function (el) {
+        el.classList.toggle('active', el.id === name);
+    });
+    document.querySelectorAll('.doc-nav a').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.doc === name);
+    });
+}
+
+document.getElementById('doc-nav').addEventListener('click', function (e) {
+    var link = e.target.closest('a[data-doc]');
+    if (!link) return;
+    e.preventDefault();
+    var name = link.dataset.doc;
+    selectDoc(name);
+    history.replaceState(null, '', '#' + name);
+});
+
+window.addEventListener('DOMContentLoaded', function () {
+    var hash = window.location.hash.replace('#', '');
+    if (hash && document.getElementById(hash)) {
+        selectDoc(hash);
+    }
+});
+
+function openScreenshotLightbox(src, caption) {
+    document.getElementById('screenshot-lightbox-img').src = src;
+    document.getElementById('screenshot-lightbox-caption').textContent = caption || '';
+    document.getElementById('screenshot-lightbox').classList.add('open');
+}
+
+function closeScreenshotLightbox() {
+    document.getElementById('screenshot-lightbox').classList.remove('open');
+    document.getElementById('screenshot-lightbox-img').src = '';
+}
+
+document.querySelectorAll('.brief-thumb').forEach(function (img) {
+    img.addEventListener('click', function () {
+        openScreenshotLightbox(img.src, img.dataset.caption || '');
+    });
+});
+
+document.getElementById('screenshot-lightbox').addEventListener('click', function (e) {
+    if (e.target.id === 'screenshot-lightbox') closeScreenshotLightbox();
+});
+
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeScreenshotLightbox();
+});
+</script>
+</body>
+</html>

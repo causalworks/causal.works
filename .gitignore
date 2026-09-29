@@ -1,0 +1,38 @@
+.deb
+node_modules
+data/cache/
+public/old/
+# Local scratch, logs, one-off script output
+tmp/
+tmp_pm2_logs.txt
+*.log
+# Local env with secrets — never commit
+.env
+.env.local
+.env.save
+# IDE / local tooling
+skills-lock.json
+.claude/
+.graphify/
+.gitattributes
+.venv/
+# Local download/inspect artifacts (e.g. Bundestag Stammdaten zip)
+tmp/stammdaten-inspect/
+# EU rep API caches (fetched at runtime; large / volatile)
+server/rep/data/eu-meps.json
+server/rep/data/eu-ep-committee-chairs.json
+# Org document uploads — private per-org files, never committed
+/uploads/
+# Private research/working docs — not for the public repo
+docs/Causal_Language_Frame.md
+docs/Causal_Systems_Rationale.md
+docs/Coop_Org_Process_Outline.md
+docs/Grant_Accounting_Test_Walkthrough.md
+docs/Accounting_Review_Request_2026-09-16.md
+docs/Demo_Walkthrough.md
+docs/Solid_Ecosystem_Landscape.md
+docs/financial-integrity-monitoring.md
+docs/organizational-system-map.md
+docs/organizational-system-map.csv
+docs/Causal_Development_Path.md
+docs/devpath-archive/

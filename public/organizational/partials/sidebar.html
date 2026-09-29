@@ -1,0 +1,145 @@
+<aside class="organizational-sidebar" id="organizational-sidebar" aria-label="Workspace">
+  <nav class="organizational-sidebar__nav" aria-label="Workspace pages">
+    <!-- Top row carries both the section-expand chevron (next to the "Organization" label,
+         like every other section header) and the sidebar-collapse toggle (flush right, on
+         this same top row rather than its own row) — collapse-toggle only appears here, not
+         repeated on every section row. -->
+    <div class="organizational-sidebar__link-with-toggle organizational-sidebar__link-with-toggle--top">
+      <a class="organizational-sidebar__link" data-organizational-route="dashboard" href="#" title="Organization">
+        <span class="organizational-sidebar__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </span>
+        <span class="organizational-sidebar__label" id="organizational-sidebar-org-name">Organization</span>
+      </a>
+      <button type="button" class="organizational-sidebar__group-chevron-btn" id="organizational-sidebar-group-toggle" aria-expanded="true" aria-controls="organizational-sidebar-group" title="Show organization pages">
+        <span class="organizational-sidebar__group-chevron" aria-hidden="true">›</span>
+      </button>
+      <button type="button" class="organizational-sidebar__toggle" id="organizational-sidebar-toggle" aria-expanded="true" aria-controls="organizational-sidebar" title="Collapse sidebar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      </button>
+    </div>
+    <div class="organizational-sidebar__group" id="organizational-sidebar-group">
+      <span class="organizational-sidebar__group-label">Financial</span>
+      <a class="organizational-sidebar__link" data-organizational-route="budget" href="#" title="Budget">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="accounting" href="#" title="Accounting">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="grants" href="#" title="Funding">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="compliance" href="#" title="Compliance">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="reports" href="#" title="Reports">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+
+      <span class="organizational-sidebar__group-label">Services</span>
+      <a class="organizational-sidebar__link" data-organizational-route="membership" id="organizational-sidebar-membership" href="#" title="Membership" hidden>
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="sponsored-projects" id="organizational-sidebar-sponsored-projects" href="#" title="Sponsorship" hidden>
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+
+      <span class="organizational-sidebar__group-label">Records</span>
+      <a class="organizational-sidebar__link" data-organizational-route="contacts" href="#" title="Contacts">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="library" href="#" title="Library">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="documents" href="#" title="Document Vault">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="solid-pod" href="#" title="Solid Pod">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+    </div>
+    <div class="organizational-sidebar__link-with-toggle">
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative" data-organizational-href-route="dashboard" href="#" title="Cooperative">
+        <span class="organizational-sidebar__icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="1"/><path d="M2 8h20"/><path d="M12 4v16"/></svg>
+        </span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <button type="button" class="organizational-sidebar__group-chevron-btn" id="organizational-sidebar-cooperative-toggle" aria-expanded="false" aria-controls="organizational-sidebar-cooperative-group" title="Show cooperative pages">
+        <span class="organizational-sidebar__group-chevron" aria-hidden="true">›</span>
+      </button>
+    </div>
+    <div class="organizational-sidebar__group" id="organizational-sidebar-cooperative-group" hidden>
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative/workshop" href="#" title="Workshop">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative/activities" href="#" title="Engagement">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative/library" href="#" title="Library">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative/members" href="#" title="Members">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+      <a class="organizational-sidebar__link" data-organizational-route="cooperative/work-pool" href="#" title="Work pool">
+        <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+      </a>
+    </div>
+    <div class="organizational-sidebar__divider"></div>
+    <a class="organizational-sidebar__link" data-organizational-route="settings" href="#" title="Settings">
+      <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+        <span class="organizational-sidebar__label"></span>
+    </a>
+  </nav>
+  <div class="organizational-sidebar__footer">
+    <a class="organizational-sidebar__link" href="/privacy" target="_blank" rel="noopener noreferrer" title="Privacy policy">
+      <span class="organizational-sidebar__icon" aria-hidden="true"><span class="organizational-sidebar__bullet"></span></span>
+      <span class="organizational-sidebar__label">Privacy policy</span>
+    </a>
+    <div class="organizational-sidebar-profile">
+      <button type="button" class="organizational-profile-trigger" id="organizational-account-menu-trigger"
+        onclick="toggleOrganizationalAccountMenu(event)" aria-expanded="false" aria-haspopup="true" title="Account">
+        <span class="organizational-profile-avatar organizational-profile-avatar--glyph" id="organizational-account-menu-trigger-avatar" aria-hidden="true">&#128100;</span>
+        <span class="organizational-profile-info">
+          <span class="organizational-profile-name">My account</span>
+        </span>
+      </button>
+      <div id="organizational-account-dropdown" class="organizational-account-dropdown" hidden aria-hidden="true">
+        <div class="organizational-account-dropdown-email" id="organizational-account-dropdown-email"></div>
+        <hr class="organizational-account-dropdown-divider">
+        <a class="organizational-account-dropdown-item" id="organizational-account-dropdown-my-account" href="/organizational/account" onclick="event.stopPropagation(); closeOrganizationalAccountMenu();">My account</a>
+        <a class="organizational-account-dropdown-item" href="/individual/" onclick="event.stopPropagation(); closeOrganizationalAccountMenu();">Switch to Agency</a>
+        <hr class="organizational-account-dropdown-divider">
+        <button type="button" class="organizational-account-dropdown-item" onclick="event.stopPropagation(); organizationalSignOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+</aside>
+<script>
+(function () {
+  var m = (window.location.pathname || '').match(/^\/organizational\/o\/([^/]+)/);
+  if (!m) return;
+  var base = '/organizational/o/' + encodeURIComponent(decodeURIComponent(m[1]));
+  document.querySelectorAll('.organizational-sidebar__link[data-organizational-route]').forEach(function (a) {
+    var r = a.getAttribute('data-organizational-href-route') || a.getAttribute('data-organizational-route');
+    a.href = base + '/' + (r === 'settings' ? 'settings/organization' : r.split('/').map(encodeURIComponent).join('/'));
+  });
+})();
+</script>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Welcome — Causal</title>
+    <meta name="theme-color" content="#0f2318">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #1a7a4a;
+            --brand: #0f2318;
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b6b6b;
+            --text-muted: #9a9a9a;
+            --border: #e5e2db;
+            --border-strong: #c9c5ba;
+            --surface-1: #ffffff;
+            --surface-2: #f7f7f5;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background: var(--surface-2);
+            visibility: hidden;
+        }
+        .onboard-container {
+            width: 100%;
+            max-width: 460px;
+            background: var(--surface-1);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07), 0 10px 20px rgba(0,0,0,0.05);
+            padding: 32px;
+        }
+        h1 { font-size: 22px; font-weight: 700; color: var(--text-primary); margin: 0 0 6px; }
+        p.sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 24px; }
+        .onboard-section { margin-bottom: 24px; }
+        .onboard-section h2 { font-size: 13px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px; }
+        .onboard-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+        .onboard-hint { font-weight: 400; color: var(--text-secondary); }
+        .onboard-input, .onboard-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 14px;
+            color: var(--text-primary);
+            background: #fff;
+            font-family: inherit;
+            box-sizing: border-box;
+            margin-bottom: 14px;
+        }
+        .onboard-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+        .onboard-pill {
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border-strong);
+            background: #fff;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .onboard-pill.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .onboard-org-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+        .onboard-org-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; cursor: pointer; background: var(--surface-2); }
+        .onboard-org-row input { width: 18px; height: 18px; cursor: pointer; }
+        .onboard-org-row span { font-size: 13px; color: var(--text-primary); }
+        .onboard-btn {
+            margin-top: 8px;
+            width: 100%;
+            padding: 11px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .onboard-skip {
+            display: block;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+        .onboard-skip:hover { text-decoration: underline; }
+        .onboard-error {
+            display: none;
+            padding: 10px 12px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            color: #991b1b;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="onboard-container">
+        <h1>Welcome to your Agency</h1>
+        <p class="sub">Add your details below:</p>
+
+        <div class="onboard-section">
+            <h2>Where you're based</h2>
+            <label class="onboard-label">Country</label>
+            <select id="onboard-country" class="onboard-select">
+                <option value="">Select a country</option>
+            </select>
+            <label class="onboard-label">ZIP / Postal code</label>
+            <input type="text" id="onboard-zip" class="onboard-input" placeholder="e.g., 10001">
+            <label class="onboard-label">Geographic focus <span class="onboard-hint">(optional)</span></label>
+            <div id="onboard-region-pills" class="onboard-pills"></div>
+        </div>
+
+        <div class="onboard-section">
+            <h2>Follow a few organizations</h2>
+            <div id="onboard-org-list" class="onboard-org-list">
+                <div style="padding:12px; color:var(--text-muted); font-size:13px;">Loading organizations…</div>
+            </div>
+        </div>
+
+        <button type="button" class="onboard-btn" onclick="onboardFinish()">Get started</button>
+        <a href="#" class="onboard-skip" onclick="onboardFinish(event)">Skip for now</a>
+        <div class="onboard-error" id="onboard-error"></div>
+    </div>
+
+    <script>
+        document.body.style.visibility = 'visible';
+
+        const ONBOARD_COUNTRIES = ['US', 'CA', 'UK', 'DE', 'FR', 'NL', 'BE', 'AT', 'CH', 'SE', 'NO', 'DK', 'FI', 'AU', 'NZ'];
+        const ONBOARD_REGIONS = ['Global', 'US', 'EU', 'UK', 'DE', 'FR', 'Other'];
+        let onboardCountry = '';
+        let onboardZip = '';
+        let onboardRegions = new Set();
+        let onboardOrgIds = new Set();
+
+        // Redirect out if not authenticated — this page is the post-login first-run wizard, not signup.
+        fetch('/api/me', { credentials: 'same-origin' }).then((r) => {
+            if (!r.ok) { window.location.href = '/login'; return; }
+            return r.json();
+        }).then((me) => {
+            if (!me) return;
+            if (me.onboarding_complete) {
+                window.location.href = '/individual/#moves/home';
+                return;
+            }
+            if (me.location_country) { onboardCountry = me.location_country; }
+            if (me.location_zip) { onboardZip = me.location_zip; }
+            initLocationFields();
+        }).catch(() => { initLocationFields(); });
+
+        function initLocationFields() {
+            const countrySelect = document.getElementById('onboard-country');
+            ONBOARD_COUNTRIES.forEach((code) => {
+                const opt = document.createElement('option');
+                opt.value = code;
+                opt.textContent = code;
+                if (code === onboardCountry) opt.selected = true;
+                countrySelect.appendChild(opt);
+            });
+            countrySelect.addEventListener('change', () => { onboardCountry = countrySelect.value; });
+
+            const zipInput = document.getElementById('onboard-zip');
+            zipInput.value = onboardZip;
+            zipInput.addEventListener('input', () => { onboardZip = zipInput.value.trim(); });
+
+            const pillsEl = document.getElementById('onboard-region-pills');
+            ONBOARD_REGIONS.forEach((label) => {
+                const val = label.toUpperCase();
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'onboard-pill';
+                btn.textContent = label;
+                btn.onclick = () => {
+                    if (onboardRegions.has(val)) { onboardRegions.delete(val); } else { onboardRegions.add(val); }
+                    btn.classList.toggle('selected', onboardRegions.has(val));
+                };
+                pillsEl.appendChild(btn);
+            });
+
+            loadOrgs();
+        }
+
+        async function loadOrgs() {
+            const listEl = document.getElementById('onboard-org-list');
+            try {
+                const res = await fetch('/api/orgs', { credentials: 'same-origin' });
+                const orgs = res.ok ? await res.json() : [];
+                const platformOrgs = (orgs || [])
+                    .filter((org) => !org.is_user_added && org.subscription_status !== 'user_contributed')
+                    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+                if (!platformOrgs.length) {
+                    listEl.innerHTML = '<div style="padding:12px; color:var(--text-muted); font-size:13px;">No organizations to show yet — you can follow some later in Settings.</div>';
+                    return;
+                }
+                listEl.innerHTML = platformOrgs.map((org) => {
+                    const id = String(org.id);
+                    const safeName = org.name ? String(org.name).replace(/</g, '&lt;') : '(Organization)';
+                    return '<label class="onboard-org-row">' +
+                        '<input type="checkbox" onchange="onboardToggleOrg(\'' + id + '\')">' +
+                        '<span>' + safeName + '</span>' +
+                        '</label>';
+                }).join('');
+            } catch (e) {
+                listEl.innerHTML = '<div style="padding:12px; color:var(--text-muted); font-size:13px;">Could not load organizations — you can follow some later in Settings.</div>';
+            }
+        }
+
+        function onboardToggleOrg(id) {
+            if (onboardOrgIds.has(id)) { onboardOrgIds.delete(id); } else { onboardOrgIds.add(id); }
+        }
+
+        async function onboardFinish(e) {
+            if (e) e.preventDefault();
+            const errorEl = document.getElementById('onboard-error');
+            errorEl.style.display = 'none';
+            try {
+                const settingsRes = await fetch('/api/settings', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        location_country: onboardCountry || null,
+                        location_zip: onboardZip || null,
+                        org_ids: Array.from(onboardOrgIds).map((x) => Number(x) || x),
+                        primary_region: Array.from(onboardRegions),
+                    }),
+                });
+                const settingsBody = await settingsRes.json().catch(() => ({}));
+                if (settingsBody.geo_changed) {
+                    // Populate representatives now so Proxies/Elected isn't empty on first visit —
+                    // /api/reps only reads a pre-matched table, matching happens here.
+                    await fetch('/api/reps/refresh', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+                }
+                const stepRes = await fetch('/api/user/onboarding-step', {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ step: 'complete' }),
+                });
+                if (!stepRes.ok) throw new Error('step save failed');
+                window.location.href = '/individual/#moves/home';
+            } catch (err) {
+                errorEl.textContent = 'Could not save. Please try again.';
+                errorEl.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

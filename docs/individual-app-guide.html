@@ -1,0 +1,404 @@
+<title>The Agency App, Explained</title>
+<style>
+  :root{
+    --paper:#eef1ea;
+    --paper-raised:#ffffff;
+    --ink:#1c2622;
+    --ink-soft:#4b5750;
+    --line:#c9d0c3;
+    --accent:#2f6f5e;
+    --accent-soft:#dce9e3;
+    --amber:#b5792f;
+    --amber-soft:#f1e3cd;
+    --violet:#5b4b8a;
+    --violet-soft:#e6e1f2;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+      --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+      --violet:#a698d8; --violet-soft:#2a2440;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+    --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+    --violet:#a698d8; --violet-soft:#2a2440;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"]{
+    --paper:#eef1ea; --paper-raised:#ffffff; --ink:#1c2622; --ink-soft:#4b5750;
+    --line:#c9d0c3; --accent:#2f6f5e; --accent-soft:#dce9e3; --amber:#b5792f; --amber-soft:#f1e3cd;
+    --violet:#5b4b8a; --violet-soft:#e6e1f2;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased;}
+
+  .page{max-width:960px; margin:0 auto; padding:56px 24px 96px;}
+
+  header.masthead{border-bottom:1px solid var(--line); padding-bottom:28px; margin-bottom:40px;}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin:0 0 12px;}
+  h1{font-family:var(--serif); font-weight:400; font-size:clamp(32px,4.2vw,46px); line-height:1.1; margin:0 0 14px; text-wrap:balance; color:var(--ink);}
+  .dek{font-size:17px; color:var(--ink-soft); max-width:66ch; margin:0;}
+
+  h2{font-family:var(--serif); font-weight:400; font-size:26px; margin:0 0 6px; color:var(--ink);}
+  h2 .num{font-family:var(--mono); font-size:14px; color:var(--ink-soft); margin-right:10px;}
+  .section-intro{color:var(--ink-soft); font-size:15px; margin:0 0 20px; max-width:68ch;}
+
+  section{margin-bottom:56px;}
+  section.lede p{font-size:17px; max-width:70ch;}
+
+  .map-frame{background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:20px; overflow-x:auto;}
+  .map-frame pre.mermaid{margin:0;}
+
+  /* static CSS flow diagram (no JS dependency) */
+  .flow{min-width:720px; display:flex; flex-direction:column; gap:16px;}
+  .flow-group{border:1px solid var(--line); border-radius:6px; padding:12px 14px;}
+  .flow-group-title{font-family:var(--mono); font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px;}
+  .flow-group.ai-group{border-color:var(--violet); background:var(--violet-soft);}
+  .flow-group.ai-group .flow-group-title{color:var(--violet);}
+  .flow-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .flow-row + .flow-row{margin-top:8px;}
+  .node{
+    font-family:var(--mono); font-size:12px; color:var(--ink); line-height:1.3;
+    background:var(--accent-soft); border:1px solid var(--accent);
+    border-radius:5px; padding:7px 11px; white-space:nowrap;
+  }
+  .node .sub{display:block; font-size:10px; color:var(--ink-soft); font-weight:400; margin-top:2px; white-space:normal;}
+  .node.ai{background:var(--paper-raised); border-color:var(--violet); color:var(--violet);}
+  .arrow{color:var(--ink-soft); font-family:var(--mono); font-size:13px; flex-shrink:0;}
+  .flow-note{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); padding:2px 0;}
+  .flow-note b{color:var(--violet); font-weight:600;}
+
+  .toc{display:flex; flex-wrap:wrap; gap:8px; margin:24px 0 0; padding:0; list-style:none;}
+  .toc a{display:inline-block; font-family:var(--mono); font-size:12px; color:var(--ink-soft); text-decoration:none; border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--paper-raised); transition:border-color .15s ease, color .15s ease;}
+  .toc a:hover, .toc a:focus-visible{border-color:var(--accent); color:var(--accent); outline:none;}
+
+  .area{background:var(--paper-raised); border:1px solid var(--line); border-radius:6px; box-shadow:var(--shadow); padding:26px 28px; margin-bottom:18px; scroll-margin-top:20px;}
+  .area-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:10px;}
+  .area-title{font-family:var(--serif); font-size:21px; margin:0; color:var(--ink);}
+
+  .area p{margin:0 0 10px; color:var(--ink);}
+  .area ul{margin:8px 0 14px; padding-left:20px;}
+  .area li{margin-bottom:6px;}
+  .area li b{color:var(--ink); font-weight:600;}
+
+  .spec{
+    border:1px dashed var(--line);
+    border-radius:6px;
+    padding:12px 16px;
+    margin:12px 0;
+    background:color-mix(in srgb, var(--paper) 55%, transparent);
+  }
+  .spec-label{font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
+  .spec code{font-family:var(--mono); font-size:12.5px; background:var(--accent-soft); color:var(--accent); padding:1px 6px; border-radius:4px;}
+  .spec.ai-spec{border-color:var(--violet); background:var(--violet-soft);}
+  .spec.ai-spec .spec-label{color:var(--violet);}
+  .spec.ai-spec code{background:var(--paper-raised); color:var(--violet);}
+
+  table.api-table{width:100%; border-collapse:collapse; font-size:14px;}
+  table.api-table th, table.api-table td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.api-table th{font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  table.api-table td.svc{font-weight:600; white-space:nowrap;}
+  table.api-table tr:last-child td{border-bottom:none;}
+
+  .ai-block{
+    border:1px solid var(--violet);
+    background:var(--violet-soft);
+    border-radius:6px;
+    padding:22px 26px;
+    margin-bottom:16px;
+  }
+  .ai-block h3{font-family:var(--serif); font-size:19px; margin:0 0 4px; color:var(--ink);}
+  .ai-block .model-tag{font-family:var(--mono); font-size:11px; color:var(--violet); background:var(--paper-raised); padding:2px 8px; border-radius:4px; margin-left:8px; vertical-align:middle;}
+  .ai-block p{color:var(--ink); font-size:14.5px; margin:8px 0 0;}
+  .ai-block .status{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin-top:8px; display:inline-block;}
+
+  .callout{border:1px solid var(--amber); background:var(--amber-soft); border-radius:6px; padding:22px 26px;}
+  .callout h2{font-size:20px; color:var(--ink);}
+  .callout ul{margin:12px 0 0; padding-left:20px;}
+  .callout li{margin-bottom:10px; color:var(--ink);}
+
+  footer{margin-top:64px; padding-top:20px; border-top:1px solid var(--line); font-family:var(--mono); font-size:12px; color:var(--ink-soft);}
+  a{color:var(--accent);}
+  @media (max-width:600px){ .page{padding:36px 16px 72px;} .area{padding:20px 18px;} }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Causal · agency · Last updated September 24, 2026</p>
+    <h1>The Agency App, Explained</h1>
+    <p class="dek">A technical tour of Agency: where its data comes from, how following organizations shapes the feed, which external APIs it calls, where Gemini does the work, and the real filtering and ranking rules.</p>
+  </header>
+
+  <section class="lede">
+    <p>Agency is the first instance built on Causal's platform tooling, for grassroots advocacy and climate action. It connects individual decision-making to expert-validated leverage points. A person can sign petitions, attend events, volunteer, move money out of fossil-fuel banks, weigh in on regulatory comment periods, and see how their elected representatives connect to it all. Five sections: <b>Home</b>, <b>Moves</b> (the action feed), <b>Proxies</b> (elected reps, advocates, financial tracking), <b>Ledger</b>, and <b>Systems/Framework</b> (planetary boundaries).</p>
+    <p>A person chooses which organizations to follow, and the feed pulls actions from those organizations. There is no single shared feed that looks the same to everyone.</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">Map</span>Data flow at a glance</h2>
+    <p class="section-intro">Where the app's data actually comes from: the internal database, deterministic external APIs, or a live Gemini call.</p>
+    <div class="map-frame">
+      <div class="flow">
+
+        <div class="flow-group">
+          <div class="flow-group-title">Moves feed</div>
+          <div class="flow-row">
+            <span class="node">GET /api/actions<span class="sub">DB-ranked feed</span></span>
+            <span class="flow-note" style="padding:0;">← ranked using the classifier and rep matches below</span>
+          </div>
+        </div>
+
+        <div class="flow-group">
+          <div class="flow-group-title">Proxies · Elected</div>
+          <div class="flow-row">
+            <span class="node">Google Civic API<span class="sub">address → district</span></span>
+            <span class="arrow">──▶</span>
+            <span class="node">congress-legislators dataset<span class="sub">24h cache</span></span>
+            <span class="arrow">──▶</span>
+            <span class="node">Congress.gov API<span class="sub">photo / party / phone</span></span>
+          </div>
+          <div class="flow-row">
+            <span class="node">FEC open data API<span class="sub">race candidates; built server-side, not yet in the UI</span></span>
+          </div>
+        </div>
+
+        <div class="flow-group">
+          <div class="flow-group-title">Money / Vest</div>
+          <div class="flow-row">
+            <span class="node">Bank flag check<span class="sub">static substring match</span></span>
+            <span class="node">Bank alternatives<span class="sub">static + ZIP regex filter</span></span>
+            <span class="node ai">Bank pressure lookup<span class="sub">Gemini + Search grounding</span></span>
+          </div>
+        </div>
+
+        <div class="flow-group ai-group">
+          <div class="flow-group-title">Gemini (gemini-2.5-flash)</div>
+          <div class="flow-row">
+            <span class="node ai">Org activity summary</span>
+            <span class="arrow">──▶ feeds Proxies</span>
+          </div>
+          <div class="flow-row">
+            <span class="node ai">E4A turnaround classifier</span>
+            <span class="arrow">──▶ feeds Moves feed above</span>
+          </div>
+        </div>
+
+        <div class="flow-group">
+          <div class="flow-group-title">Moves feed · Comments tab</div>
+          <div class="flow-row">
+            <span class="node">Federal Register API<span class="sub">open public-comment periods</span></span>
+            <span class="node">EIP Oil &amp; Gas Watch<span class="sub">state permitting alerts from a daily Excel export (no public API)</span></span>
+            <span class="arrow">──▶ both feed the Comments tab, keyed off <code>actions.source</code></span>
+          </div>
+        </div>
+
+        <div class="flow-group">
+          <div class="flow-group-title">Other external services</div>
+          <div class="flow-row">
+            <span class="node">Mobilize.us<span class="sub">nearby events</span></span>
+            <span class="node">Every.org<span class="sub">donation links; not active, no API key configured</span></span>
+            <span class="node">ProPublica<span class="sub">nonprofit verification</span></span>
+            <span class="node">Postmark<span class="sub">transactional email</span></span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <ul class="toc">
+      <li><a href="#moves">Moves</a></li>
+      <li><a href="#proxies">Proxies</a></li>
+      <li><a href="#follows">Following organizations</a></li>
+      <li><a href="#ledger">Ledger</a></li>
+      <li><a href="#systems">Systems/Framework</a></li>
+      <li><a href="#ai">AI / LLM usage</a></li>
+      <li><a href="#apis">External APIs</a></li>
+      <li><a href="#money-logic">Money-out logic</a></li>
+      <li><a href="#rough-edges">Rough edges and what's next</a></li>
+    </ul>
+  </section>
+
+  <section id="areas">
+    <h2><span class="num">Areas</span>Section by section</h2>
+
+    <div class="area" id="moves">
+      <div class="area-head"><h3 class="area-title">Moves: the action feed</h3></div>
+      <p>Every item is a "move" pulled from one <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">actions</code> feed and bucketed by type:</p>
+      <ul>
+        <li><b>sign</b>: petitions</li>
+        <li><b>attend</b>: DB events + a live pull from Mobilize.us, defaulting to the user's saved ZIP within 25 miles; a search box lets the user query a different ZIP with a selectable radius (10/25/50/100mi)</li>
+        <li><b>volunteer</b>: curated opportunities plus volunteer-type actions</li>
+        <li><b>vest</b>: money moves (bank / invest / pension), shown separately from feed cards</li>
+        <li><b>comments</b>: open regulatory comment periods and state permitting notices, sourced from the Federal Register API and EIP Oil &amp; Gas Watch (see below)</li>
+        <li>anything else falls back to <b>notify</b></li>
+      </ul>
+      <div class="spec">
+        <div class="spec-label">Server filtering: <code>GET /api/actions</code></div>
+        Only shows actions from orgs the user follows, or user-sourced actions they already have. Excludes: already dismissed/completed, org subscription lapsed, out-of-region, needs manual review, decision window passed. Capped at 3 actions per org (window function) so no single org dominates.
+      </div>
+      <div class="spec">
+        <div class="spec-label">Ranking</div>
+        do-now first → real financial/personal stake → <code>timing_confidence + boundary_urgency_score</code> (combined) → newest first. Client re-sorts dated-soonest first, then groups attend → sign → volunteer → notify.
+      </div>
+      <p style="font-size:14px;color:var(--ink-soft);">"Your rep is involved" badges are computed client-side by matching an action's target strings against the user's already-fetched representatives.</p>
+      <div class="spec">
+        <div class="spec-label">Comments tab: permitting and comment-period pipeline</div>
+        Two scheduled jobs feed this tab and nothing else: a daily 04:00 UTC job pulls open public-comment periods from the <b>Federal Register API</b>, and a daily 05:00 UTC job (<code>eip-oil-gas-watch-job.js</code>) ingests <b>EIP Oil &amp; Gas Watch</b>'s state-level fossil-infrastructure permitting alerts (LNG terminals, compressor stations, gas storage) from a daily Excel export, since EIP has no public API. Both write into the same <code>actions</code> table; the Comments tab filters on <code>source</code> so these never leak into Sign/Attend.
+      </div>
+    </div>
+
+    <div class="area" id="proxies">
+      <div class="area-head"><h3 class="area-title">Proxies: Elected · Advocates · Financial</h3></div>
+      <p><i>"People and institutions acting on your behalf."</i></p>
+      <div class="spec">
+        <div class="spec-label">Elected: how a rep lookup actually happens</div>
+        1. Address → <code>Google Civic API divisionsByAddress</code> → state + congressional district.<br>
+        2. District matched against a locally-cached <code>unitedstates/congress-legislators</code> dataset (refreshed every 24h) for roster + committees.<br>
+        3. <code>Congress.gov API</code> adds photo, party history, phone.<br>
+        4. EU/UK users route through a separate matcher.<br>
+        5. Re-runs automatically after onboarding or a ZIP/country change in Settings.
+      </div>
+      <p>Rep-to-issue relevance uses a hardcoded table mapping 35 named committees and fiduciary boards to the five E4A turnarounds. This drives "your rep works on this" badges and the related-actions ranking.</p>
+      <div class="spec">
+        <div class="spec-label">Elections tab</div>
+        Not live yet. The UI shows "Bills and Races: Coming soon" and links out to Ballotpedia's Sample Ballot Lookup. The FEC-backed endpoint (candidates filtered to incumbents or nonzero campaign receipts) is fully built server-side but nothing in the frontend calls it.
+      </div>
+      <p><b>Advocates</b> tab: orgs the user follows/gives to. <b>Financial</b> tab: read-only summary of where money exerts pressure, managed from Vest instead.</p>
+      <div class="spec">
+        <div class="spec-label">Fiduciary pledges (Financial tab)</div>
+        A separate pledge system alongside the bank pledges below: users can pledge to press a pension/fund board (mapped via the same committee table above) to act by a date, with <code>committed</code>/<code>acted</code>/<code>withdrawn</code> status and reminder cards feeding back into Moves.
+      </div>
+    </div>
+
+    <div class="area" id="follows">
+      <div class="area-head"><h3 class="area-title">Following organizations</h3></div>
+      <p>A follow is a per-person choice. It decides which actions appear in Moves, which organizations show as Advocates and in the Give list, and which forwarded emails are let through.</p>
+      <div class="spec">
+        <div class="spec-label">How an email becomes a card</div>
+        Each person has a forwarding address for subscribing to organizations' email lists. Incoming mail is matched to an organization by sender domain (a domain belongs to one organization). Mail to a person's forwarding address goes through only when it comes from an organization they follow; otherwise it is archived. Mail that passes is classified by Gemini and becomes an entry in the <code>actions</code> feed.
+      </div>
+      <div class="spec">
+        <div class="spec-label">Which organizations can be followed</div>
+        The platform's curated list. A person can also keep a private list of organizations they give to; those are visible only to them and are not followed.
+      </div>
+    </div>
+
+    <div class="area" id="ledger">
+      <div class="area-head"><h3 class="area-title">Ledger</h3></div>
+      <p>The user's own giving and impact history, computed from their donation/contribution records.</p>
+    </div>
+
+    <div class="area" id="systems">
+      <div class="area-head"><h3 class="area-title">Systems/Framework: planetary boundaries</h3></div>
+      <p>The nine Stockholm Resilience Centre planetary boundaries (climate, biodiversity, freshwater, etc.), each carrying a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">status</code> (safe/transgressed), a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">trend</code>, and a <code style="font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:1px 6px;border-radius:4px;">transgression_severity</code> score (0–3). Each maps to one or more of Causal's five <b>E4A turnarounds</b>, hand-maintained and refreshed annually after each Stockholm health check.</p>
+      <div class="spec">
+        <div class="spec-label">The one live computation</div>
+        <code>boundaryUrgencyScore</code> = max severity across an action's tagged boundaries. Feeds straight into the Moves feed ranking above.
+      </div>
+    </div>
+  </section>
+
+  <section id="ai">
+    <h2><span class="num">AI</span>AI / LLM usage: where and how</h2>
+    <p class="section-intro">Everything AI-related runs on <b>Google Gemini</b> (<code style="font-family:var(--mono);background:var(--violet-soft);color:var(--violet);padding:1px 6px;border-radius:4px;">gemini-2.5-flash</code>) via the <code style="font-family:var(--mono);background:var(--violet-soft);color:var(--violet);padding:1px 6px;border-radius:4px;">@google/generative-ai</code> SDK or a raw REST call. Four use sites total.</p>
+
+    <div class="ai-block">
+      <h3>Organization activity summaries <span class="model-tag">gemini-2.5-flash</span></h3>
+      <p>1–2 sentence "what has this org been doing" blurb, shown wherever an org is listed. Three-tier fallback, each its own prompt: summarize recent tracked actions → or summarize the org's earliest inbound outreach email → or fetch-and-summarize the org's own homepage text (plain HTTP fetch + tag strip, no headless browser).</p>
+      <span class="status">Cached 14 days per org · live</span>
+    </div>
+
+    <div class="ai-block">
+      <h3>Bank pressure-campaign lookup <span class="model-tag">gemini-2.5-flash + Google Search grounding</span></h3>
+      <p><code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">GET /api/bank/pressure</code> asks Gemini for 2–3 current (2025–2026) real campaigns or divestment actions targeting the specific bank the user named, with <code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">tools: [google_search]</code> enabled so it can ground on live results. Expects JSON output.</p>
+      <span class="status">Cached client-side per session · live</span>
+    </div>
+
+    <div class="ai-block">
+      <h3>E4A turnaround / policy-parameter classifier <span class="model-tag">gemini-2.5-flash, JSON mode</span></h3>
+      <p>Reads inbound content (forwarded emails, submitted actions) and classifies it against the five E4A turnarounds and 19 underlying policy parameters. This is the pipeline that populates the <code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">turnaround_category</code> tag used everywhere in Moves and Proxies. Feed ranking and rep-relevance badges both depend on this having already run.</p>
+      <span class="status">Live · upstream of most of the app</span>
+    </div>
+
+    <div class="ai-block">
+      <h3>Congressional bill classification <span class="model-tag">same approach, not wired up</span></h3>
+      <p>Schema was designed for classifying bills into turnarounds with a rationale (<code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">bills_cache</code> table, read by <code style="font-family:var(--mono);background:var(--paper-raised);color:var(--violet);padding:1px 6px;border-radius:4px;">/api/reps/bills-rationale</code>), but the table itself was dropped in a later migration and never rebuilt.</p>
+      <span class="status">Dormant: endpoint currently errors</span>
+    </div>
+
+    <p style="font-size:14px;color:var(--ink-soft);">No AI is used for rep-matching, event lookup, or bank-alternative filtering. Those are deterministic API/data lookups, covered below.</p>
+  </section>
+
+  <section id="apis">
+    <h2><span class="num">APIs</span>External services in use</h2>
+    <div class="map-frame" style="padding:4px 20px;">
+      <table class="api-table">
+        <thead><tr><th>Service</th><th>Used for</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="svc">Google Civic Information API</td><td>Address → congressional district</td><td>Requires <code>GOOGLE_CIVIC_API_KEY</code></td></tr>
+          <tr><td class="svc">congress-legislators (GitHub)</td><td>Legislator roster, committees</td><td>Static JSON, 24h disk cache</td></tr>
+          <tr><td class="svc">Congress.gov API</td><td>Rep photo, party history, phone</td><td>Requires <code>CONGRESS_API_KEY</code></td></tr>
+          <tr><td class="svc">FEC open data API</td><td>Upcoming race candidates</td><td>Falls back to public <code>DEMO_KEY</code>; built, not yet in the UI</td></tr>
+          <tr><td class="svc">Mobilize.us API</td><td>Nearby civic events</td><td>Default: user's saved ZIP, 25-mile radius. Search box allows a different ZIP + 10/25/50/100mi radius</td></tr>
+          <tr><td class="svc">Every.org API</td><td>Donation links + webhook</td><td><b>Not active</b>: no <code>EVERYORG_PUBLIC_KEY</code> configured, endpoint 404s</td></tr>
+          <tr><td class="svc">ProPublica Nonprofit Explorer</td><td>Verifying user-submitted orgs</td><td>Auto-approves on high match score</td></tr>
+          <tr><td class="svc">Federal Register API</td><td>Open public-comment periods → Comments tab</td><td>Scheduled job, daily 04:00 UTC</td></tr>
+          <tr><td class="svc">EIP Oil &amp; Gas Watch</td><td>State fossil-infrastructure permitting alerts → Comments tab</td><td>No public API; daily Google Drive Excel export, scheduled job daily 05:00 UTC</td></tr>
+          <tr><td class="svc">Postmark</td><td>Transactional email</td><td>Admin approvals, volunteer submissions</td></tr>
+          <tr><td class="svc">Google Gemini</td><td>See AI section</td><td><code>gemini-2.5-flash</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="money-logic">
+    <h2><span class="num">Logic</span>Money-out logic</h2>
+    <div class="spec">
+      <div class="spec-label"><code>POST /api/bank/check</code>: bank flag check</div>
+      Plain substring match against a static, curated dataset of banks known for major fossil-fuel financing (sourced from public reporting, e.g. Banking on Climate Chaos). No API call.
+    </div>
+    <div class="spec">
+      <div class="spec-label"><code>GET /api/bank/alternatives-suggestions</code></div>
+      Fully static/curated data, no geocoding API. Non-US users get fixed EU links. US users always see "Fossil Free Alliance"–certified banks unconditionally (so ZIP-less users still see something); everything else (mostly credit unions) is filtered to the user's state, extracted from their ZIP/address via a <b>regex heuristic</b>: abbreviation near ZIP, bare state abbreviation, full state-name match, or a Massachusetts ZIP-range fallback.
+    </div>
+    <div class="spec">
+      <div class="spec-label">Bank pledges</div>
+      Running pledge count per bank; the aggregate total is only displayed once at least 50 people have pledged against that bank, to avoid showing a discouragingly small number.
+    </div>
+  </section>
+
+  <section id="rough-edges">
+    <div class="callout">
+      <h2>Rough edges and what's next</h2>
+      <p style="margin:12px 0 0;"><b>Rough today</b></p>
+      <ul>
+        <li>Congressional bill classification (<code>bills_cache</code>) is dormant: the table was dropped in a later migration, so its endpoint currently errors.</li>
+        <li>Eventbrite and Action Network are stubbed as future event sources in <code>local.js</code> but need paid keys that aren't configured, so only Mobilize.us is live.</li>
+        <li>Every.org donation links are not active: no <code>EVERYORG_PUBLIC_KEY</code> is configured, so the endpoint 404s.</li>
+        <li>The EU/UK representative-matching path is separate code from the US path and less battle-tested.</li>
+        <li>Agency has no Solid pod integration. Personal data stays in Postgres.</li>
+      </ul>
+      <p style="margin:16px 0 0;"><b>Next</b></p>
+      <ul>
+        <li><b>Following across instances.</b> Through Agency, individuals follow organizations on any Cooperative instance, chosen from a curated, human-approved list.</li>
+        <li><b>Elections tab.</b> It shows "Coming soon" and links out to Ballotpedia today. The FEC-backed candidate lookup is already built server-side and not yet used.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    See the <a href="/docs/platform-guide.html" target="_blank" rel="noopener">Platform guide</a> for login, roles, and the Solid picture above both apps, and the <a href="/docs/organizational-app-guide.html" target="_blank" rel="noopener">Cooperative app guide</a> for the nonprofit workspace.
+  </footer>
+
+</div>

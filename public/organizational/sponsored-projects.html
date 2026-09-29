@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="sponsored-projects">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading sponsored projects…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Sponsored Projects</h1>
+
+          <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 24px;">
+            <button type="button" class="organizational-btn" id="organizational-sp-add-btn">Add sponsored project</button>
+          </div>
+
+          <div id="organizational-sp-list">
+            <p class="organizational-empty">Loading sponsored projects…</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Sponsored Project Modal -->
+  <div id="organizational-sp-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-sp-modal-title" hidden>
+    <div class="organizational-modal" onclick="event.stopPropagation()">
+      <h3 id="organizational-sp-modal-title">Add sponsored project</h3>
+      <form id="organizational-sp-form">
+        <input type="hidden" id="organizational-sp-edit-id" value="">
+
+        <label for="organizational-sp-name">Project name</label>
+        <input id="organizational-sp-name" type="text" required maxlength="300" autocomplete="off">
+
+        <label for="organizational-sp-description">Description</label>
+        <textarea id="organizational-sp-description" rows="3" maxlength="5000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+        <label for="organizational-sp-start-date">Start date</label>
+        <input id="organizational-sp-start-date" type="date" autocomplete="off">
+
+        <label for="organizational-sp-end-date">End date (optional)</label>
+        <input id="organizational-sp-end-date" type="date" autocomplete="off">
+
+        <label for="organizational-sp-contact-name">Contact lead name</label>
+        <input id="organizational-sp-contact-name" type="text" maxlength="200" autocomplete="off">
+
+        <label for="organizational-sp-contact-email">Contact lead email</label>
+        <input id="organizational-sp-contact-email" type="email" maxlength="255" autocomplete="off">
+
+        <label for="organizational-sp-budget">Annual budget estimate</label>
+        <input id="organizational-sp-budget" type="number" min="0" step="0.01" autocomplete="off">
+
+        <label for="organizational-sp-sponsorship-model">Sponsorship model</label>
+        <select id="organizational-sp-sponsorship-model">
+          <option value="">Use organization default</option>
+          <option value="model_c">Standard (pass-through)</option>
+          <option value="model_a">Managed (comprehensive)</option>
+          <option value="other">Other</option>
+        </select>
+
+        <label for="organizational-sp-program" id="organizational-sp-program-label">Budget program or activity</label>
+        <select id="organizational-sp-program">
+          <option value="">No program linked</option>
+        </select>
+        <p class="organizational-hint" id="organizational-sp-program-hint" hidden>Managed projects should link to their own activity under a program, so their expenses stay separable from that program's other activity — not the parent program itself.</p>
+
+        <label for="organizational-sp-admin-rate">Admin allocation rate (%, optional override)</label>
+        <input id="organizational-sp-admin-rate" type="number" min="0" max="100" step="0.01" autocomplete="off">
+
+        <label for="organizational-sp-next-report-due">Next sponsee report due</label>
+        <input id="organizational-sp-next-report-due" type="date" autocomplete="off">
+        <p class="organizational-hint">When the sponsee's next report on how the money was spent is due — the IRC 4945(h) accountability piece, separate from disbursement tracking.</p>
+
+        <label for="organizational-sp-status">Status</label>
+        <select id="organizational-sp-status">
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+          <option value="completed">Completed</option>
+          <option value="winding_down">Winding down</option>
+        </select>
+
+        <div id="organizational-sp-edit-finances-section" hidden>
+          <div class="organizational-panel-section-head" style="margin-top:16px;">Project finances</div>
+          <div id="organizational-sp-finances"><p class="organizational-hint" style="margin:0;"><em>Loading…</em></p></div>
+        </div>
+
+        <div id="organizational-sp-edit-reports-section" hidden>
+          <div class="organizational-panel-section-head" style="margin-top:16px;">Sponsee reports</div>
+          <div id="organizational-sp-reports-summary"></div>
+          <div id="organizational-sp-documents"><p class="organizational-hint" style="margin:0;"><em>Loading…</em></p></div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+            <input type="file" id="organizational-sp-attach-file">
+            <button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" id="organizational-sp-attach-btn">Attach report</button>
+          </div>
+        </div>
+
+        <div class="organizational-modal-actions">
+          <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-sp-cancel">Cancel</button>
+          <button type="submit" class="organizational-btn" id="organizational-sp-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Project Detail Modal -->
+  <div id="organizational-sp-detail-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="organizational-sp-detail-title" hidden>
+    <div class="organizational-modal organizational-modal-large" onclick="event.stopPropagation()">
+      <h3 id="organizational-sp-detail-title">—</h3>
+      <div id="organizational-sp-detail-content"></div>
+      <div class="organizational-modal-actions">
+        <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-sp-detail-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/sponsored-projects.js?v=1" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

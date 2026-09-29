@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signing in… — Causal</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" style="visibility:visible;">
+  <div style="max-width:480px; margin:80px auto; padding:24px; text-align:center;">
+    <p id="callback-status" class="organizational-hint">Completing sign-in…</p>
+  </div>
+  <script src="/organizational/js/solid-oidc-client.js"></script>
+  <script>
+    (async () => {
+      const statusEl = document.getElementById('callback-status');
+      try {
+        const session = await window.SolidOidcClient.handleRedirectCallback();
+        if (!session) {
+          statusEl.textContent = 'No sign-in in progress. Redirecting…';
+          setTimeout(() => { window.location.href = '/organizational/solid-login.html'; }, 1500);
+          return;
+        }
+        statusEl.textContent = 'Signed in as ' + session.webId + '. Redirecting…';
+        setTimeout(() => { window.location.href = '/organizational/solid-login.html'; }, 800);
+      } catch (e) {
+        console.error('callback error:', e);
+        statusEl.textContent = 'Sign-in failed: ' + (e.message || 'unknown error');
+        statusEl.style.color = '#ef4444';
+      }
+    })();
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

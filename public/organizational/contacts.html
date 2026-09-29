@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Contacts — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="contacts">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading contacts…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Contacts</h1>
+          <p class="organizational-hint" style="margin-top: -8px;">Every donor, vendor, and customer contact your organization tracks, shared across Accounting and Funders — not a per-module list.</p>
+
+          <div class="organizational-grants-head" style="margin-top:20px;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="text" id="organizational-contacts-search" class="organizational-input" placeholder="Search name or email…" style="width:220px;">
+              <select id="organizational-contacts-filter-role" class="organizational-input" style="width:150px;">
+                <option value="">All roles</option>
+                <option value="donor">Donor</option>
+                <option value="vendor">Vendor</option>
+                <option value="customer">Customer</option>
+              </select>
+              <!-- Dependent field: only meaningful once Role=Donor is picked (donor-category
+                   segmentation), same controlling/dependent relationship as the create panel's
+                   Roles->Donor category field. Hidden by default. -->
+              <select id="organizational-contacts-filter-type" class="organizational-input" style="width:150px;" hidden>
+                <option value="">All donor categories</option>
+                <option value="individual">Individual</option>
+                <option value="board">Board</option>
+                <option value="prospect">Prospect</option>
+                <option value="foundation">Foundation</option>
+                <option value="member_org">Member org</option>
+              </select>
+            </div>
+            <a href="#" id="organizational-contacts-1099-export" class="organizational-btn organizational-btn-secondary" title="Vendors marked 1099-eligible, amount paid this calendar year, and whether each crosses that year's IRS reporting threshold" hidden>1099 summary (CSV)</a>
+            <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-contacts-add">+ New contact</button>
+          </div>
+
+          <section class="organizational-card organizational-card-flush" style="margin-top:16px;">
+            <div class="organizational-table-wrap">
+              <table class="organizational-table" aria-label="Contacts">
+                <thead>
+                  <tr><th>Name</th><th>Type</th><th>Roles</th><th>Email</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody id="organizational-contacts-tbody">
+                  <tr class="organizational-table-empty"><td colspan="6">No contacts yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Contact detail/create sliding panel -->
+  <div id="organizational-contacts-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-contacts-panel" class="organizational-grant-panel" aria-label="Contact details">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-contacts-panel-title">Contact</h3>
+      <button type="button" id="organizational-contacts-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-contacts-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-contacts-panel-body"></div>
+  </aside>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/contacts-ui.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

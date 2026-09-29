@@ -1,0 +1,318 @@
+{
+  "_meta": {
+    "source": "Curated registry (verify periodically; leadership changes after elections).",
+    "last_verified": "2026-03-30",
+    "reference": "https://www.whereig.com/usa/list-of-current-united-states-governors.html",
+    "office_contact_note": "website and phone are each state executive office main public URLs and switchboard-style numbers; verify after elections."
+  },
+  "states": {
+    "AL": {
+      "name": "Kay Ivey",
+      "party": "Republican",
+      "website": "https://www.governor.alabama.gov",
+      "phone": "334-242-7100"
+    },
+    "AK": {
+      "name": "Mike Dunleavy",
+      "party": "Republican",
+      "website": "https://gov.alaska.gov",
+      "phone": "907-465-3500"
+    },
+    "AZ": {
+      "name": "Katie Hobbs",
+      "party": "Democratic",
+      "website": "https://azgovernor.gov",
+      "phone": "602-542-4331"
+    },
+    "AR": {
+      "name": "Sarah Huckabee Sanders",
+      "party": "Republican",
+      "website": "https://governor.arkansas.gov",
+      "phone": "501-682-2345"
+    },
+    "CA": {
+      "name": "Gavin Newsom",
+      "party": "Democratic",
+      "website": "https://www.gov.ca.gov",
+      "phone": "916-445-2841"
+    },
+    "CO": {
+      "name": "Jared Polis",
+      "party": "Democratic",
+      "website": "https://www.colorado.gov/governor",
+      "phone": "303-866-2881"
+    },
+    "CT": {
+      "name": "Ned Lamont",
+      "party": "Democratic",
+      "website": "https://portal.ct.gov/governor",
+      "phone": "860-566-4840"
+    },
+    "DE": {
+      "name": "Matt Meyer",
+      "party": "Democratic",
+      "website": "https://governor.delaware.gov",
+      "phone": "302-577-3210"
+    },
+    "FL": {
+      "name": "Ron DeSantis",
+      "party": "Republican",
+      "website": "https://www.flgov.com",
+      "phone": "850-717-9337"
+    },
+    "GA": {
+      "name": "Brian Kemp",
+      "party": "Republican",
+      "website": "https://gov.georgia.gov",
+      "phone": "404-656-1776"
+    },
+    "HI": {
+      "name": "Josh Green",
+      "party": "Democratic",
+      "website": "https://governor.hawaii.gov",
+      "phone": "808-586-0034"
+    },
+    "ID": {
+      "name": "Brad Little",
+      "party": "Republican",
+      "website": "https://gov.idaho.gov",
+      "phone": "208-334-2100"
+    },
+    "IL": {
+      "name": "JB Pritzker",
+      "party": "Democratic",
+      "website": "https://www2.illinois.gov/sites/governor",
+      "phone": "217-782-6830"
+    },
+    "IN": {
+      "name": "Mike Braun",
+      "party": "Republican",
+      "website": "https://www.in.gov/governor",
+      "phone": "317-232-4567"
+    },
+    "IA": {
+      "name": "Kim Reynolds",
+      "party": "Republican",
+      "website": "https://governor.iowa.gov",
+      "phone": "515-281-5211"
+    },
+    "KS": {
+      "name": "Laura Kelly",
+      "party": "Democratic",
+      "website": "https://governor.kansas.gov",
+      "phone": "785-296-3232"
+    },
+    "KY": {
+      "name": "Andy Beshear",
+      "party": "Democratic",
+      "website": "https://governor.ky.gov",
+      "phone": "502-564-2611"
+    },
+    "LA": {
+      "name": "Jeff Landry",
+      "party": "Republican",
+      "website": "https://gov.louisiana.gov",
+      "phone": "225-342-7015"
+    },
+    "ME": {
+      "name": "Janet Mills",
+      "party": "Democratic",
+      "website": "https://www.maine.gov/governor",
+      "phone": "207-287-3531"
+    },
+    "MD": {
+      "name": "Wes Moore",
+      "party": "Democratic",
+      "website": "https://governor.maryland.gov",
+      "phone": "410-974-3901"
+    },
+    "MA": {
+      "name": "Maura Healey",
+      "party": "Democratic",
+      "website": "https://www.mass.gov/orgs/office-of-the-governor",
+      "phone": "617-725-4005"
+    },
+    "MI": {
+      "name": "Gretchen Whitmer",
+      "party": "Democratic",
+      "website": "https://www.michigan.gov/whitmer",
+      "phone": "517-373-3400"
+    },
+    "MN": {
+      "name": "Tim Walz",
+      "party": "Democratic",
+      "website": "https://mn.gov/governor",
+      "phone": "651-201-3400"
+    },
+    "MS": {
+      "name": "Tate Reeves",
+      "party": "Republican",
+      "website": "https://governor.ms.gov",
+      "phone": "601-359-3150"
+    },
+    "MO": {
+      "name": "Mike Kehoe",
+      "party": "Republican",
+      "website": "https://governor.mo.gov",
+      "phone": "573-751-3222"
+    },
+    "MT": {
+      "name": "Greg Gianforte",
+      "party": "Republican",
+      "website": "https://gov.mt.gov",
+      "phone": "406-444-3111"
+    },
+    "NE": {
+      "name": "Jim Pillen",
+      "party": "Republican",
+      "website": "https://governor.nebraska.gov",
+      "phone": "402-471-2244"
+    },
+    "NV": {
+      "name": "Joe Lombardo",
+      "party": "Republican",
+      "website": "https://gov.nv.gov",
+      "phone": "775-684-5670"
+    },
+    "NH": {
+      "name": "Kelly Ayotte",
+      "party": "Republican",
+      "website": "https://www.governor.nh.gov",
+      "phone": "603-271-2121"
+    },
+    "NJ": {
+      "name": "Mikie Sherrill",
+      "party": "Democratic",
+      "website": "https://www.nj.gov/governor",
+      "phone": "609-292-6000"
+    },
+    "NM": {
+      "name": "Michelle Lujan Grisham",
+      "party": "Democratic",
+      "website": "https://www.governor.state.nm.us",
+      "phone": "505-476-2200"
+    },
+    "NY": {
+      "name": "Kathy Hochul",
+      "party": "Democratic",
+      "website": "https://www.governor.ny.gov",
+      "phone": "518-474-8390"
+    },
+    "NC": {
+      "name": "Josh Stein",
+      "party": "Democratic",
+      "website": "https://governor.nc.gov",
+      "phone": "919-814-2000"
+    },
+    "ND": {
+      "name": "Kelly Armstrong",
+      "party": "Republican",
+      "website": "https://www.governor.nd.gov",
+      "phone": "701-328-2200"
+    },
+    "OH": {
+      "name": "Mike DeWine",
+      "party": "Republican",
+      "website": "https://governor.ohio.gov",
+      "phone": "614-466-3555"
+    },
+    "OK": {
+      "name": "Kevin Stitt",
+      "party": "Republican",
+      "website": "https://oklahoma.gov/governor",
+      "phone": "405-521-2342"
+    },
+    "OR": {
+      "name": "Tina Kotek",
+      "party": "Democratic",
+      "website": "https://www.oregon.gov/gov",
+      "phone": "503-378-4582"
+    },
+    "PA": {
+      "name": "Josh Shapiro",
+      "party": "Democratic",
+      "website": "https://www.governor.pa.gov",
+      "phone": "717-787-2500"
+    },
+    "RI": {
+      "name": "Dan McKee",
+      "party": "Democratic",
+      "website": "https://governor.ri.gov",
+      "phone": "401-222-2080"
+    },
+    "SC": {
+      "name": "Henry McMaster",
+      "party": "Republican",
+      "website": "https://governor.sc.gov",
+      "phone": "803-734-2100"
+    },
+    "SD": {
+      "name": "Larry Rhoden",
+      "party": "Republican",
+      "website": "https://governor.sd.gov",
+      "phone": "605-773-3212"
+    },
+    "TN": {
+      "name": "Bill Lee",
+      "party": "Republican",
+      "website": "https://www.tn.gov/governor",
+      "phone": "615-741-2001"
+    },
+    "TX": {
+      "name": "Greg Abbott",
+      "party": "Republican",
+      "website": "https://gov.texas.gov",
+      "phone": "512-463-2000"
+    },
+    "UT": {
+      "name": "Spencer Cox",
+      "party": "Republican",
+      "website": "https://governor.utah.gov",
+      "phone": "801-538-1000"
+    },
+    "VT": {
+      "name": "Phil Scott",
+      "party": "Republican",
+      "website": "https://governor.vermont.gov",
+      "phone": "802-828-3333"
+    },
+    "VA": {
+      "name": "Abigail Spanberger",
+      "party": "Democratic",
+      "website": "https://www.governor.virginia.gov",
+      "phone": "804-786-2211"
+    },
+    "WA": {
+      "name": "Bob Ferguson",
+      "party": "Democratic",
+      "website": "https://www.governor.wa.gov",
+      "phone": "360-902-4111"
+    },
+    "WV": {
+      "name": "Patrick Morrisey",
+      "party": "Republican",
+      "website": "https://governor.wv.gov",
+      "phone": "304-558-2000"
+    },
+    "WI": {
+      "name": "Tony Evers",
+      "party": "Democratic",
+      "website": "https://www.evers.wi.gov",
+      "phone": "608-266-1212"
+    },
+    "WY": {
+      "name": "Mark Gordon",
+      "party": "Republican",
+      "website": "https://governor.wyo.gov",
+      "phone": "307-777-7434"
+    },
+    "DC": {
+      "name": "Muriel Bowser",
+      "party": "Democratic",
+      "role": "mayor",
+      "office_name": "Mayor of the District of Columbia",
+      "website": "https://mayor.dc.gov",
+      "phone": "202-727-2643"
+    }
+  }
+}

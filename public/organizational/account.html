@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main">
+        <div id="organizational-account-loading" class="organizational-empty">Loading…</div>
+        <div id="organizational-account-error" class="organizational-error" hidden></div>
+
+        <div id="organizational-account-content" hidden>
+          <h1>My Account</h1>
+
+          <h2 class="organizational-subheading">Account info</h2>
+          <section class="organizational-card">
+            <p><strong>Email:</strong> <span id="organizational-account-email">—</span></p>
+          </section>
+
+          <h2 class="organizational-subheading">My workspaces</h2>
+          <section class="organizational-card">
+            <p id="organizational-workspaces-empty" class="organizational-hint">Loading workspaces…</p>
+            <div class="organizational-table-wrap" id="organizational-workspaces-table-wrap" hidden>
+              <table class="organizational-table" aria-label="Your workspaces">
+                <thead>
+                  <tr>
+                    <th>Workspace</th>
+                    <th>Your role</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="organizational-workspaces-tbody">
+                  <tr class="organizational-table-empty"><td colspan="3">No workspaces.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="organizational-landing-actions" style="margin-top:16px;">
+              <a class="organizational-btn organizational-btn-outline" id="organizational-account-create-org-link" href="/organizational/?create=1">+ Create a new organization</a>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/account.js"></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

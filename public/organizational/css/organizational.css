@@ -1,0 +1,6115 @@
+@import "/shared/css/tokens.css";
+/**
+ * Coop workspace UI — load after /css/styles.css (and optionally /css/app-panels.css
+ * for shared metric tiles). Uses Causal design tokens only; no duplicate :root palette.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  /* Coop-specific tokens — supplement app.css base tokens */
+  --organizational-accent:           #800020;
+  --organizational-status-warning:   #f59e0b;
+  --organizational-status-danger:    #ef4444;
+  --organizational-status-success:   #10b981;
+  --organizational-radius-md:        6px;
+  --organizational-radius-lg:        8px;
+  --organizational-shadow-sm:        var(--shadow-sm);
+  --organizational-shadow-md:        var(--shadow-md);
+  --organizational-shadow-lg:        var(--shadow-lg);
+
+  /* Map app.css tokens to organizational-* and app-* aliases so existing Coop component classes still work */
+  --organizational-font-sans:        var(--font-sans);
+  --organizational-text-primary:     var(--text-primary);
+  --organizational-text-secondary:   var(--text-secondary);
+  --organizational-text-tertiary:    var(--text-muted);
+  --organizational-border-subtle:    var(--border);
+  --organizational-border-medium:    var(--border-strong);
+  --organizational-surface-page:     var(--surface-page);
+  --organizational-surface-card:     var(--surface-card);
+}
+
+body.organizational-app {
+  height: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  color-scheme: light;
+  background: var(--organizational-surface-page);
+  visibility: hidden; /* shown after header loads */
+}
+
+/* App header: always visible at top as page scrolls */
+body.organizational-app #app-header {
+  position: sticky;
+  top: 0;
+  z-index: 500;
+}
+
+/* Org-first header (Variant C): org switcher button on the left */
+.organizational-header-org {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.organizational-header-org-chevron {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  line-height: 1;
+}
+
+body.organizational-app .app-header-logo {
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.app-header-logo-line {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.app-header-signature-product {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+body.organizational-app h1,
+body.organizational-app .organizational-org-dashboard-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: var(--organizational-text-primary);
+}
+
+body.organizational-app h2,
+body.organizational-app h3,
+body.organizational-app .organizational-section-heading,
+body.organizational-app .organizational-subheading {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--organizational-text-primary);
+}
+
+body.organizational-app .organizational-hint,
+body.organizational-app .organizational-data-freshness {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--organizational-text-secondary);
+}
+
+body.organizational-app .organizational-sidebar__workspace-label,
+body.organizational-app .organizational-settings-subnav a {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--organizational-text-secondary);
+}
+
+/* Form fields: explicit text/background so values stay visible (budget grid, onboarding)
+   and typing/paste work reliably — avoids inheriting header `color: white` in some trees. */
+body.organizational-app input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='range']),
+body.organizational-app textarea,
+body.organizational-app select {
+  color: #1a1a1a;
+  -webkit-text-fill-color: #1a1a1a;
+  background-color: #ffffff;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+body.organizational-app input:-webkit-autofill,
+body.organizational-app input:-webkit-autofill:hover,
+body.organizational-app input:-webkit-autofill:focus,
+body.organizational-app textarea:-webkit-autofill {
+  -webkit-text-fill-color: #1a1a1a;
+  transition: background-color 9999s ease-out;
+}
+
+/* Re-lock background scroll only while an coop modal overlay is open (see organizational-org.js). */
+body.organizational-app.organizational-organizational-modal-open {
+  overflow: hidden;
+}
+
+/* Full-width main (same horizontal padding as header). */
+.organizational-main {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 20px 20px 48px;
+  box-sizing: border-box;
+}
+
+/* Kept for page hooks; same width as default NP main. */
+.organizational-main.organizational-main-wide {
+  max-width: none;
+}
+
+a.organizational-nav-link {
+  text-decoration: none;
+  color: inherit;
+  display: inline-block;
+}
+
+/* NP dashboard splash — first visit / create-org context */
+.organizational-intro-splash {
+  margin-bottom: 24px;
+  padding: 18px 20px;
+  border-left: 3px solid var(--organizational-accent, var(--brand-primary));
+  background: var(--organizational-surface-card, #fff);
+}
+
+.organizational-intro-splash-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+.organizational-intro-splash-lead {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #374151;
+  max-width: 52rem;
+}
+
+.organizational-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+details.organizational-collapsible {
+  margin-bottom: 2rem;
+}
+
+details.organizational-collapsible > summary.organizational-section-heading {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.5rem 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  color: var(--organizational-text-secondary, var(--text-secondary));
+  border-bottom: 0.5px solid var(--organizational-border-subtle, var(--border-subtle));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+details.organizational-collapsible > summary.organizational-section-heading::after {
+  content: '>';
+  transition: transform 0.15s;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+details.organizational-collapsible[open] > summary.organizational-section-heading::after {
+  transform: rotate(90deg);
+}
+
+details.organizational-collapsible > summary.organizational-section-heading::-webkit-details-marker {
+  display: none;
+}
+
+details.organizational-collapsible > .organizational-section-body {
+  padding-top: 1rem;
+}
+
+.organizational-card {
+  background: var(--organizational-surface-card, var(--surface-card));
+  border: 1px solid var(--organizational-border-subtle, var(--border-subtle));
+  border-radius: var(--organizational-radius-lg, 8px);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--organizational-shadow-sm);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.organizational-card:hover {
+  box-shadow: var(--organizational-shadow-md);
+}
+
+.organizational-card.organizational-card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Budget grid: avoid clipping the wide horizontal scroll region (flush cards use overflow: hidden for radius). */
+.organizational-card.organizational-card-flush.organizational-budget-entry-card {
+  overflow: visible;
+}
+
+.organizational-org-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.organizational-org-card-link:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.organizational-org-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-org-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.organizational-org-row:first-child {
+  padding-top: 0;
+}
+
+.organizational-org-name {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.organizational-org-meta {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+/* Post-login landing page (index.html) — one template, org count just changes how many
+   rows render, not the layout itself. */
+.organizational-landing-eyebrow {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.organizational-landing-heading {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.organizational-landing-subhead {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  max-width: 40rem;
+}
+
+.organizational-landing-org-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--organizational-border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.organizational-landing-org-row:hover {
+  border-color: var(--organizational-border-strong, var(--border-strong));
+}
+
+.organizational-org-row-main {
+  min-width: 0;
+}
+
+.organizational-org-status-line {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.organizational-org-row-side {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.organizational-org-row-side--action {
+  color: var(--organizational-accent, var(--brand-primary));
+  font-weight: 600;
+}
+
+.organizational-landing-org-row--invited {
+  border-style: dashed;
+}
+
+.organizational-landing-divider {
+  border-top: 1px solid var(--organizational-border-subtle);
+  margin: 24px 0 20px;
+}
+
+.organizational-landing-sandbox {
+  margin-bottom: 24px;
+}
+
+.organizational-landing-sandbox-row {
+  border-style: dashed;
+  color: var(--text-secondary);
+}
+
+.organizational-landing-sandbox-row .organizational-org-name {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.organizational-landing-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.organizational-landing-manage-link {
+  font-size: 0.875rem;
+  color: var(--organizational-accent, var(--brand-primary));
+  text-decoration: none;
+}
+
+.organizational-landing-manage-link:hover {
+  text-decoration: underline;
+}
+
+.organizational-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #374151;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+/* Neutral tag chip + colored status dot — matches the planetary boundary tag
+   style on the individual app's Sign cards (.individual-timing-badge +
+   .individual-turnaround-dot) instead of a solid colored chip. */
+.organizational-badge--tag {
+  display: inline-flex;
+  align-items: center;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.organizational-badge-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.organizational-badge.role-admin {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.organizational-empty {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.organizational-org-dashboard-title {
+  font-size: clamp(1.75rem, 2.5vw + 1rem, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 8px;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-org-dashboard-slug {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 22px;
+}
+
+.organizational-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -4px 0 18px;
+}
+
+.organizational-subnav .organizational-nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--organizational-radius-md, 6px);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--organizational-text-secondary);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.organizational-subnav .organizational-nav-link:hover {
+  background: rgba(128, 0, 32, 0.08);
+  color: var(--organizational-accent, var(--brand-primary));
+}
+
+.organizational-subnav .organizational-nav-link.active {
+  background: rgba(128, 0, 32, 0.12);
+  color: var(--organizational-accent, var(--brand-primary));
+  font-weight: 600;
+}
+
+button.organizational-nav-link {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.organizational-tab-panel {
+  padding-top: 4px;
+}
+
+label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+
+label:first-of-type {
+  margin-top: 0;
+}
+
+input[type='text'],
+input[type='search'],
+input[type='number'] {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--organizational-border-subtle, var(--border-subtle));
+  border-radius: var(--organizational-radius-md, 6px);
+  font-size: 0.875rem;
+  font-family: var(--ui-sans);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type='text']:focus,
+input[type='search']:focus,
+input[type='number']:focus {
+  border-color: var(--organizational-accent, var(--brand-primary));
+  box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.1);
+}
+
+input:focus {
+  outline: none;
+}
+
+.organizational-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Stacked hint paragraphs (e.g. generic help text followed by a conditional
+   status line) read as one run-on block at 4px apart -- give the second one room. */
+.organizational-hint + .organizational-hint {
+  margin-top: 12px;
+}
+
+#organizational-xero-not-connected-hint {
+  color: var(--amber);
+}
+
+.organizational-actions {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.organizational-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: var(--ui-sans);
+  border: none;
+  border-radius: var(--organizational-radius-md, 6px);
+  cursor: pointer;
+  background: var(--brand-primary, var(--organizational-accent));
+  color: #fff;
+  transition: all 0.15s ease;
+  letter-spacing: -0.01em;
+}
+
+/* .organizational-btn's own `display` would otherwise beat the browser's
+   default [hidden]{display:none} UA rule, since author styles always win
+   over UA defaults regardless of the hidden attribute/property. */
+.organizational-btn[hidden] {
+  display: none;
+}
+
+.organizational-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--organizational-shadow-md);
+  filter: brightness(1.05);
+}
+
+.organizational-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.organizational-btn-secondary {
+  background: var(--cta-bg);
+}
+
+.organizational-btn-secondary:hover {
+  background: var(--cta-bg-hover);
+}
+
+.organizational-btn-outline {
+  background: transparent;
+  color: var(--organizational-text-primary);
+  border: 1px solid var(--organizational-border-medium);
+  transition: all 0.15s ease;
+}
+
+.organizational-btn-outline:hover {
+  background: var(--organizational-surface-page);
+  border-color: var(--organizational-border-subtle);
+}
+
+.organizational-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 16px;
+}
+
+.organizational-error[hidden] {
+  display: none;
+}
+
+/* Civic org typeahead */
+.organizational-org-results {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-card);
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.organizational-org-results[hidden] {
+  display: none;
+}
+
+.organizational-org-results li button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  font-size: 0.875rem;
+  font-family: var(--ui-sans);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-org-results li:last-child button {
+  border-bottom: none;
+}
+
+.organizational-org-results li button:hover {
+  background: var(--surface-page);
+}
+
+/* Contact picker (Purchases/Sales vendor+customer search+add-new) -- results list itself reuses
+   .organizational-org-results above; these two are the only genuinely new pieces. */
+.organizational-contact-picker-add-new {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--wine-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-contact-picker-active {
+  background: var(--surface-page);
+}
+
+.organizational-org-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #f0fdf4;
+  border: 1px solid var(--border-metrics);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.organizational-org-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+/* AI summary strip */
+.organizational-ai-summary {
+  font-size: 0.9375rem;
+  color: #374151;
+  line-height: 1.55;
+  padding: 16px;
+  background: linear-gradient(165deg, var(--surface-metrics-mid) 0%, var(--surface-card) 55%);
+  border: 1px solid var(--border-metrics);
+  border-left: 3px solid var(--accent-metrics-bar);
+  border-radius: 12px;
+}
+
+/* Grant table */
+.organizational-table-wrap {
+  overflow-x: auto;
+  /* Overlay scrollbars (macOS trackpad style) render on top of content rather than
+     reserving their own space -- without this, an active horizontal scrollbar sits
+     directly on top of the last row's text. This clearance gives it somewhere to sit. */
+  padding-bottom: 14px;
+}
+
+.organizational-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.organizational-table th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  height: 32px;
+}
+
+.organizational-table td {
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  height: 32px;
+  vertical-align: middle;
+}
+
+.organizational-table-empty td {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 28px 16px;
+}
+
+.organizational-grants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.organizational-grants-head h2 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Grants table — horizontal scroll + frozen first two columns */
+.organizational-grants-table {
+  min-width: 1200px;
+}
+
+/* Prevent cell content from wrapping so the table scrolls instead of reflows */
+.organizational-grants-table th,
+.organizational-grants-table td {
+  white-space: nowrap;
+}
+
+/* All body cells need an opaque background so sticky frozen columns cover scrolled content */
+.organizational-grants-table tbody td {
+  background: var(--surface-card, #fff);
+}
+
+.organizational-grants-table tbody tr:hover td {
+  background: var(--surface-hover, #f5f5f5);
+}
+
+/* Sticky frozen column: Funder only (col 1). Was Funder + Grant name until
+   this pass -- freezing Grant name too meant giving it a fixed width, and
+   grant names run far longer than funder names, so long ones overflowed the
+   box and visually collided with the Award column. Funder alone.
+   Scoped to tr.organizational-grants-row specifically -- the grouped/sort
+   view's subtotal row is a single <td colspan="12"> that is *also*
+   structurally nth-child(1) of its own <tr>, so an unscoped selector forced
+   sticky+140px onto that full-width row too, making it visually shift and
+   clip while scrolling instead of just scrolling normally with the table. */
+.organizational-grants-table thead th:nth-child(1),
+.organizational-grants-table tr.organizational-grants-row td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-card, #fff);
+  will-change: transform;
+  min-width: 220px;
+  max-width: 220px;
+  width: 220px;
+  box-shadow: 2px 0 5px -2px rgba(0,0,0,0.10);
+  /* Funder names can run long ("The Riverside Community Foundation") -- a
+     fixed-width sticky box needs real overflow handling or long names spill
+     into the Institution column instead of just being clipped cleanly. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header cell gets a slightly elevated z-index so body rows scroll under */
+.organizational-grants-table thead th:nth-child(1) {
+  z-index: 3;
+}
+
+/* frozen column on hover — explicitly re-assert so it isn't painted behind scrolled rows */
+.organizational-grants-table tbody tr.organizational-grants-row:hover td:nth-child(1) {
+  background: var(--surface-hover, #f5f5f5);
+}
+
+/* Allocate button — fixed width so % label doesn't shift column */
+.organizational-grant-allocate-btn {
+  min-width: 90px;
+  text-align: center;
+}
+
+/* Grant modal */
+.organizational-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.organizational-modal-overlay.organizational-modal-open {
+  display: flex;
+}
+
+.organizational-modal {
+  background: var(--surface-card);
+  width: min(480px, 100%);
+  max-height: min(90vh, 640px);
+  overflow-y: auto;
+  border-radius: var(--organizational-radius-lg, 8px);
+  padding: 24px;
+  box-shadow: var(--organizational-shadow-lg);
+  border: 1px solid var(--organizational-border-subtle, var(--border-subtle));
+}
+
+.organizational-modal h3 {
+  margin: 0 0 20px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.organizational-modal .organizational-btn-outline {
+  margin: 0;
+}
+
+.organizational-subheading {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.organizational-xero-quick-add {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.organizational-xero-quick-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.organizational-xero-quick-add-row input,
+.organizational-xero-quick-add-row select {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 8px;
+  font-family: var(--ui-sans);
+  font-size: 0.9375rem;
+}
+
+.organizational-xero-quick-add-row input#organizational-xero-new-code {
+  width: 100px;
+}
+
+.organizational-xero-quick-add-row input#organizational-xero-new-name {
+  flex: 1 1 180px;
+  min-width: 140px;
+}
+
+#organizational-xero-mapping-tbody select {
+  max-width: 100%;
+  min-width: 200px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-subtle);
+  font-size: 0.875rem;
+}
+
+.organizational-budget-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-budget-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.organizational-budget-field span.organizational-hint {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.organizational-budget-field select,
+.organizational-budget-fy-input {
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: 8px;
+  font-family: var(--ui-sans);
+  font-size: 0.9375rem;
+}
+
+.organizational-budget-fy-input {
+  width: 100px;
+}
+
+.organizational-budget-scroll-outer {
+  /* wraps top-scroll-row + grid-with-chevrons */
+}
+
+.organizational-budget-top-scroll-row[hidden] {
+  display: none;
+}
+
+.organizational-budget-top-scroll-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+  padding-bottom: 2px;
+}
+
+.organizational-budget-top-scroll-row .organizational-budget-scroll-btn {
+  flex-shrink: 0;
+}
+
+.organizational-budget-top-scroll {
+  flex: 1;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  height: 12px;
+  /* hide the scrollbar track visually on Firefox/Chrome but keep it functional */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.25) transparent;
+}
+
+.organizational-budget-top-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.organizational-budget-top-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.22);
+  border-radius: 4px;
+}
+.organizational-budget-top-scroll::-webkit-scrollbar-track {
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+}
+
+#organizational-budget-top-scroll-inner {
+  height: 1px;
+  /* width set dynamically by JS to match table scrollWidth */
+}
+
+.organizational-budget-grid-with-chevrons {
+  display: block;
+  /* Allowed to shrink below its content's natural width (the flexbox
+     min-width:auto default would otherwise force the whole row wider than
+     the viewport instead of letting .organizational-budget-grid-scroll's own
+     overflow-x:auto take over) — this is what makes horizontal scroll
+     actually contained within the grid instead of the whole page. */
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Budget tab: grid with a line-item panel that opens as a wide overlay on top of it
+   (2026-09-17 -- was a narrow right-rail panel stretched tall, which forced most panel
+   content into an internal scroll; this trades "shares the view with the grid" for "full
+   width, no scroll to see the panel" instead). position:relative anchors the panel's
+   position:absolute so it covers exactly the grid's own footprint (same width and height),
+   not the whole viewport. */
+.organizational-budget-tab-budget-layout {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  position: relative;
+}
+
+.organizational-budget-inline-panel[hidden] {
+  display: none;
+}
+
+.organizational-budget-inline-panel {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  inset: 0;
+  /* Above the grid's sticky header (thead th: z-index 5) and sticky first column
+     (.organizational-budget-sticky-col: z-index 105) -- otherwise those poke through on
+     top of the panel instead of being covered by it. */
+  z-index: 200;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg, #fff);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+/* The form inside was built assuming a ~400px-wide sidebar (.organizational-panel-field-full
+   meant "as wide as the narrow sidebar," a reasonable width for a single text field). Now that
+   the panel itself covers the whole grid (can be 1500px+), that same full-width span stretches
+   a single Name input absurdly wide. Cap the form's own width so short fields (Name, Account)
+   stay a sane size, while still leaving noticeably more room than the old ~400px sidebar for
+   the wider content further down the same form (program-allocation rows, the monthly-breakdown
+   tile grid) that genuinely benefits from it. */
+.organizational-budget-inline-panel .organizational-panel-fields {
+  max-width: 900px;
+}
+
+.organizational-budget-scroll-btn {
+  flex-shrink: 0;
+  width: 32px;
+  border: 1px solid var(--organizational-border-medium, #ddd);
+  border-radius: 4px;
+  background: var(--surface-card, #fff);
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  align-self: center;
+  height: 32px;
+  padding: 0;
+  margin: 0 2px;
+}
+
+.organizational-budget-scroll-btn:hover {
+  background: rgba(0,0,0,0.05);
+  color: var(--text-primary, #111);
+}
+
+.organizational-budget-scroll-btn:active {
+  background: rgba(0,0,0,0.1);
+}
+
+.organizational-budget-grid-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
+  max-height: var(--budget-scroll-max-height, calc(100dvh - 320px));
+  /* Clearance for an overlay scrollbar, bottom and right -- same reasoning as
+     .organizational-bv-grid: this grid has its own vertical scroll, so at full browser
+     width the right-edge scrollbar can sit directly over the rightmost month's numbers. */
+  padding-bottom: 14px;
+  padding-right: 14px;
+  overscroll-behavior: contain;
+}
+
+.organizational-budget-grid {
+  min-width: 920px;
+  font-size: 0.8125rem;
+  border-collapse: collapse;
+}
+
+.organizational-budget-grid th,
+.organizational-budget-grid td {
+  text-align: right;
+  white-space: nowrap;
+  height: 32px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.organizational-budget-grid th:last-child,
+.organizational-budget-grid td:last-child {
+  border-right: none;
+}
+
+.organizational-budget-grid th.organizational-budget-sticky-col,
+.organizational-budget-grid td.organizational-budget-sticky-col {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-card);
+  box-shadow: 1px 0 0 var(--border-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.organizational-budget-grid thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-card);
+  z-index: 5;
+  padding: 8px 12px;
+  height: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+/* Row 2 sticks below row 1 — height measured by JS and stored as --budget-thead-row1-h */
+.organizational-budget-grid .organizational-budget-monthly-header-2 th {
+  top: var(--budget-thead-row1-h, 32px);
+}
+
+.organizational-budget-grid thead th.organizational-budget-sticky-col {
+  z-index: 105;
+}
+
+.organizational-budget-col-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+}
+
+.organizational-budget-col-variance.organizational-stat-good   { color: var(--organizational-status-success); }
+.organizational-budget-col-variance.organizational-stat-danger { color: var(--organizational-status-danger); }
+
+/* Stronger than generic body.organizational-app input rules + OS dark form theming (totals used .value while text stayed invisible). */
+.organizational-budget-grid input.organizational-budget-cell {
+  box-sizing: border-box;
+  width: 76px;
+  max-width: 88px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  background-color: #ffffff !important;
+  caret-color: #111827;
+  color-scheme: light;
+}
+
+.organizational-budget-cell:focus {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 0;
+}
+
+div.organizational-budget-cell-demo {
+  box-sizing: border-box;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.organizational-budget-row-total {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* Budget hierarchy (Spec 3.5.3) + Budget vs actual */
+.organizational-budget-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.organizational-budget-view-label {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.organizational-budget-view-btn.organizational-budget-view-btn-active {
+  border-color: var(--organizational-accent, var(--brand-primary));
+  color: var(--organizational-accent, var(--brand-primary));
+  font-weight: 600;
+}
+.organizational-account-summary {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+.organizational-account-summary td {
+  padding: 8px 12px !important;
+  height: 32px;
+}
+.organizational-account-subtotal {
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid var(--border-subtle) !important;
+}
+.organizational-account-subtotal td {
+  padding-left: 16px !important;
+  height: 32px;
+}
+.organizational-account-posting {
+  height: 32px;
+}
+.organizational-account-posting td:first-child {
+  padding-left: 28px !important;
+}
+.organizational-account-sum-row {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.03);
+  border-top: 2px solid var(--border-subtle) !important;
+}
+.organizational-budget-bva-section-sum {
+  border-top: 3px double var(--border-subtle) !important;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.organizational-budget-net-row {
+  border-top: 3px double var(--border-subtle) !important;
+  background: rgba(0, 0, 0, 0.04);
+  font-weight: 700;
+}
+
+.organizational-budget-net-row .organizational-budget-sticky-col {
+  font-style: normal;
+  font-weight: 700;
+}
+.organizational-account-surplus-positive {
+  color: #800020;
+}
+.organizational-account-surplus-negative {
+  color: #b91c1c;
+}
+.organizational-budget-cell-readonly {
+  opacity: 0.75;
+  cursor: not-allowed;
+  background: #f3f4f6 !important;
+}
+.organizational-bva-mo {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.organizational-bva-editable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.organizational-bva-editable:hover {
+  background-color: rgba(128, 0, 32, 0.06);
+}
+.organizational-bva-var-warn {
+  color: #b91c1c;
+  font-weight: 600;
+}
+.organizational-bva-var-good {
+  color: #15803d;
+  font-weight: 600;
+}
+.organizational-budget-bva-table .organizational-budget-sticky-col {
+  min-width: 72px;
+}
+
+/* Budget by program (L3) */
+.organizational-budget-byprogram-table-scroll {
+  overflow-x: auto;
+  /* See .organizational-table-wrap's comment -- clearance for an overlay scrollbar. */
+  padding-bottom: 14px;
+  max-width: 100%;
+  margin-top: 4px;
+}
+.organizational-budget-byprogram-table {
+  min-width: 720px;
+  font-size: 0.8125rem;
+}
+.organizational-budget-byprogram-table th,
+.organizational-budget-byprogram-table td {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.organizational-budget-byprogram-table th.organizational-budget-sticky-col,
+.organizational-budget-byprogram-table td.organizational-budget-sticky-col {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface-card);
+  box-shadow: 1px 0 0 var(--border-subtle);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.organizational-budget-byprogram-table thead th {
+  background: var(--surface-card);
+  z-index: 3;
+}
+.organizational-budget-byprogram-table thead th.organizational-budget-sticky-col {
+  z-index: 4;
+  vertical-align: bottom;
+}
+.organizational-budget-byprogram-account-head {
+  min-width: 200px;
+}
+.organizational-budget-byprogram-group-head {
+  text-align: center;
+  font-weight: 600;
+  border-left: 1px solid var(--border-subtle);
+  background: rgba(128, 0, 32, 0.06);
+}
+.organizational-budget-byprogram-subhead {
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-left: 1px solid var(--border-subtle);
+}
+.organizational-budget-byprogram-num {
+  padding: 6px 10px;
+}
+.organizational-budget-proj-cell {
+  cursor: pointer;
+  position: relative;
+}
+.organizational-budget-proj-cell::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  opacity: 0.9;
+}
+.organizational-budget-proj-cell.organizational-proj-src-derived::before { background: transparent; }
+.organizational-budget-proj-cell.organizational-proj-src-manual-monthly::before { background: var(--brand-primary); }
+.organizational-budget-proj-cell.organizational-proj-src-manual-annual::before { background: rgba(128, 0, 32, 0.65); }
+.organizational-budget-proj-cell.organizational-proj-src-allocation::before { background: #6b7280; }
+.organizational-budget-proj-cell.organizational-proj-src-formula::before { background: #2563eb; }
+.organizational-budget-proj-cell.organizational-proj-src-formula-error::before { background: #b91c1c; }
+.organizational-budget-proj-cell.organizational-proj-src-formula-error {
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.organizational-proj-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(17, 24, 39, 0.25);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 12px 12px;
+}
+.organizational-proj-editor-panel {
+  width: min(780px, 100%);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+  padding: 12px;
+}
+.organizational-proj-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.organizational-proj-context-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.organizational-proj-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.organizational-proj-tab-body {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px;
+}
+.organizational-proj-month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.organizational-proj-month-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.organizational-proj-month-cell input {
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+.organizational-proj-editor-foot {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+.organizational-budget-byprogram-section td {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  text-align: left;
+  padding: 8px 10px;
+}
+.organizational-budget-byprogram-account-row td.organizational-budget-byprogram-account-cell {
+  white-space: normal;
+  max-width: 280px;
+}
+.organizational-budget-byprogram-subtotal-row td {
+  font-weight: 700;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+.organizational-budget-byprogram-net-row td {
+  font-weight: 700;
+  border-top: 3px double var(--border-subtle);
+  padding-top: 10px;
+}
+.organizational-budget-program-multiselect {
+  position: relative;
+  min-width: 200px;
+}
+.organizational-budget-program-multiselect-trigger {
+  width: 100%;
+  text-align: left;
+}
+.organizational-budget-program-multiselect-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  min-width: 280px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.organizational-budget-program-multiselect-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.organizational-budget-program-multiselect-row input {
+  margin-top: 3px;
+}
+
+/* Onboarding wizard */
+.organizational-wizard-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 16px 0 20px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.organizational-wizard-step-active {
+  color: var(--brand-primary);
+}
+
+.organizational-wizard-step-sep {
+  color: var(--border-subtle);
+  font-weight: 400;
+}
+
+.organizational-onb-steps-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin: 20px 0 24px;
+  padding: 20px;
+  background: rgba(128, 0, 32, 0.04);
+  border-radius: var(--organizational-radius-lg, 8px);
+  border: 1px solid rgba(128, 0, 32, 0.1);
+}
+
+.organizational-onb-step-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.organizational-onb-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--organizational-accent, var(--brand-primary));
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Tooltip hint for visual cues */
+.organizational-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.organizational-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  border-radius: var(--organizational-radius-md, 6px);
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  pointer-events: none;
+  z-index: 100;
+  margin-bottom: 8px;
+}
+
+.organizational-tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+.organizational-compliance-placeholder-text {
+  color: var(--organizational-text-secondary);
+  font-size: 0.9375rem;
+  margin-bottom: 16px;
+}
+
+.organizational-compliance-placeholder-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.organizational-compliance-placeholder-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--organizational-surface-page);
+  border-radius: var(--organizational-radius-md, 6px);
+  border: 1px solid var(--organizational-border-subtle);
+}
+
+.organizational-compliance-placeholder-icon {
+  font-size: 1.25rem;
+}
+
+/* Completeness meter — heads each 990 schedule card (Part IX / Schedule D / Schedule J) */
+.organizational-compliance-meter {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Meter sits in the always-visible accordion header (not the collapsible body) so
+   completeness shows even while the card is closed — tighter spacing, no bottom margin
+   since it's the last thing in the header text block. */
+.organizational-compliance-accordion-header-text .organizational-compliance-meter {
+  margin: 10px 0 0;
+  max-width: 480px;
+}
+
+.organizational-compliance-accordion-header-text .organizational-compliance-meter-pct {
+  font-size: 1.0625rem;
+}
+
+.organizational-compliance-meter-pct {
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.organizational-compliance-meter-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.organizational-compliance-meter-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 5px;
+  background: var(--organizational-border-subtle, var(--border));
+  overflow: hidden;
+}
+
+.organizational-compliance-meter-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.2s ease;
+}
+
+.organizational-compliance-meter-detail {
+  font-size: 0.75rem;
+  color: var(--organizational-text-secondary, var(--text-secondary));
+  margin-top: 6px;
+}
+
+/* Exclusive accordion — the four 990-tab cards (Part IX / Schedule D / Schedule J /
+   Functional Expense Classification). One open at a time, toggled in compliance.js. */
+.organizational-compliance-accordion-item {
+  padding: 0;
+  overflow: hidden;
+}
+
+.organizational-compliance-accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  padding: 20px 24px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.organizational-compliance-accordion-header:hover {
+  background: var(--organizational-surface-page, var(--surface-page));
+}
+
+.organizational-compliance-accordion-header-text {
+  display: block;
+}
+
+.organizational-compliance-accordion-chevron {
+  flex-shrink: 0;
+  color: var(--organizational-text-secondary, var(--text-secondary));
+  font-size: 0.875rem;
+  transition: transform 0.15s ease;
+  margin-top: 2px;
+}
+
+.organizational-compliance-accordion-header.organizational-compliance-accordion-open .organizational-compliance-accordion-chevron {
+  transform: rotate(90deg);
+}
+
+.organizational-compliance-accordion-body {
+  padding: 0 24px 20px;
+}
+
+.organizational-onb-next-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.organizational-onb-next-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--organizational-surface-page);
+  border-radius: var(--organizational-radius-md, 6px);
+  border: 1px solid var(--organizational-border-subtle);
+  transition: all 0.15s ease;
+}
+
+.organizational-onb-next-step:hover {
+  border-color: var(--organizational-accent, var(--brand-primary));
+  transform: translateY(-2px);
+  box-shadow: var(--organizational-shadow-sm);
+}
+
+.organizational-onb-next-step-link {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--organizational-accent, var(--brand-primary));
+}
+
+.organizational-onb-next-step-desc {
+  font-size: 0.8125rem;
+  color: var(--organizational-text-secondary);
+}
+
+.organizational-wizard-card label {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.organizational-wizard-card input[type='text'],
+.organizational-wizard-card input[type='url'],
+.organizational-wizard-card input[type='file'],
+.organizational-wizard-card select,
+.organizational-wizard-card textarea {
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 0.9375rem;
+}
+
+.organizational-wizard-heading {
+  margin: 0 0 12px;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+  align-items: center;
+}
+
+.organizational-onb-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  cursor: pointer;
+  font-size: 0.9375rem;
+}
+
+.organizational-onb-details {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.organizational-onb-details-summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--brand-primary);
+  list-style: none;
+}
+
+.organizational-onb-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.organizational-onb-details[open] .organizational-onb-details-summary {
+  margin-bottom: 4px;
+}
+
+.organizational-onb-choice-list {
+  margin: 12px 0 8px;
+}
+
+.organizational-onb-block {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+.organizational-onb-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.organizational-onb-template-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-card);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  max-width: 520px;
+}
+
+.organizational-onb-template-card:hover {
+  border-color: var(--organizational-accent, var(--brand-primary));
+  background: rgba(128, 0, 32, 0.02);
+}
+
+.organizational-onb-map-table th {
+  text-align: left;
+  font-size: 0.75rem;
+}
+
+.organizational-onb-confirm-table .organizational-input-sm {
+  max-width: 96px;
+}
+
+.onb-add-row-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin: 14px 0 10px;
+}
+
+.onb-add-import-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onb-add-import-select {
+  min-width: 220px;
+  max-width: min(100%, 420px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-subtle);
+  font-size: 0.875rem;
+  font-family: var(--ui-sans);
+}
+
+.onb-xero-push-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 4px;
+  max-width: 52rem;
+  line-height: 1.45;
+}
+
+.onb-xero-push-label input {
+  margin-top: 3px;
+}
+
+.organizational-onb-confirm-table .onb-row-name {
+  min-width: 140px;
+}
+
+.organizational-onb-ok {
+  color: #059669;
+  font-weight: 700;
+}
+
+.organizational-onb-warn {
+  color: #d97706;
+}
+
+.organizational-onboarding-banner {
+  background: rgba(128, 0, 32, 0.06);
+  border: 1px solid rgba(128, 0, 32, 0.15);
+  border-radius: var(--organizational-radius-lg, 8px);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 0.9375rem;
+}
+
+.organizational-onboarding-banner a {
+  font-weight: 600;
+  color: var(--organizational-accent, var(--brand-primary));
+}
+
+.organizational-org-setup-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(128, 0, 32, 0.12);
+  color: var(--organizational-accent, #800020);
+}
+
+/* Data freshness + plain-language term tooltips (NP) */
+.organizational-data-freshness {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+  line-height: 1.35;
+}
+
+.organizational-term {
+  border-bottom: 1px dotted var(--text-secondary);
+  cursor: help;
+  text-decoration: none;
+}
+
+.organizational-term:focus {
+  outline: 2px solid var(--organizational-accent, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+/* --- Spec L1: workspace row (sidebar + main) --- */
+.organizational-workspace {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  align-items: stretch;
+  background: var(--organizational-surface-page, var(--surface-page));
+}
+
+.organizational-workspace-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.organizational-app .organizational-main {
+  padding: 32px 40px 48px;
+}
+
+/* Budget page: same left/right/top margins as other Organization pages, but no
+   bottom padding — the JS-calculated grid fills the remaining viewport height
+   and bottom padding would add extra page height, triggering an outer body
+   scroll alongside the grid's own inner scroll. */
+body.organizational-app[data-organizational-active="budget"] .organizational-main {
+  padding: 32px 40px 0;
+}
+
+@media (max-width: 720px) {
+  body.organizational-app .organizational-main {
+    padding: 20px 16px 40px;
+  }
+
+  body.organizational-app[data-organizational-active="budget"] .organizational-main {
+    padding: 20px 16px 0;
+  }
+}
+
+/* Workshop detail: page-local left rail (Overview / Systems Map / Actions /
+   Participants / Discussion) scoped to one open workshop. Distinct from the
+   global sidebar's nested accordion groups — a flat button-switcher local to
+   this card, closer in spirit to .organizational-tabs than to the sidebar. */
+.organizational-workshop-rail-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.organizational-workshop-rail {
+  flex: 0 0 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 16px;
+}
+
+.organizational-workshop-rail__link {
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: var(--organizational-radius-md, 6px);
+  border: 0.5px solid transparent;
+  background: none;
+  color: var(--organizational-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.organizational-workshop-rail__link:hover {
+  background: rgba(128, 0, 32, 0.06);
+  color: var(--organizational-text-primary);
+}
+
+.organizational-workshop-rail__link--active {
+  background: rgba(128, 0, 32, 0.1);
+  color: var(--organizational-accent, var(--brand-primary));
+  border-color: rgba(128, 0, 32, 0.12);
+  font-weight: 600;
+}
+
+.organizational-workshop-rail-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.organizational-workshop-loop-box {
+  border: 1px solid var(--organizational-border-subtle, var(--border-subtle));
+  border-left: 4px solid var(--organizational-accent, var(--brand-primary));
+  border-radius: var(--organizational-radius-md, 6px);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.organizational-workshop-cascade-item {
+  border-left: 4px solid var(--organizational-border-medium, var(--border-strong));
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 720px) {
+  .organizational-workshop-rail-row {
+    flex-direction: column;
+  }
+
+  .organizational-workshop-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    position: static;
+  }
+}
+
+/* Sidebar */
+.organizational-sidebar {
+  flex: 0 0 220px;
+  width: 220px;
+  /* Sticky sidebar: stays on left as page body scrolls */
+  position: sticky;
+  top: 56px; /* below app header */
+  height: calc(100dvh - 56px);
+  align-self: flex-start;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--organizational-surface-card, #fff);
+  border-right: 1px solid var(--organizational-border-subtle, rgba(0, 0, 0, 0.06));
+  transition: flex-basis 0.18s ease, width 0.18s ease;
+}
+
+.organizational-sidebar.organizational-sidebar--collapsed {
+  flex-basis: 56px;
+  width: 56px;
+}
+
+.organizational-sidebar__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 12px 12px 14px;
+  border-bottom: 0.5px solid var(--organizational-border-subtle);
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__top {
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 6px;
+}
+
+.organizational-sidebar__brand {
+  min-width: 0;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__brand {
+  display: none;
+}
+
+.organizational-sidebar__workspace-label {
+  margin: 0 0 2px;
+}
+
+.organizational-sidebar__org-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--organizational-text-primary);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.organizational-sidebar__toggle {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.5px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-md);
+  background: var(--organizational-surface-card);
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+}
+
+.organizational-sidebar__toggle:hover {
+  border-color: var(--organizational-border-medium);
+  color: var(--organizational-text-primary);
+}
+
+.organizational-sidebar__toggle:focus-visible {
+  outline: 2px solid var(--organizational-accent);
+  outline-offset: 2px;
+}
+
+.organizational-sidebar__link-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 8px;
+  position: relative;
+  margin-left: 0;
+  margin-bottom: 0;
+}
+
+/* Natural width, not flex:1 — keeps the chevron sitting right next to the label instead of
+   being pushed to the far edge of the row. */
+.organizational-sidebar__link-with-toggle .organizational-sidebar__link {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  margin-left: 4px;
+}
+
+.organizational-sidebar__link-with-toggle .organizational-sidebar__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sidebar-collapse toggle only appears on the top row (see --top / the HTML) — pushed to
+   the far right of that one row with margin-left:auto, flush with the top item, separate
+   from the section chevron immediately after the label. */
+.organizational-sidebar__link-with-toggle .organizational-sidebar__toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  margin-left: 0;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle .organizational-sidebar__link {
+  flex: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle .organizational-sidebar__label {
+  display: none;
+}
+
+/* Collapsed: no separate toggle button — the Organization and Cooperative icons
+   themselves expand the sidebar (wired in sidebar.js), so the dedicated toggle is
+   hidden and only the two nav icons show, stacked in one centered column. */
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle--top .organizational-sidebar__toggle {
+  display: none;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle--top {
+  display: flex;
+  justify-content: center;
+}
+
+/* Hover cue for the collapsed rail's expand-icons (Organization/Cooperative): a plain nav-link
+   hover reads as "this navigates," but here the click expands the sidebar instead — a scale
+   nudge plus the accent-colored ring (vs. the plain background tint every other link hover
+   uses) signals "this is a distinct control," reinforcing the tooltip swap in sidebar.js. */
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle .organizational-sidebar__link:hover {
+  background: rgba(128, 0, 32, 0.06);
+  box-shadow: 0 0 0 1px rgba(128, 0, 32, 0.25) inset;
+  transform: scale(1.05);
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link-with-toggle .organizational-sidebar__toggle {
+  margin-left: 0;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.organizational-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 12px;
+  gap: 2px;
+  flex: 1;
+}
+
+.organizational-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: var(--organizational-radius-md);
+  text-decoration: none;
+  color: var(--organizational-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  border: 0.5px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.organizational-sidebar__link[hidden] {
+  display: none;
+}
+
+.organizational-sidebar__link:hover {
+  background: rgba(128, 0, 32, 0.06);
+  color: var(--organizational-text-primary);
+}
+
+.organizational-sidebar__link--active {
+  background: rgba(128, 0, 32, 0.1);
+  color: var(--organizational-accent);
+  border-color: rgba(128, 0, 32, 0.12);
+  font-weight: 600;
+}
+
+.organizational-sidebar__icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.organizational-sidebar__label {
+  white-space: nowrap;
+}
+
+.organizational-sidebar__bullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+/* Pins itself + everything after it (the "back to individual app" link, Settings) as a
+   group to the bottom of the sidebar's flex column, instead of stacking directly under
+   whatever content happens to be above it. */
+.organizational-sidebar__divider {
+  height: 1px;
+  background: var(--organizational-border-subtle);
+  margin: 4px 8px;
+  margin-top: auto;
+}
+
+.organizational-sidebar__group-chevron-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--organizational-radius-md);
+  background: none;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.organizational-sidebar__group-chevron-btn:hover {
+  background: rgba(128, 0, 32, 0.06);
+  color: var(--organizational-text-primary);
+}
+
+.organizational-sidebar__group-chevron {
+  display: inline-flex;
+  transition: transform 0.15s ease;
+}
+
+.organizational-sidebar__group-chevron-btn[aria-expanded="true"] .organizational-sidebar__group-chevron {
+  transform: rotate(90deg);
+}
+
+.organizational-sidebar__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.organizational-sidebar__group-label {
+  padding: 8px 12px 4px 32px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--organizational-text-secondary);
+  opacity: 0.75;
+}
+
+.organizational-sidebar__group-label:first-child {
+  padding-top: 4px;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__group-label {
+  display: none;
+}
+
+.organizational-sidebar__group[hidden] {
+  display: none;
+}
+
+.organizational-sidebar__group .organizational-sidebar__link {
+  padding-left: 32px;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__group-chevron-btn,
+.organizational-sidebar--collapsed .organizational-sidebar__group {
+  display: none;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__nav {
+  padding: 8px 6px;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__link {
+  justify-content: center;
+  padding: 10px 6px;
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.organizational-sidebar__footer {
+  margin-top: auto;
+  padding: 10px 12px 16px;
+  border-top: 0.5px solid var(--organizational-border-subtle);
+}
+
+.organizational-sidebar--collapsed .organizational-sidebar__footer {
+  display: none;
+}
+
+.organizational-sidebar-profile {
+  position: relative;
+  margin-top: 6px;
+}
+
+.organizational-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--organizational-radius-md);
+  transition: background 0.15s ease;
+}
+
+.organizational-profile-trigger:hover {
+  background: rgba(128, 0, 32, 0.06);
+}
+
+.organizational-profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--organizational-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* Fallback state (no email yet, or initials couldn't be derived) -- plain glyph, no accent fill,
+   same distinction the Individual app's account-circle-glyph makes. */
+.organizational-profile-avatar--glyph {
+  background: var(--organizational-surface-page, var(--surface-page));
+  font-size: 14px;
+}
+
+.organizational-profile-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.organizational-profile-name {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--organizational-text-primary);
+  line-height: 1.2;
+}
+
+.organizational-account-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: var(--organizational-surface-card);
+  border: 1px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-md);
+  box-shadow: var(--organizational-shadow-md);
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.organizational-account-dropdown[hidden] {
+  display: none;
+}
+
+.organizational-account-dropdown-email {
+  padding: 12px 16px;
+  font-size: 12px;
+  color: var(--organizational-text-secondary);
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  word-break: break-all;
+}
+
+.organizational-account-dropdown-divider {
+  border: none;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  margin: 0;
+}
+
+.organizational-account-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: var(--organizational-text-primary);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  box-sizing: border-box;
+}
+
+.organizational-account-dropdown-item:hover {
+  background: var(--organizational-surface-page, var(--surface-page));
+}
+
+.organizational-sidebar__sync {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--organizational-text-tertiary);
+}
+
+/* Settings secondary tabs */
+.organizational-settings-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 0.5px solid var(--organizational-border-subtle);
+}
+
+.organizational-settings-subnav a {
+  text-decoration: none;
+  color: var(--organizational-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 4px;
+  border-radius: var(--organizational-radius-md);
+}
+
+.organizational-settings-subnav a:hover {
+  color: var(--organizational-accent);
+}
+
+.organizational-settings-subnav a.organizational-settings-subnav--active {
+  color: var(--organizational-accent);
+  box-shadow: inset 0 -2px 0 var(--organizational-accent);
+}
+
+.organizational-settings-panel[hidden] {
+  display: none !important;
+}
+
+.organizational-import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Trimmed 2026-09-15 -- these cards used to carry a full explanatory paragraph each; removed
+   in favor of just title + template + upload, now that they're denser and more numerous (7).
+   A guided setup wizard is the planned place for the "what is this and why" explanation going
+   forward (see CURRENT_PRIORITIES.md) -- these cards just need to be usable references. */
+.organizational-import-card {
+  padding: 12px 14px;
+  margin-bottom: 0;
+}
+
+.organizational-import-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.organizational-import-step {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--organizational-accent);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.organizational-import-card .organizational-subheading {
+  font-size: 14px;
+  margin: 0;
+}
+
+.organizational-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.organizational-import-file {
+  font-size: 13px;
+  max-width: 100%;
+}
+
+.organizational-actuals-summary {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 0.5px solid var(--organizational-border-subtle, rgba(0, 0, 0, 0.08));
+  border-radius: var(--organizational-radius-md, 8px);
+  background: var(--organizational-surface-page, #faf9f6);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--organizational-text-secondary);
+}
+
+.organizational-actuals-summary ul {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Executive dashboard (L2 narrative-first) ─── */
+.organizational-dash-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.organizational-dash-date {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--organizational-text-secondary);
+  text-align: right;
+}
+
+/* Hero narrative */
+.organizational-dash-narrative-card {
+  margin-bottom: 20px;
+  padding: 24px 28px;
+  background: var(--organizational-surface-card);
+  border: 0.5px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-lg);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
+
+.organizational-dash-narrative-orgname {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-dash-narrative-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+/* Metric grid */
+.organizational-dash-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.organizational-dash-metric-tile {
+  padding: 16px;
+  background: var(--organizational-surface-card);
+  border: 0.5px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-md);
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  cursor: pointer;
+}
+
+.organizational-dash-metric-tile:hover {
+  border-color: var(--organizational-border-medium);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.organizational-dash-metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--organizational-text-secondary);
+  margin-bottom: 8px;
+}
+
+.organizational-dash-metric-value {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--organizational-text-primary);
+  margin-bottom: 6px;
+}
+
+.organizational-dash-metric-context {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--organizational-text-tertiary);
+}
+
+.organizational-dash-metric-context.organizational-dash-metric-context--warning {
+  color: var(--organizational-status-warning);
+}
+
+.organizational-dash-metric-context.organizational-dash-metric-context--danger {
+  color: var(--organizational-status-danger);
+}
+
+.organizational-dash-metric-context.organizational-dash-metric-context--success {
+  color: var(--organizational-status-success);
+}
+
+/* Needs attention */
+.organizational-dash-needs-attention {
+  background: var(--organizational-surface-card);
+  border: 0.5px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-lg);
+  overflow: hidden;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+}
+
+.organizational-dash-needs-title {
+  margin: 0;
+  padding: 16px 20px 12px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--organizational-text-primary);
+  border-bottom: 0.5px solid var(--organizational-border-subtle);
+}
+
+.organizational-dash-attention-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.organizational-dash-coop-title {
+  margin: 0 0 12px;
+  padding: 0 0 12px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--organizational-text-primary);
+  border-bottom: 0.5px solid var(--organizational-border-subtle);
+}
+
+.organizational-dash-coop-workshop-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.organizational-dash-coop-workshop-list li a {
+  color: var(--organizational-accent);
+  text-decoration: none;
+}
+
+.organizational-dash-coop-workshop-list li a:hover {
+  text-decoration: underline;
+}
+
+.organizational-dash-coop-membership {
+  margin: 0 0 10px;
+}
+
+.organizational-dash-coop-stats {
+  margin: 10px 0 0;
+}
+
+.organizational-dash-attention-empty {
+  margin: 0;
+  padding: 16px 20px 20px;
+}
+
+.organizational-dash-attn-row {
+  display: flex;
+  align-items: center;
+  gap: 14px 16px;
+  padding: 14px 20px;
+  border-bottom: 0.5px solid var(--organizational-border-subtle);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.12s ease;
+}
+
+.organizational-dash-attn-row:last-child {
+  border-bottom: none;
+}
+
+.organizational-dash-attn-row:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.organizational-dash-attn-row:focus-visible {
+  outline: 2px solid var(--organizational-accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.organizational-dash-attn-accent {
+  align-self: stretch;
+  width: 4px;
+  min-height: 40px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: var(--organizational-text-tertiary);
+}
+
+.organizational-dash-attn-row--amber .organizational-dash-attn-accent {
+  background: var(--organizational-status-warning);
+}
+
+.organizational-dash-attn-row--danger .organizational-dash-attn-accent {
+  background: var(--organizational-status-danger);
+}
+
+.organizational-dash-attn-row--neutral .organizational-dash-attn-accent {
+  background: var(--organizational-border-medium);
+}
+
+.organizational-dash-attn-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.organizational-dash-attn-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-dash-attn-context {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--organizational-text-secondary);
+}
+
+.organizational-dash-attn-aside {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--organizational-accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 880px) {
+  .organizational-dash-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .organizational-dash-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .organizational-dash-narrative-kicker {
+    flex-wrap: wrap;
+  }
+
+  .organizational-dash-date {
+    width: 100%;
+    text-align: left;
+  }
+
+  .organizational-dash-narrative-card {
+    padding: 20px 18px;
+  }
+}
+
+/* ========================================================
+   Membership page & shared list/tab/modal components
+   ======================================================== */
+
+/* Page-level header block */
+.organizational-header {
+  margin-bottom: 24px;
+}
+.organizational-subtitle {
+  font-size: 0.9375rem;
+  color: var(--organizational-text-secondary);
+  margin: 4px 0 0;
+}
+
+/* Summary metric cards */
+.organizational-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.organizational-summary-card {
+  background: var(--organizational-surface-card);
+  border: 1px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--organizational-shadow-sm);
+}
+.organizational-summary-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--organizational-text-secondary);
+  margin-bottom: 6px;
+}
+.organizational-summary-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--organizational-text-primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.organizational-summary-inline {
+  font-size: 0.875rem;
+  color: var(--organizational-text-secondary);
+}
+
+/* Tabs */
+.organizational-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.organizational-tab {
+  padding: 8px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  margin-bottom: -1px;
+  font-family: var(--organizational-font-sans);
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.organizational-tab:hover {
+  color: var(--organizational-text-primary);
+}
+.organizational-tab.active {
+  color: var(--organizational-accent);
+  border-bottom-color: var(--organizational-accent);
+  font-weight: 600;
+}
+.organizational-tab-content {
+  display: none;
+}
+.organizational-tab-content.active {
+  display: block;
+}
+
+/* A visual break between an area's core/committed tabs and secondary ones
+   (a what-if sandbox next to Budget's real numbers, config/periodic tools
+   next to Accounting's daily-use screens) -- same tab strip, not a second row. */
+.organizational-tab-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 4px -1px 4px;
+  background: var(--organizational-border-subtle);
+}
+.organizational-tab-whatif {
+  font-style: italic;
+}
+
+/* Toolbar & filters */
+.organizational-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.organizational-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.organizational-filters select,
+.organizational-filters input[type="text"] {
+  padding: 6px 10px;
+  border: 1px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-md);
+  font-size: 0.875rem;
+  font-family: var(--organizational-font-sans);
+  background: white;
+  color: #1a1a1a;
+  width: auto;
+}
+
+/* Primary button (alias for .organizational-btn) */
+.organizational-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: var(--organizational-font-sans);
+  border: none;
+  border-radius: var(--organizational-radius-md);
+  cursor: pointer;
+  background: var(--brand-primary, var(--organizational-accent));
+  color: #fff;
+  transition: all 0.15s ease;
+}
+.organizational-btn-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: var(--organizational-shadow-sm);
+}
+
+/* List container */
+.organizational-list {
+  border: 1px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-lg);
+  overflow: hidden;
+  background: var(--organizational-surface-card);
+  margin-bottom: 16px;
+}
+.organizational-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.organizational-list-item:hover {
+  background: var(--organizational-surface-page);
+}
+.organizational-list-item:last-child {
+  border-bottom: none;
+}
+.organizational-list-item-main {
+  flex: 1;
+  min-width: 0;
+}
+.organizational-list-item-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.organizational-list-item-subtitle {
+  font-size: 0.8125rem;
+  color: var(--organizational-text-secondary);
+  margin-top: 2px;
+}
+.organizational-list-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.organizational-date {
+  font-size: 0.8125rem;
+  color: var(--organizational-text-secondary);
+  white-space: nowrap;
+}
+.organizational-loading {
+  color: var(--organizational-text-secondary);
+  padding: 24px 16px;
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+/* Badge status variants */
+.organizational-badge.organizational-badge-active { background: #d1fae5; color: #065f46; }
+.organizational-badge.organizational-badge-lapsed { background: #fee2e2; color: #991b1b; }
+.organizational-badge.organizational-badge-grace_period { background: #fef3c7; color: #92400e; }
+.organizational-badge.organizational-badge-terminated { background: #f3f4f6; color: #4b5563; }
+.organizational-badge.organizational-badge-pending_first_payment { background: #ede9fe; color: #5b21b6; }
+
+/* Document retention state badges */
+.organizational-badge.organizational-badge-doc-permanent { background: #d1fae5; color: #065f46; }
+.organizational-badge.organizational-badge-doc-retain_until { background: #f3f4f6; color: #374151; }
+.organizational-badge.organizational-badge-doc-expiring_soon { background: #fef3c7; color: #92400e; }
+.organizational-badge.organizational-badge-doc-expired { background: #fee2e2; color: #991b1b; }
+
+/* Reconciliation & close check cards */
+.organizational-recon-check {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+}
+.organizational-recon-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.organizational-recon-check--pass .organizational-badge { background: #d1fae5; color: #065f46; }
+.organizational-recon-check--fail .organizational-badge { background: #fee2e2; color: #991b1b; }
+.organizational-recon-check--info .organizational-badge { background: #f3f4f6; color: #4b5563; }
+
+/* Structured modal (header + scrollable body + sticky footer) */
+.organizational-modal-large {
+  width: min(640px, calc(100vw - 40px)) !important;
+  max-height: min(90vh, 720px) !important;
+}
+.organizational-modal-structured {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.organizational-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  flex-shrink: 0;
+}
+.organizational-modal-header h2,
+.organizational-modal-header h3 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.organizational-modal-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: var(--organizational-radius-md);
+  cursor: pointer;
+  font-size: 1.125rem;
+  color: var(--organizational-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.organizational-modal-close:hover {
+  background: var(--organizational-surface-page);
+  color: var(--organizational-text-primary);
+}
+.organizational-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.organizational-form-group {
+  margin-bottom: 16px;
+}
+.organizational-form-group label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  margin-top: 0;
+}
+.organizational-form-group input,
+.organizational-form-group select,
+.organizational-form-group textarea {
+  width: 100%;
+}
+.organizational-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--organizational-border-subtle);
+  flex-shrink: 0;
+  background: var(--organizational-surface-page);
+}
+.organizational-detail-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+}
+.organizational-detail-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.organizational-detail-section h3 {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--organizational-text-secondary);
+  margin: 0 0 8px;
+}
+.organizational-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+/* ========================================================
+   Coop overlay: NP design override (replaces styles.css defaults)
+   ======================================================== */
+body.organizational-app .organizational-overlay {
+  background: rgba(0, 0, 0, 0.45);
+}
+body.organizational-app .organizational-overlay-content {
+  background: var(--organizational-surface-card);
+  border: 1px solid var(--organizational-border-subtle);
+  box-shadow: var(--organizational-shadow-lg);
+  border-radius: var(--organizational-radius-lg);
+  padding: 0;
+  max-width: 460px;
+  width: min(460px, calc(100vw - 40px));
+  max-height: min(80vh, 600px);
+}
+body.organizational-app .organizational-overlay-header {
+  background: none;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  padding: 18px 24px;
+}
+body.organizational-app .organizational-overlay-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+body.organizational-app .organizational-overlay-close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--organizational-radius-md);
+  color: var(--organizational-text-secondary);
+  font-size: 1.125rem;
+}
+body.organizational-app .organizational-overlay-close:hover {
+  background: var(--organizational-surface-page);
+  color: var(--organizational-text-primary);
+}
+body.organizational-app .organizational-overlay-body {
+  padding: 20px 24px;
+}
+body.organizational-app .organizational-overlay-hint {
+  font-size: 0.875rem;
+  color: var(--organizational-text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* ========================================================
+   Budget page redesign: Monarch-inspired layout
+   ======================================================== */
+
+/* Page header: FY nav + view tabs */
+.organizational-budget-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* Org title + FY nav in one row */
+.organizational-budget-top-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.organizational-budget-top-row .organizational-org-dashboard-title {
+  margin: 0;
+}
+
+.organizational-budget-fy-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.organizational-budget-fy-nav button {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid var(--organizational-border-medium);
+  background: transparent;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.organizational-budget-fy-nav button:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--organizational-text-primary);
+  border-color: var(--organizational-border-subtle);
+}
+
+.organizational-budget-fy-nav button:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.organizational-budget-fy-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  min-width: 80px;
+  text-align: center;
+}
+
+/* View tabs as segment control */
+.organizational-budget-view-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.organizational-budget-view-tab {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--organizational-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.organizational-budget-view-tab:hover {
+  color: var(--organizational-text-primary);
+}
+
+.organizational-budget-view-tab.organizational-budget-view-tab-active {
+  background: #111827;
+  color: #ffffff;
+}
+
+/* Two-column layout: content + summary panel */
+.organizational-budget-two-col {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.organizational-budget-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.organizational-budget-panel {
+  width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  overflow: hidden;
+  max-height: calc(100vh - 120px);
+}
+
+.organizational-budget-panel-nav {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.organizational-budget-panel-nav-item {
+  padding: 10px 4px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.15s;
+}
+
+.organizational-budget-panel-nav-item:hover {
+  color: #333;
+  background: #f0f0f0;
+}
+
+.organizational-budget-panel-nav-item.active {
+  color: #800020;
+  border-bottom-color: #800020;
+  font-weight: 700;
+  background: white;
+}
+
+.organizational-budget-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+/* Workspace tabs layout (Phase 1b) */
+/* Flat filter bar: program / grant / display toggles in one row */
+/* Sticky block: filter bar + workspace tabs + top scrollbar row */
+.organizational-budget-sticky-header {
+  position: sticky;
+  top: 56px; /* sits just below the sticky app header */
+  z-index: 200;
+  background: var(--surface-page, #f7f7f5);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding-top: 8px;
+  padding-bottom: 2px;
+}
+
+/* Compact org name inside sticky header */
+.organizational-budget-sticky-header .organizational-budget-top-row {
+  margin-bottom: 6px;
+}
+.organizational-budget-sticky-header .organizational-org-dashboard-title {
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+/* Compact metric cards inside sticky header */
+.organizational-budget-sticky-header .organizational-budget-stat-strip {
+  margin-bottom: 6px;
+}
+.organizational-budget-sticky-header .organizational-budget-stat-item {
+  padding: 8px 12px;
+  gap: 2px;
+}
+.organizational-budget-sticky-header .organizational-budget-stat-value {
+  font-size: 1rem;
+}
+
+.organizational-budget-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 8px;
+  flex-wrap: nowrap;
+}
+
+/* Without this, the `display: flex` above beats the browser's default [hidden] { display:
+   none } (author stylesheet wins over UA stylesheet regardless of specificity), so setting
+   the `hidden` attribute from JS (budget-workspace.js's switchTab, Settings tab) silently did
+   nothing -- same fix already applied to .organizational-budget-tab-pane[hidden] nearby. */
+.organizational-budget-filter-bar[hidden] {
+  display: none;
+}
+
+.organizational-budget-filter-bar .organizational-budget-fy-nav {
+  padding-right: 8px;
+  border-right: 1px solid var(--border, #ddd);
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.organizational-budget-filter-bar .organizational-program-multiselect {
+  width: auto;
+  max-width: 200px;
+  flex-shrink: 0;
+}
+
+.organizational-budget-filter-bar .organizational-program-multiselect-btn {
+  width: auto;
+  height: 30px;
+  font-size: 0.8125rem;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.organizational-budget-filter-bar .organizational-budget-grant-select {
+  height: 30px;
+  font-size: 0.8125rem;
+  padding: 0 8px;
+  border: 1px solid var(--border, #ddd);
+  border-radius: 4px;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  max-width: 220px;
+}
+
+.organizational-budget-filter-bar .organizational-budget-view-options {
+  display: flex;
+  gap: 4px;
+}
+
+.organizational-budget-workspace-tabs {
+  margin-bottom: 0;
+  border-bottom: none; /* sticky header provides the separator */
+}
+
+.organizational-budget-workspace-tabs .organizational-tab {
+  padding: 12px 16px;
+  font-size: 0.875rem;
+}
+
+/* Settings gear icon, right-aligned in the workspace tab row (see budget.html) — same
+   hover/active tint as the sidebar's icon links (.organizational-sidebar__link:hover) for a
+   consistent icon-button language across the app. */
+.organizational-budget-settings-btn {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.organizational-budget-settings-btn:hover {
+  background: rgba(128, 0, 32, 0.06);
+  color: var(--organizational-text-primary);
+}
+.organizational-budget-settings-btn.active {
+  background: rgba(128, 0, 32, 0.06);
+  color: var(--organizational-accent);
+}
+
+#organizational-budget-workspace {
+  display: block;
+}
+
+.organizational-budget-tab-pane {
+  display: block;
+}
+
+.organizational-budget-tab-pane[hidden] {
+  display: none;
+}
+
+/* Stat strip in Budget tab — summary metric cards */
+.organizational-budget-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.organizational-budget-stat-item {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.organizational-budget-stat-item:hover {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.organizational-budget-stat-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.organizational-budget-stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.organizational-budget-stat-secondary {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.organizational-budget-stat-secondary.organizational-stat-good {
+  color: var(--organizational-status-success);
+}
+
+.organizational-budget-stat-secondary.organizational-stat-warn {
+  color: var(--organizational-status-warning);
+}
+
+.organizational-budget-stat-secondary.organizational-stat-danger {
+  color: var(--organizational-status-danger);
+}
+
+/* Inline row editing */
+.organizational-budget-inline-edit {
+  background: #f5f9fc;
+  border: 1px solid #c5dff0;
+}
+
+.organizational-budget-inline-edit td {
+  padding: 16px !important;
+}
+
+.organizational-budget-inline-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.organizational-budget-inline-edit-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.organizational-budget-inline-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.organizational-budget-inline-edit-field label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.organizational-budget-inline-edit-field input {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-family: monospace;
+}
+
+.organizational-budget-inline-edit-field input:focus {
+  outline: none;
+  border-color: #800020;
+  box-shadow: 0 0 0 2px rgba(128, 0, 32, 0.1);
+}
+
+.organizational-budget-inline-dist {
+  display: flex;
+  gap: 16px;
+  font-size: 0.875rem;
+}
+
+.organizational-budget-inline-dist label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.organizational-budget-inline-dist input[type="radio"] {
+  cursor: pointer;
+}
+
+.organizational-budget-inline-months-wrap {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+}
+
+.organizational-budget-inline-months-wrap summary {
+  cursor: pointer;
+  padding: 4px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #800020;
+}
+
+.organizational-budget-inline-months-wrap summary:hover {
+  background: #f5f5f5;
+  border-radius: 2px;
+}
+
+.organizational-budget-inline-months-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.organizational-budget-inline-month-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.organizational-budget-inline-month-input label {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.organizational-budget-inline-month-input input {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+/* Summary panel section */
+.organizational-sum-panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.organizational-sum-panel-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--organizational-text-tertiary);
+  margin: 0;
+}
+
+.organizational-sum-panel-metric {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--organizational-text-primary);
+}
+
+.organizational-sum-panel-metric.organizational-sum-metric-negative {
+  color: var(--organizational-status-danger);
+}
+
+.organizational-sum-panel-sub {
+  font-size: 12px;
+  color: var(--organizational-text-secondary);
+}
+
+/* Bar charts in summary */
+.organizational-sum-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.organizational-sum-bar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.organizational-sum-bar-label {
+  font-size: 13px;
+  color: var(--organizational-text-primary);
+  flex: 1;
+}
+
+.organizational-sum-bar-value {
+  font-size: 13px;
+  color: var(--organizational-text-secondary);
+  white-space: nowrap;
+}
+
+.organizational-sum-bar-track {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.organizational-sum-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.organizational-sum-bar-fill.organizational-sum-bar-green {
+  background: var(--organizational-status-success);
+}
+
+.organizational-sum-bar-fill.organizational-sum-bar-amber {
+  background: var(--organizational-status-warning);
+}
+
+.organizational-sum-bar-fill.organizational-sum-bar-red {
+  background: var(--organizational-status-danger);
+}
+
+/* Grant cards in summary */
+.organizational-sum-grant-card {
+  padding: 12px;
+  border: 1px solid var(--organizational-border-subtle);
+  border-left: 3px solid #800020;
+  border-radius: 6px;
+  background: var(--organizational-surface-card);
+}
+
+.organizational-sum-grant-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  margin: 0 0 4px;
+}
+
+.organizational-sum-grant-card-meta {
+  font-size: 12px;
+  color: var(--organizational-text-secondary);
+  margin: 0;
+}
+
+/* BvA table progress row */
+.organizational-bva-progress-row td {
+  padding: 0 16px 8px !important;
+  border: none !important;
+  background: none !important;
+}
+
+.organizational-bva-progress-row:hover {
+  background: none !important;
+}
+
+.organizational-bva-bar-track {
+  height: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.organizational-bva-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* Hide summary panel on entry and byprogram views */
+#organizational-budget-summary-panel[data-view="entry"],
+#organizational-budget-summary-panel[data-view="byprogram"] {
+  display: none;
+}
+
+/* Panel edit mode: budget grid */
+.organizational-budget-panel-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-budget-panel-edit-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.organizational-budget-panel-edit-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
+}
+
+.organizational-budget-panel-edit-close:hover {
+  color: var(--text-primary);
+}
+
+.organizational-budget-panel-months-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.organizational-budget-panel-month-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.organizational-budget-panel-month-cell label {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.organizational-budget-panel-month-cell input {
+  font-size: 0.875rem;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--surface-page);
+}
+
+.organizational-budget-panel-month-cell input:focus {
+  outline: none;
+  border-color: #800020;
+  box-shadow: 0 0 0 2px rgba(128, 0, 32, 0.1);
+}
+
+.organizational-budget-panel-annual-total {
+  padding: 12px;
+  background: rgba(128, 0, 32, 0.04);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.organizational-budget-panel-annual-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.organizational-budget-panel-annual-value {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Panel buttons */
+.organizational-budget-panel-button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.organizational-budget-panel-button-row button {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-page);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.organizational-budget-panel-button-row button:hover {
+  background-color: rgba(128, 0, 32, 0.06);
+}
+
+/* Panel tabs for projected */
+.organizational-budget-panel-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+
+.organizational-budget-panel-tab {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.organizational-budget-panel-tab.active {
+  border-bottom-color: #800020;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.organizational-budget-panel-tab:hover {
+  color: var(--text-primary);
+}
+
+.organizational-budget-panel-tab-content {
+  display: none;
+}
+
+.organizational-budget-panel-tab-content.active {
+  display: block;
+}
+
+/* Row selection highlight in BvA table */
+.organizational-account-posting.organizational-selected {
+  background-color: rgba(128, 0, 32, 0.08);
+}
+
+.organizational-account-posting.organizational-selected td {
+  font-weight: 500;
+}
+
+/* Entry panel - running totals */
+.organizational-budget-entry-summary {
+  padding: 12px;
+  background: rgba(128, 0, 32, 0.04);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.organizational-budget-entry-summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+}
+
+.organizational-budget-entry-summary-row:last-child {
+  margin-bottom: 0;
+  border-top: 1px solid rgba(128, 0, 32, 0.2);
+  padding-top: 8px;
+  font-weight: 600;
+  color: #800020;
+}
+
+.organizational-budget-entry-summary-label {
+  color: var(--text-secondary);
+}
+
+.organizational-budget-entry-summary-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* By Program comparison strip */
+.organizational-budget-byprogram-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.organizational-budget-byprogram-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: var(--surface-page);
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+  font-size: 0.875rem;
+}
+
+.organizational-budget-byprogram-row.burn-green {
+  border-left-color: #10b981;
+}
+
+.organizational-budget-byprogram-row.burn-amber {
+  border-left-color: #f59e0b;
+}
+
+.organizational-budget-byprogram-row.burn-red {
+  border-left-color: #ef4444;
+}
+
+.organizational-budget-byprogram-row-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.organizational-budget-byprogram-row-pct {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Panel footer with link */
+.organizational-budget-panel-footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.75rem;
+}
+
+.organizational-budget-panel-footer a {
+  color: #800020;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.organizational-budget-panel-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive: stack summary panel below content on narrow widths */
+@media (max-width: 1200px) {
+  .organizational-budget-two-col {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .organizational-budget-summary-panel {
+    width: 100%;
+    position: static;
+  }
+
+  .organizational-budget-panel-months-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Personnel Tab ────────────────────────────────────────────────────────── */
+
+.organizational-personnel-wrap {
+  padding: 16px 0;
+}
+
+.organizational-personnel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 20px;
+}
+
+.organizational-personnel-section {
+  margin-bottom: 24px;
+}
+
+.organizational-personnel-section-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin: 0 0 10px 0;
+}
+
+.organizational-personnel-table td {
+  vertical-align: top;
+  padding: 8px 10px;
+}
+
+.organizational-personnel-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.organizational-personnel-title {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.organizational-personnel-alloc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  max-width: 200px;
+}
+
+/* Fringe settings */
+.organizational-personnel-fringe-details > summary.organizational-personnel-fringe-summary {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  list-style: none;
+}
+
+.organizational-personnel-fringe-details > summary::before {
+  content: '▸ ';
+  font-size: 0.75rem;
+}
+
+.organizational-personnel-fringe-details[open] > summary::before {
+  content: '▾ ';
+}
+
+.organizational-fringe-form {
+  padding: 12px 0;
+}
+
+.organizational-fringe-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.organizational-fringe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px 16px;
+}
+
+.organizational-fringe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+}
+
+.organizational-fringe-field label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.organizational-fringe-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.organizational-fringe-input,
+input.organizational-fringe-input,
+select.organizational-fringe-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+}
+
+.organizational-fringe-unit {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Worker add/edit modal */
+.organizational-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.organizational-modal-box {
+  background: var(--bg-surface, #fff);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 640px;
+  max-width: 95vw;
+}
+
+.organizational-worker-modal {
+  padding: 0;
+}
+
+.organizational-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface, #fff);
+  z-index: 1;
+}
+
+.organizational-modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.organizational-modal-close:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.organizational-worker-form {
+  padding: 16px 18px;
+}
+
+.organizational-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 12px;
+}
+
+.organizational-input,
+.organizational-select {
+  padding: 8px 10px;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+
+.organizational-input:focus,
+.organizational-select:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(128, 0, 32, 0.1);
+}
+
+.organizational-btn-danger {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.organizational-btn-danger:hover {
+  background: #fecaca;
+}
+
+/* ── Multi-select program dropdown ─────────────────────────────────────── */
+
+.organizational-program-multiselect {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.organizational-program-multiselect-btn {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: inherit;
+}
+
+.organizational-program-multiselect-btn:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.organizational-program-caret {
+  font-size: 0.625rem;
+  flex-shrink: 0;
+}
+
+.organizational-program-multiselect-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-subtle);
+  border-top: none;
+  border-radius: 0 0 3px 3px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 100;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.organizational-program-multiselect-dropdown label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-program-multiselect-dropdown label:last-child {
+  border-bottom: none;
+}
+
+.organizational-program-multiselect-dropdown label:hover {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.organizational-program-multiselect-dropdown input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* ── Import section styles in Budget tab ───────────────────────────────── */
+
+/* Personnel inline editing */
+
+.organizational-personnel-row {
+  cursor: pointer;
+}
+
+.organizational-personnel-row:hover td {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.organizational-personnel-row.organizational-personnel-expanded td {
+  background: #eef4fb;
+}
+
+.organizational-personnel-add-row {
+  cursor: pointer;
+}
+
+.organizational-personnel-add-row:hover td {
+  background: var(--bg-hover, #f5f5f5);
+}
+
+.organizational-personnel-add-cell {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.organizational-personnel-inline-edit td {
+  background: #f0f6fc !important;
+  padding: 16px !important;
+}
+
+.organizational-personnel-inline-alloc-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 6px;
+}
+
+.organizational-personnel-inline-alloc-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+}
+
+.organizational-personnel-inline-alloc-item input {
+  width: 52px;
+  text-align: right;
+}
+
+.organizational-personnel-alloc-total {
+  font-size: 0.8125rem;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Link-style button for Programs cell */
+.organizational-btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 0.8125rem;
+  font-family: inherit;
+}
+
+.organizational-btn-link:hover {
+  opacity: 0.8;
+}
+
+/* Change history */
+.organizational-worker-history {
+  margin-top: 14px;
+}
+
+.organizational-worker-history summary {
+  font-size: 0.8125rem;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.organizational-worker-history summary:hover {
+  color: var(--organizational-text-primary);
+}
+
+.organizational-worker-history-body {
+  font-size: 0.8125rem;
+  margin-top: 8px;
+  overflow-x: auto;
+  /* See .organizational-table-wrap's comment -- clearance for an overlay scrollbar. */
+  padding-bottom: 14px;
+}
+
+.organizational-worker-history-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8125rem;
+}
+
+.organizational-worker-history-body td,
+.organizational-worker-history-body th {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--organizational-border-subtle);
+  text-align: left;
+}
+
+/* CHUNK 1.5: Monthly Budget Grid Styles (Fixed layout + permissions) */
+
+/* Base table styling — sizes to its content (account + narrow numeric
+   columns) rather than stretching to fill the container (overrides
+   .organizational-table's width:100%, which this table also carries); whatever
+   doesn't fit scrolls horizontally via .organizational-budget-grid-scroll. */
+.organizational-budget-grid {
+  border-collapse: collapse;
+  width: auto;
+}
+
+.organizational-budget-grid tbody tr {
+  border-bottom: 1px solid var(--border, #e0e0e0);
+}
+
+/* Frozen columns - sticky positioning */
+.organizational-budget-sticky-col {
+  position: sticky;
+  background-color: var(--bg-secondary, #f9f9f9);
+  z-index: 100;
+  font-weight: 500;
+  border-right: 1px solid var(--border, #ddd);
+  padding: 8px 12px;
+  text-align: right;
+}
+
+.organizational-budget-col-account {
+  width: 340px;
+  min-width: 340px;
+  max-width: 340px;
+  left: 0;
+  z-index: 101;
+  text-align: left;
+  border-right: 2px solid var(--border, #999);
+}
+
+.organizational-budget-annual-header {
+  text-align: center;
+  background-color: var(--bg-tertiary, #f5f5f5);
+  border-right: 1px solid var(--border, #ddd);
+  padding: 6px 4px;
+  font-size: 0.9rem;
+  background-clip: padding-box;
+}
+
+.organizational-budget-annual-data {
+  min-width: 110px;
+  text-align: right;
+  background-color: var(--bg-secondary, #f9f9f9);
+}
+
+/* Sticky positioning for annual column (col 2) — last sticky before the monthly scroll region */
+.organizational-budget-grid tbody td.organizational-budget-sticky-col:nth-child(2),
+.organizational-budget-grid thead th.organizational-budget-sticky-col:nth-child(2) {
+  left: 340px;
+  z-index: 100;
+  width: 110px;
+  border-right: 2px solid var(--border, #999);
+}
+
+/* thead sticky-col intersection cell: both top and left sticky */
+.organizational-budget-grid thead th.organizational-budget-sticky-col:nth-child(2) {
+  z-index: 105;
+}
+
+/* Month header styling - centered over 3 sub-columns */
+.organizational-budget-month-header {
+  background-color: var(--bg-tertiary, #f0f0f0);
+  text-align: center !important;
+  border-bottom: 2px solid var(--border, #ccc);
+  padding: 8px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.organizational-budget-subheader {
+  padding: 4px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background-color: var(--bg-tertiary, #fafafa);
+  border-bottom: 1px solid var(--border, #ddd);
+  vertical-align: middle;
+}
+
+/* Month data columns */
+.organizational-budget-col-budget {
+  background-color: rgba(100, 150, 255, 0.08);
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border, #e8e8e8);
+}
+
+.organizational-budget-col-actual {
+  background-color: rgba(180, 180, 180, 0.08);
+  min-width: 100px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border, #e8e8e8);
+  color: var(--text-secondary);
+}
+
+.organizational-budget-col-projected {
+  background-color: rgba(100, 200, 100, 0.08);
+  min-width: 100px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--border, #e8e8e8);
+}
+
+.organizational-budget-col-num {
+  text-align: right !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  font-size: 0.9rem;
+  padding-right: 12px;
+}
+
+/* Editable vs Read-only cell states */
+.organizational-budget-editable {
+  cursor: cell;
+  user-select: none;
+  position: relative;
+}
+
+.organizational-budget-editable:hover {
+  background-color: rgba(100, 150, 255, 0.15) !important;
+  box-shadow: inset 0 0 0 1px rgba(100, 150, 255, 0.3);
+}
+
+.organizational-budget-editable:focus {
+  outline: 2px solid var(--accent, #0066cc);
+  outline-offset: -2px;
+}
+
+.organizational-budget-editing {
+  background-color: var(--bg-highlight, #fffacd) !important;
+  border: 2px solid var(--accent, #0066cc);
+  border-radius: 2px;
+  padding: 6px 8px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.organizational-budget-readonly {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Schedule-row cells whose actual budget lines were written by a module (personnel / grant recalc).
+   The account's budget_source may still say 'schedule', but the line-level source_type reveals
+   the true owner. Dimmer than the base readonly so the mismatch is visually distinguishable. */
+.organizational-budget-readonly--lineage {
+  opacity: 0.4;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* Budget page header layout */
+.organizational-budget-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.organizational-budget-fy-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* View options in toolbar - align with other fields */
+.organizational-budget-view-options {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.organizational-budget-view-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.organizational-budget-view-btn:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border);
+}
+
+.organizational-budget-view-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* CHUNK 2: Input-based inline editing */
+
+.organizational-budget-input-editor {
+  width: 100%;
+  padding: 6px 10px;
+  border: 2px solid var(--accent, #0066cc);
+  border-radius: 2px;
+  font-size: 0.9rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  text-align: right;
+  box-sizing: border-box;
+  background-color: var(--bg-highlight, #fffacd);
+  -moz-appearance: textfield;
+}
+.organizational-budget-input-editor::-webkit-inner-spin-button,
+.organizational-budget-input-editor::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.organizational-budget-input-editor:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.15);
+}
+
+/* Save states for budget cells */
+
+.organizational-budget-saving {
+  background-color: rgba(255, 250, 205, 0.5) !important;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.organizational-budget-saved {
+  background-color: rgba(100, 200, 100, 0.3) !important;
+  border: 1px solid rgba(100, 200, 100, 0.8);
+  animation: pulse-success 0.6s ease-out;
+}
+
+.organizational-budget-error {
+  background-color: rgba(255, 100, 100, 0.3) !important;
+  border: 1px solid rgba(255, 100, 100, 0.8);
+  animation: pulse-error 0.6s ease-out;
+}
+
+/* Budget Phase C — cell state indicators */
+.organizational-budget-cell--calculated {
+  background-color: var(--surface-active) !important;
+}
+
+.organizational-budget-cell--override {
+  position: relative;
+}
+.organizational-budget-cell--override::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 6px 6px 0;
+  border-color: transparent var(--brand-mid) transparent transparent;
+  pointer-events: none;
+}
+
+.organizational-budget-cell--stale {
+  background-color: var(--amber-bg) !important;
+}
+.organizational-budget-cell--stale.organizational-budget-editable:hover {
+  background-color: var(--amber-bg) !important;
+}
+
+/* Cell dim state while popover is open */
+.organizational-budget-cell--popover-open {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Budget grid row hierarchy */
+.organizational-budget-row-summary td {
+  background-color: var(--surface-raised, #f0f0f4);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.organizational-budget-row-subtotal td {
+  background-color: var(--surface-page, #fafafa);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.organizational-budget-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-tertiary, #9ca3af);
+  font-size: 0.75rem;
+  border-radius: 3px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.organizational-budget-chevron:hover {
+  color: var(--accent, #0066cc);
+  background: var(--surface-hover, #f0f4ff);
+}
+
+.organizational-budget-chevron-spacer {
+  display: inline-block;
+  width: 22px;
+  flex-shrink: 0;
+}
+
+.organizational-budget-posting-name {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  /* Nests editable/leaf accounts visually under their bold summary/subtotal
+     parent rows, instead of all rows sharing the same left edge. */
+  padding-left: 24px;
+}
+
+.organizational-budget-acct-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizational-budget-source-badge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Schedule item sub-rows nested under posting account rows — click-to-edit,
+   opens the shared schedule-item panel (same pattern as Insurance/Other
+   Schedules row lists). */
+.organizational-budget-row-schedule-item td {
+  background-color: var(--surface-page, #fafafa);
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #6b7280);
+}
+
+.organizational-budget-row-schedule-item {
+  cursor: pointer;
+}
+.organizational-budget-row-schedule-item:hover td {
+  background: var(--surface-hover, #f8f8f8);
+}
+
+.organizational-budget-subrow-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 54px !important;
+}
+
+.organizational-budget-subrow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizational-budget-subrow-edit {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-tertiary, #9ca3af);
+  font-size: 0.875rem;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.organizational-budget-subrow-edit:hover {
+  color: var(--accent, #0066cc);
+  background: var(--surface-hover, #f0f4ff);
+}
+
+/* ── Budget Tools column (removed — tools are now inline in account cell) ── */
+.organizational-budget-tools-header,
+.organizational-budget-tools-col {
+  display: none;
+}
+
+
+.organizational-budget-add-subrow-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--accent, #0066cc);
+  font-size: 0.75rem;
+  border-radius: 3px;
+}
+
+.organizational-budget-add-subrow-btn:hover {
+  background: var(--surface-hover, #f0f4ff);
+}
+
+
+/* ── Math warning banner ─────────────────────────────────────────────────── */
+
+.organizational-budget-math-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--warn-bg, #fffbeb);
+  border-bottom: 1px solid var(--warn-border, #fbbf24);
+  font-size: 0.8125rem;
+  color: var(--warn-text, #92400e);
+}
+.organizational-budget-math-warning[hidden] {
+  display: none;
+}
+
+.organizational-budget-math-warning span {
+  flex: 1;
+}
+
+.organizational-budget-fix-math-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--warn-border, #fbbf24);
+  border-radius: 4px;
+  background: var(--surface, #fff);
+  color: var(--warn-text, #92400e);
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.organizational-budget-fix-math-btn:hover {
+  background: var(--warn-bg, #fffbeb);
+}
+
+.organizational-budget-fix-math-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.organizational-budget-math-warning-dismiss {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--warn-text, #92400e);
+  font-size: 0.875rem;
+  border-radius: 3px;
+  opacity: 0.6;
+}
+
+.organizational-budget-math-warning-dismiss:hover {
+  opacity: 1;
+}
+
+.organizational-budget-row-subtotal-sum td {
+  background-color: var(--surface-page, #fafafa);
+  border-top: 1px solid var(--border-subtle, #e0e0e0);
+  font-size: 0.8125rem;
+}
+
+.organizational-budget-row-section-sum td {
+  background-color: var(--surface-raised, #f0f0f4);
+  border-top: 2px solid var(--border, #ccc);
+  font-size: 0.875rem;
+}
+
+@keyframes pulse-success {
+  0% {
+    box-shadow: 0 0 8px rgba(100, 200, 100, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(100, 200, 100, 0);
+  }
+}
+
+/* ── Schedule Builder ──────────────────────────────────────────────────────── */
+
+.organizational-schedule-pane {
+  padding: 0 0 32px;
+}
+
+.organizational-schedule-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 16px;
+  gap: 12px;
+}
+
+.organizational-schedule-heading {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.organizational-schedule-form-wrap {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.organizational-schedule-form-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+
+.organizational-schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.organizational-schedule-form-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.organizational-schedule-form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 140px;
+}
+
+.organizational-schedule-qty { max-width: 100px; }
+
+.organizational-schedule-custom-months {
+  padding: 8px 0 4px;
+}
+
+.organizational-schedule-month-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.organizational-schedule-month-cb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.organizational-schedule-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.organizational-schedule-form-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+
+.organizational-schedule-table {
+  width: 100%;
+  font-size: 0.8125rem;
+}
+
+.organizational-schedule-table th,
+.organizational-schedule-table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.organizational-schedule-table .organizational-num {
+  text-align: right;
+}
+
+.organizational-schedule-account {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizational-schedule-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.organizational-btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 0.875rem;
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.organizational-btn-icon:hover { opacity: 1; }
+
+/* ── Schedule inline grid (B.5) ─────────────────────────────────────────────── */
+
+.organizational-sg-container {
+  overflow-x: auto;
+  /* See .organizational-table-wrap's comment -- clearance for an overlay scrollbar. */
+  padding-bottom: 14px;
+}
+
+.organizational-sg-table {
+  width: 100%;
+  font-size: 0.8125rem;
+  border-collapse: collapse;
+}
+
+.organizational-sg-table th {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 6px 8px;
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+.organizational-sg-table td {
+  padding: 5px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.organizational-sg-num { text-align: right; }
+.organizational-sg-total { white-space: nowrap; }
+
+.organizational-sg-row:hover {
+  background: var(--surface-hover, #f8f8f8);
+}
+
+.organizational-sg-account {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organizational-sg-add-row td {
+  padding: 6px 8px;
+  border-bottom: none;
+}
+
+.organizational-sg-add-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.organizational-sg-add-btn:hover {
+  border-color: var(--organizational-accent);
+  color: var(--organizational-accent);
+}
+
+/* Inputs inside the grid */
+.organizational-sg-input,
+.organizational-sg-sel {
+  font-size: 0.8125rem;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.organizational-sg-input:focus,
+.organizational-sg-sel:focus {
+  outline: none;
+  border-color: var(--organizational-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--organizational-accent) 20%, transparent);
+}
+
+/* Insurance schedule grid — extra columns */
+.organizational-sg-ins-container {
+  overflow-x: auto;
+  max-width: 100%;
+  /* See .organizational-table-wrap's comment -- clearance for an overlay scrollbar. */
+  padding-bottom: 14px;
+}
+
+.organizational-sg-ins-table {
+  min-width: 1100px;
+}
+
+.organizational-sg-month-col {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 4px;
+  min-width: 46px;
+}
+
+.organizational-sg-date {
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.organizational-schedule-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+/* Named schedule toolbar */
+.organizational-named-schedule-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.organizational-named-schedule-sel {
+  font-size: 0.875rem;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  min-width: 200px;
+  height: 32px;
+}
+
+.organizational-named-schedule-new-btn {
+  white-space: nowrap;
+}
+
+.organizational-named-schedule-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 12px;
+  flex-wrap: wrap;
+}
+
+/* Personnel inline grid edit */
+.organizational-personnel-secondary-cell {
+  padding: 4px 8px 8px;
+  background: var(--surface-raised, #f5f3ff);
+}
+
+.organizational-personnel-secondary-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.organizational-personnel-secondary-fields label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@keyframes pulse-error {
+  0% {
+    box-shadow: 0 0 8px rgba(255, 100, 100, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(255, 100, 100, 0);
+  }
+}
+
+/* Reports index */
+.organizational-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.organizational-report-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--organizational-surface-card);
+  border: 0.5px solid var(--organizational-border-subtle);
+  border-radius: var(--organizational-radius-lg);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.organizational-report-card:hover {
+  border-color: var(--organizational-accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+
+.organizational-report-card--dim {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+.organizational-report-card-icon {
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.organizational-report-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.organizational-report-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--organizational-text-primary);
+  margin-bottom: 4px;
+}
+
+.organizational-report-card-desc {
+  font-size: 12.5px;
+  color: var(--organizational-text-secondary);
+  line-height: 1.45;
+}
+
+.organizational-report-card-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--organizational-accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.organizational-report-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.organizational-btn-ghost {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--organizational-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.organizational-btn-ghost:hover {
+  color: var(--organizational-text-primary);
+}
+
+/* Audit log */
+.organizational-status-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+.organizational-status-create { background: #d1fae5; color: #065f46; }
+.organizational-status-update { background: #dbeafe; color: #1e40af; }
+.organizational-status-delete { background: #fee2e2; color: #991b1b; }
+.organizational-audit-val {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* ── Grants table: click a row to open its panel (see .organizational-sg-row
+   for the same convention elsewhere) -- individual cells are no longer
+   separately editable in place. ── */
+.organizational-grants-row:hover {
+  background: var(--surface-hover, #f8f8f8);
+}
+
+.organizational-alloc-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.organizational-alloc-delete:hover { color: var(--organizational-status-danger); }
+
+/* ── Grant sliding panel ──
+   z-index must clear the sticky #app-header (z-index: 500, tokens.css) —
+   at 200/201 the header's ~500 sat visually on top of the panel's own
+   title-bar/close button, so the close (×) was unclickable (clicks landed
+   on the header instead) and the panel could look permanently stuck open. */
+.organizational-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 550;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.organizational-panel-overlay.organizational-panel-is-open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.organizational-grant-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 580px;
+  max-width: 100vw;
+  background: var(--bg, #fff);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--organizational-shadow-lg);
+  z-index: 551;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(100%);
+  transition: transform 0.22s ease, visibility 0s 0.22s;
+}
+
+.organizational-grant-panel.organizational-panel-is-open {
+  visibility: visible;
+  pointer-events: all;
+  transform: translateX(0);
+  transition: transform 0.22s ease, visibility 0s;
+}
+
+.organizational-panel-header[hidden] {
+  display: none;
+}
+
+.organizational-panel-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--organizational-surface-page, #fafafa);
+}
+
+.organizational-panel-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 48px);
+}
+
+.organizational-panel-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.organizational-panel-close:hover {
+  background: var(--border-subtle, #e5e7eb);
+  color: var(--text-primary);
+}
+
+.organizational-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.organizational-panel-loading {
+  padding: 32px 0;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* Panel field grid */
+.organizational-panel-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.organizational-panel-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.organizational-panel-field-full {
+  grid-column: 1 / -1;
+}
+
+.organizational-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.organizational-label > input,
+.organizational-label > select,
+.organizational-label > textarea {
+  width: 100%;
+}
+
+.organizational-panel-section-head {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  padding: 14px 0 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.organizational-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+/* Insurance panel month tiles */
+.organizational-ins-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.organizational-ins-tile {
+  background: var(--surface-hover, #f8f8f8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 6px;
+  text-align: center;
+}
+
+.organizational-ins-tile-label {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  display: block;
+}
+
+.organizational-ins-tile-amt {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  display: block;
+}
+
+/* Panel derived/read-only field — reads as a value, not label text, so it
+   needs to opt back out of .organizational-label's uppercase/letter-spacing when
+   nested inside one (e.g. a locked account, a computed total). */
+.organizational-panel-derived {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-primary);
+  background: var(--surface-hover, #f8f8f8);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+}
+
+/* Allocation panel — program line rows */
+.organizational-alloc-line-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.organizational-alloc-line-row .organizational-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Allocation panel — monthly distribution grid */
+.organizational-alloc-months-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.organizational-alloc-month-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+.organizational-alloc-month-input input {
+  width: 100%;
+  text-align: right;
+}
+
+/* FY allocation sections */
+.organizational-panel-fy-section {
+  margin-bottom: 20px;
+}
+
+.organizational-panel-fy-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.organizational-panel-fy-label {
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.organizational-panel-fy-period {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.organizational-panel-fy-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+  flex-wrap: wrap;
+}
+
+.organizational-panel-fy-total {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.organizational-alloc-over      { color: var(--organizational-status-danger);  font-weight: 600; }
+.organizational-alloc-remaining { color: var(--organizational-status-success); font-weight: 600; }
+
+.organizational-alloc-prog-label {
+  font-size: 0.8125rem;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.organizational-alloc-secondary {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.organizational-table-compact th,
+.organizational-table-compact td {
+  padding: 5px 8px;
+  font-size: 0.8125rem;
+}
+
+.organizational-panel-new-alloc-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0 4px;
+  flex-wrap: wrap;
+  border-top: 1px dashed var(--border);
+}
+
+/* Panel-level inline error bar (sits between header and body) */
+.organizational-panel-error {
+  background: #fef2f2;
+  border-bottom: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.organizational-panel-error[hidden] {
+  display: none;
+}
+
+/* Formula-entry field that failed to evaluate (formula-input.js) -- same error palette as
+   .organizational-panel-error above, just applied as a border since this decorates an input. */
+.organizational-formula-error {
+  border-color: #fecaca !important;
+  background: #fef2f2;
+}
+
+/* Allocation mode toggle ($ Amount / % of award) */
+.organizational-panel-alloc-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+
+.organizational-seg-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.organizational-seg-btn {
+  padding: 4px 14px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: var(--surface-card, #fff);
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1.5;
+}
+
+.organizational-seg-btn + .organizational-seg-btn {
+  border-left: 1px solid var(--border);
+}
+
+.organizational-seg-btn.active {
+  background: var(--surface-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.organizational-seg-btn:hover:not(.active) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* ── Personnel panel specifics ──────────────────────────────────────────────── */
+
+.cpn-pid-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--border-subtle, #e5e7eb);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: monospace;
+}
+
+.cpn-alloc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.cpn-alloc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cpn-alloc-row label {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.cpn-alloc-row input[type="number"] {
+  width: 64px;
+}
+
+.cpn-alloc-total {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.cpn-alloc-total.over { color: var(--organizational-status-danger, #dc2626); }
+.cpn-alloc-total.ok   { color: var(--organizational-status-success, #16a34a); }
+
+/* ── Budget views spread table (reports page) ─────────────────────────── */
+/* Scroll container + 4 frozen left columns: Account | Budget | Actual | Forecast */
+
+.organizational-bv-grid {
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* max-height set dynamically by syncBrScroll() */
+  /* Clearance for an overlay scrollbar at the bottom (see .organizational-table-wrap's
+     comment) and on the right -- this grid has its own vertical scroll (max-height set by
+     syncBrScroll()), so at full browser width, with no horizontal scroll needed (e.g. Monthly
+     detail mode with all columns visible), the vertical scrollbar sits directly over the
+     rightmost column's numbers without this. */
+  padding-bottom: 14px;
+  padding-right: 14px;
+}
+
+/* Sticky column 1: Account */
+.organizational-bv-grid td:nth-child(1),
+.organizational-bv-grid th:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 101;
+  min-width: 220px;
+  width: 220px;
+  background: var(--surface-card, #fff);
+  border-right: none;
+  text-align: left;
+}
+
+/* Sticky column 2: Annual Budget */
+.organizational-bv-grid td:nth-child(2),
+.organizational-bv-grid th:nth-child(2) {
+  position: sticky;
+  left: 220px;
+  z-index: 100;
+  min-width: 100px;
+  background: var(--surface-card, #fff);
+}
+
+/* Sticky column 3: Annual Actual */
+.organizational-bv-grid td:nth-child(3),
+.organizational-bv-grid th:nth-child(3) {
+  position: sticky;
+  left: 320px;
+  z-index: 100;
+  min-width: 100px;
+  background: var(--surface-card, #fff);
+}
+
+/* Sticky column 4: Annual Forecast — right separator before scrolling months */
+.organizational-bv-grid td:nth-child(4),
+.organizational-bv-grid th:nth-child(4) {
+  position: sticky;
+  left: 420px;
+  z-index: 100;
+  min-width: 100px;
+  background: var(--surface-card, #fff);
+  border-right: 2px solid var(--border, #ddd) !important;
+}
+
+/* Future-month headers are muted */
+.organizational-bv-grid .organizational-budget-month-header--future {
+  opacity: 0.55;
+}
+
+/* Monthly sub-column widths */
+.organizational-bv-grid .organizational-bv-bgt { min-width: 82px; background: rgba(100,150,255,0.07); }
+.organizational-bv-grid .organizational-bv-actl { min-width: 82px; background: rgba(180,180,180,0.07); color: var(--text-secondary); }
+.organizational-bv-grid .organizational-bv-fcst { min-width: 82px; background: rgba(80,180,80,0.07); border-right: 1px solid var(--border, #e8e8e8); }
+
+/* Row types */
+.organizational-bv-grid tr.bv-summary td:nth-child(1),
+.organizational-bv-grid tr.bv-summary th:nth-child(1) { background: var(--surface-active, #f4f4f5); }
+.organizational-bv-grid tr.bv-summary td:nth-child(2),
+.organizational-bv-grid tr.bv-summary td:nth-child(3),
+.organizational-bv-grid tr.bv-summary td:nth-child(4) { background: var(--surface-active, #f4f4f5); }
+.organizational-bv-grid tr.bv-section td:nth-child(1),
+.organizational-bv-grid tr.bv-section td:nth-child(2),
+.organizational-bv-grid tr.bv-section td:nth-child(3),
+.organizational-bv-grid tr.bv-section td:nth-child(4) { background: var(--surface-active, #f4f4f5); }
+.organizational-bv-grid tr.bv-net td:nth-child(1),
+.organizational-bv-grid tr.bv-net td:nth-child(2),
+.organizational-bv-grid tr.bv-net td:nth-child(3),
+.organizational-bv-grid tr.bv-net td:nth-child(4) { background: var(--surface-active, #f4f4f5); }
+
+/* Month-group header row (row 1 of 2-row monthly thead): cols 3+ scroll horizontally */
+/* Keep position:sticky for vertical sticking, but clear left so they don't freeze horizontally */
+.organizational-bv-grid tr.organizational-bv-group-row th:nth-child(n+3) {
+  position: sticky !important;
+  top: 0;
+  left: auto !important;
+  z-index: 2;
+}
+
+/* Sticky thead within the scroll container */
+.organizational-bv-grid thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-card, #fff);
+  z-index: 5;
+}
+
+/* Row 2 of 2-row monthly thead: sticks below row 1 (height measured by JS) */
+.organizational-bv-grid .organizational-budget-monthly-header-2 th {
+  top: var(--br-thead-r1-h, 32px);
+}
+
+/* Corner intersections (frozen col + frozen row) always on top */
+.organizational-bv-grid thead th:nth-child(1),
+.organizational-bv-grid thead th:nth-child(2),
+.organizational-bv-grid thead th:nth-child(3),
+.organizational-bv-grid thead th:nth-child(4) {
+  z-index: 105;
+}
+
+/* ── Budget report sticky filter header (reports page) ────────────────── */
+.organizational-br-sticky-header {
+  position: sticky;
+  top: 56px; /* sits below the fixed app header */
+  z-index: 200;
+  background: var(--surface-card, #fff);
+}
+
+/* Card-level overflow override so sticky child works */
+.organizational-card.organizational-card-flush.organizational-br-report-card {
+  overflow: visible;
+}
+
+/* Top horizontal scrollbar — synced with grid scrollLeft */
+.organizational-br-top-scroll-row {
+  display: flex;
+  align-items: center;
+  padding: 3px 0 2px;
+  background: var(--surface-page, #f7f7f5);
+  border-top: 1px solid var(--border, #e8e8e8);
+}
+
+.organizational-br-top-scroll {
+  flex: 1;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  height: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.25) transparent;
+}
+.organizational-br-top-scroll::-webkit-scrollbar { height: 8px; }
+.organizational-br-top-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.22); border-radius: 4px; }
+.organizational-br-top-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
+#organizational-br-top-scroll-inner { height: 1px; }
+
+/* causalworks: bright brand half + wine-accent suffix, legible on #3c1416 */
+body.organizational-app .app-header-logo-causal { color: rgba(255,255,255,0.92); }
+body.organizational-app .app-header-logo-works  { color: #c96b72; }

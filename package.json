@@ -1,0 +1,40 @@
+{
+  "name": "causal-app",
+  "version": "1.0.0",
+  "description": "causal.works — civic action SPA (Express, Postgres, Postmark)",
+  "private": true,
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "civic-tech",
+    "causal"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.5",
+    "bcrypt": "^6.0.0",
+    "cheerio": "^1.2.0",
+    "cookie-parser": "^1.4.7",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^17.3.1",
+    "ejs": "^3.0.2",
+    "exceljs": "^4.4.0",
+    "expr-eval": "^2.0.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
+    "jose": "^4.15.9",
+    "multer": "^1.4.4",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^8.0.1",
+    "pg": "^8.18.0",
+    "plaid": "^47.0.0",
+    "postmark": "^4.0.7",
+    "puppeteer": "^24.37.5"
+  }
+}

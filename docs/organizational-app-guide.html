@@ -1,0 +1,501 @@
+<title>The Cooperative App, Explained</title>
+<style>
+  :root{
+    --paper:#eef1ea;
+    --paper-raised:#ffffff;
+    --ink:#1c2622;
+    --ink-soft:#4b5750;
+    --line:#c9d0c3;
+    --accent:#2f6f5e;
+    --accent-soft:#dce9e3;
+    --amber:#b5792f;
+    --amber-soft:#f1e3cd;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#141a17;
+      --paper-raised:#1b2320;
+      --ink:#e7ece7;
+      --ink-soft:#a9b3ac;
+      --line:#33403a;
+      --accent:#5fbfa2;
+      --accent-soft:#1f322b;
+      --amber:#d9a05c;
+      --amber-soft:#33291a;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#141a17; --paper-raised:#1b2320; --ink:#e7ece7; --ink-soft:#a9b3ac;
+    --line:#33403a; --accent:#5fbfa2; --accent-soft:#1f322b; --amber:#d9a05c; --amber-soft:#33291a;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"]{
+    --paper:#eef1ea; --paper-raised:#ffffff; --ink:#1c2622; --ink-soft:#4b5750;
+    --line:#c9d0c3; --accent:#2f6f5e; --accent-soft:#dce9e3; --amber:#b5792f; --amber-soft:#f1e3cd;
+    --shadow: 0 1px 2px rgba(28,38,34,0.06), 0 8px 24px rgba(28,38,34,0.06);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    max-width:920px;
+    margin:0 auto;
+    padding:56px 24px 96px;
+  }
+
+  header.masthead{
+    border-bottom:1px solid var(--line);
+    padding-bottom:28px;
+    margin-bottom:40px;
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin:0 0 12px;
+  }
+  h1{
+    font-family:var(--serif);
+    font-weight:400;
+    font-size:clamp(32px,4.2vw,46px);
+    line-height:1.1;
+    margin:0 0 14px;
+    text-wrap:balance;
+    color:var(--ink);
+  }
+  .dek{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:62ch;
+    margin:0;
+  }
+
+  h2{
+    font-family:var(--serif);
+    font-weight:400;
+    font-size:26px;
+    margin:0 0 6px;
+    color:var(--ink);
+  }
+  h2 .num{
+    font-family:var(--mono);
+    font-size:14px;
+    color:var(--ink-soft);
+    margin-right:10px;
+  }
+  .section-intro{
+    color:var(--ink-soft);
+    font-size:15px;
+    margin:0 0 20px;
+    max-width:66ch;
+  }
+
+  section{margin-bottom:56px;}
+  section.lede{margin-bottom:48px;}
+  .lede p{font-size:17px;max-width:68ch;}
+
+  /* map */
+  .map-frame{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:6px;
+    box-shadow:var(--shadow);
+    padding:20px;
+    overflow-x:auto;
+  }
+  .map-frame pre.mermaid{margin:0;}
+
+  /* sitemap SVG diagram */
+  .sitemap-svg{width:100%; height:auto; min-width:760px; display:block;}
+  .sitemap-svg .box{fill:var(--accent-soft); stroke:var(--accent); stroke-width:1.3;}
+  .sitemap-svg .box-dim{fill:var(--paper); stroke:var(--line); stroke-dasharray:4 3;}
+  .sitemap-svg .box-accent2{fill:var(--amber-soft); stroke:var(--amber);}
+  .sitemap-svg .title{font-family:var(--sans); font-size:13px; font-weight:600; fill:var(--ink);}
+  .sitemap-svg .title.dim{fill:var(--ink-soft); font-weight:600;}
+  .sitemap-svg .subt{font-family:var(--mono); font-size:9.5px; fill:var(--ink-soft);}
+  .sitemap-svg .caption{font-family:var(--mono); font-size:10px; fill:var(--ink-soft);}
+  .sitemap-svg .conn{stroke:var(--line); stroke-width:1.4; fill:none;}
+  .sitemap-svg .conn-dashed{stroke-dasharray:3 3;}
+
+  .flow-note{
+    font-family:var(--mono); font-size:11.5px; color:var(--ink-soft);
+    padding:4px 0;
+  }
+  .flow-note b{color:var(--accent); font-weight:600;}
+
+  /* nav rail as chips */
+  .toc{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:24px 0 0;
+    padding:0;
+    list-style:none;
+  }
+  .toc a{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.02em;
+    color:var(--ink-soft);
+    text-decoration:none;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 12px;
+    background:var(--paper-raised);
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .toc a:hover, .toc a:focus-visible{
+    border-color:var(--accent);
+    color:var(--accent);
+    outline:none;
+  }
+
+  /* area cards */
+  .area{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:6px;
+    box-shadow:var(--shadow);
+    padding:26px 28px;
+    margin-bottom:18px;
+    scroll-margin-top:20px;
+  }
+  .area-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .area-title{
+    font-family:var(--serif);
+    font-size:21px;
+    margin:0;
+    color:var(--ink);
+  }
+
+  .area p{margin:0 0 10px; color:var(--ink);}
+  .area ul{margin:8px 0 0; padding-left:20px;}
+  .area li{margin-bottom:6px;}
+  .area li b{color:var(--ink); font-weight:600;}
+
+  /* rough edges callout */
+  .callout{
+    border:1px solid var(--amber);
+    background:var(--amber-soft);
+    border-radius:6px;
+    padding:22px 26px;
+  }
+  .callout h2{font-size:20px; color:var(--ink);}
+  .callout ul{margin:12px 0 0; padding-left:20px;}
+  .callout li{margin-bottom:10px; color:var(--ink);}
+
+  .spec{
+    border:1px dashed var(--line);
+    border-radius:6px;
+    padding:12px 16px;
+    margin:12px 0;
+    background:color-mix(in srgb, var(--paper) 55%, transparent);
+  }
+  .spec-label{font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px;}
+  .spec code, .area code{font-family:var(--mono); font-size:12.5px; background:var(--accent-soft); color:var(--accent); padding:1px 6px; border-radius:4px;}
+
+  table.api-table{width:100%; border-collapse:collapse; font-size:14px;}
+  table.api-table th, table.api-table td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top;}
+  table.api-table th{font-family:var(--mono); font-size:11px; letter-spacing:0.04em; text-transform:uppercase; color:var(--ink-soft); font-weight:600;}
+  table.api-table td.svc{font-weight:600; white-space:nowrap;}
+  table.api-table tr:last-child td{border-bottom:none;}
+
+  footer{
+    margin-top:64px;
+    padding-top:20px;
+    border-top:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--ink-soft);
+  }
+
+  a{color:var(--accent);}
+
+  @media (max-width:600px){
+    .page{padding:36px 16px 72px;}
+    .area{padding:20px 18px;}
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Causal · cooperative · Last updated September 24, 2026</p>
+    <h1>The Cooperative App, Explained</h1>
+    <p class="dek">A plain-language tour of Cooperative: what each area is for and how they connect.</p>
+  </header>
+
+  <section class="lede">
+    <p>Cooperative is the sector-neutral operational core of Causal's platform, for any nonprofit or coalition forming around collaborative work and common needs: climate action, civic action, social work, cultural work, and more. Each organization gets a workspace with budgeting, accounting, funding, contacts, compliance, and reporting, plus membership and fiscal-sponsorship tools where used. The tools are built around a common needs framework, and <b>every organization's instance is completely private to it.</b> Collaboration happens separately, in Workshop and the shared cooperative resources: the peer network, work library, and work pool.</p>
+  </section>
+
+  <section id="map">
+    <h2><span class="num">Map</span>How the pieces connect</h2>
+    <p class="section-intro">One private workspace per organization, all reached from the same sidebar, plus the Cooperative section, which is shared across every organization.</p>
+    <div class="map-frame">
+      <svg class="sitemap-svg" viewBox="0 0 1274 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sitemap: Workspace Picker leads to Dashboard, which leads to Budget, Accounting, Funding, Compliance, Reports, Membership, Sponsorship, Contacts, Library, Document Vault, Solid Pod, Settings, and Cooperative; Cooperative leads to Workshop, Engagement, Library, Members, and Work Pool.">
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--ink-soft)"></path></marker></defs>
+        <line x1="475" y1="40" x2="505" y2="40" class="conn" marker-end="url(#arrow)"></line>
+        <line x1="590" y1="65" x2="590" y2="90" class="conn"></line>
+        <line x1="73" y1="90" x2="1201" y2="90" class="conn"></line>
+        <line x1="73" y1="90" x2="73" y2="100" class="conn"></line>
+        <line x1="167" y1="90" x2="167" y2="100" class="conn"></line>
+        <line x1="261" y1="90" x2="261" y2="100" class="conn"></line>
+        <line x1="355" y1="90" x2="355" y2="100" class="conn"></line>
+        <line x1="449" y1="90" x2="449" y2="100" class="conn"></line>
+        <line x1="543" y1="90" x2="543" y2="100" class="conn conn-dashed"></line>
+        <line x1="637" y1="90" x2="637" y2="100" class="conn conn-dashed"></line>
+        <line x1="731" y1="90" x2="731" y2="100" class="conn"></line>
+        <line x1="825" y1="90" x2="825" y2="100" class="conn"></line>
+        <line x1="919" y1="90" x2="919" y2="100" class="conn"></line>
+        <line x1="1013" y1="90" x2="1013" y2="100" class="conn"></line>
+        <line x1="1107" y1="90" x2="1107" y2="100" class="conn"></line>
+        <line x1="1201" y1="90" x2="1201" y2="100" class="conn"></line>
+        <line x1="1201" y1="150" x2="1201" y2="175" class="conn"></line>
+        <line x1="825" y1="175" x2="1201" y2="175" class="conn"></line>
+        <g class="nodegrp"><rect x="305" y="15" width="170" height="50" rx="6" class="box"></rect><text x="390" y="36" class="title" text-anchor="middle">Workspace Picker</text><text x="390" y="52" class="subt" text-anchor="middle">orgs + invites</text></g>
+        <g class="nodegrp"><rect x="505" y="15" width="170" height="50" rx="6" class="box"></rect><text x="590" y="36" class="title" text-anchor="middle">Dashboard</text><text x="590" y="52" class="subt" text-anchor="middle">what needs attention</text></g>
+        <g class="nodegrp"><rect x="30" y="100" width="86" height="50" rx="6" class="box"></rect><text x="73" y="130" class="title" text-anchor="middle">Budget</text></g>
+        <g class="nodegrp"><rect x="124" y="100" width="86" height="50" rx="6" class="box"></rect><text x="167" y="130" class="title" text-anchor="middle">Accounting</text></g>
+        <g class="nodegrp"><rect x="218" y="100" width="86" height="50" rx="6" class="box"></rect><text x="261" y="122" class="title" text-anchor="middle">Funding</text><text x="261" y="138" class="subt" text-anchor="middle">grants, gifts</text></g>
+        <g class="nodegrp"><rect x="312" y="100" width="86" height="50" rx="6" class="box"></rect><text x="355" y="130" class="title" text-anchor="middle">Compliance</text></g>
+        <g class="nodegrp"><rect x="406" y="100" width="86" height="50" rx="6" class="box"></rect><text x="449" y="130" class="title" text-anchor="middle">Reports</text></g>
+        <g class="nodegrp"><rect x="500" y="100" width="86" height="50" rx="6" class="box box-dim"></rect><text x="543" y="122" class="title dim" text-anchor="middle">Membership</text><text x="543" y="138" class="subt" text-anchor="middle">if enabled</text></g>
+        <g class="nodegrp"><rect x="594" y="100" width="86" height="50" rx="6" class="box box-dim"></rect><text x="637" y="122" class="title dim" text-anchor="middle">Sponsorship</text><text x="637" y="138" class="subt" text-anchor="middle">if enabled</text></g>
+        <g class="nodegrp"><rect x="688" y="100" width="86" height="50" rx="6" class="box"></rect><text x="731" y="130" class="title" text-anchor="middle">Contacts</text></g>
+        <g class="nodegrp"><rect x="782" y="100" width="86" height="50" rx="6" class="box"></rect><text x="825" y="130" class="title" text-anchor="middle">Library</text></g>
+        <g class="nodegrp"><rect x="876" y="100" width="86" height="50" rx="6" class="box"></rect><text x="919" y="121" class="title" text-anchor="middle">Document</text><text x="919" y="134" class="title" text-anchor="middle">Vault</text></g>
+        <g class="nodegrp"><rect x="970" y="100" width="86" height="50" rx="6" class="box"></rect><text x="1013" y="130" class="title" text-anchor="middle">Solid Pod</text></g>
+        <g class="nodegrp"><rect x="1064" y="100" width="86" height="50" rx="6" class="box"></rect><text x="1107" y="130" class="title" text-anchor="middle">Settings</text></g>
+        <g class="nodegrp"><rect x="1158" y="100" width="86" height="50" rx="6" class="box box-accent2"></rect><text x="1201" y="122" class="title" text-anchor="middle">Cooperative</text><text x="1201" y="138" class="subt" text-anchor="middle">shared</text></g>
+        <line x1="825" y1="175" x2="825" y2="185" class="conn"></line>
+        <g class="nodegrp"><rect x="782" y="185" width="86" height="50" rx="6" class="box box-dim"></rect><text x="825" y="215" class="title dim" text-anchor="middle">Workshop</text></g>
+        <line x1="919" y1="175" x2="919" y2="185" class="conn"></line>
+        <g class="nodegrp"><rect x="876" y="185" width="86" height="50" rx="6" class="box box-dim"></rect><text x="919" y="215" class="title dim" text-anchor="middle">Engagement</text></g>
+        <line x1="1013" y1="175" x2="1013" y2="185" class="conn"></line>
+        <g class="nodegrp"><rect x="970" y="185" width="86" height="50" rx="6" class="box box-dim"></rect><text x="1013" y="215" class="title dim" text-anchor="middle">Library</text></g>
+        <line x1="1107" y1="175" x2="1107" y2="185" class="conn"></line>
+        <g class="nodegrp"><rect x="1064" y="185" width="86" height="50" rx="6" class="box box-dim"></rect><text x="1107" y="215" class="title dim" text-anchor="middle">Members</text></g>
+        <line x1="1201" y1="175" x2="1201" y2="185" class="conn"></line>
+        <g class="nodegrp"><rect x="1158" y="185" width="86" height="50" rx="6" class="box box-dim"></rect><text x="1201" y="208" class="title dim" text-anchor="middle">Work</text><text x="1201" y="221" class="title dim" text-anchor="middle">Pool</text></g>
+        <text x="40" y="258" class="caption">Cooperative is the only space shared across organizations. Every other page is private to one organization.</text>
+        <text x="40" y="273" class="caption">Dashed border = only shown when the organization has turned that feature on.</text>
+        <text x="40" y="288" class="caption">The real sidebar groups these as Financial (Budget to Reports), Services (Membership, Sponsorship), and Records (Contacts to Solid Pod).</text>
+        <text x="40" y="303" class="caption">Library appears twice: as a page in Records and as a Cooperative tab (shared templates). Two different pages, same name.</text>
+        </svg>
+    </div>
+
+    <div class="map-frame" style="margin-top:14px;">
+      <div class="flow-note"><b>Contacts</b> are one list shared by <b>Accounting</b> and <b>Funding</b>: one record can be a donor, a vendor, and a customer</div>
+      <div class="flow-note"><b>Funding</b> (gifts and pledges) → <b>Accounting</b> (Gift Postings or Bank Reconciliation match) → posted ledger entry, only after someone reviews it</div>
+      <div class="flow-note"><b>Accounting</b> → live ledger → <b>Reports</b> (financial statements, Budget-vs-Actual) and <b>Compliance</b> (990 views)</div>
+      <div class="flow-note"><b>Document Vault</b> → sync → <b>Solid Pod</b> (the organization's own pod)</div>
+    </div>
+
+    <ul class="toc">
+      <li><a href="#picker">Workspace Picker</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#budget">Budget</a></li>
+      <li><a href="#ledger">Accounting</a></li>
+      <li><a href="#grants">Funding</a></li>
+      <li><a href="#contacts">Contacts</a></li>
+      <li><a href="#compliance">Compliance</a></li>
+      <li><a href="#reports">Reports</a></li>
+      <li><a href="#library">Library</a></li>
+      <li><a href="#documents">Document Vault</a></li>
+      <li><a href="#solid-pod">Solid Pod</a></li>
+      <li><a href="#membership">Membership</a></li>
+      <li><a href="#sponsored">Sponsorship</a></li>
+      <li><a href="#cooperative">Cooperative</a></li>
+      <li><a href="#settings">Settings</a></li>
+      <li><a href="#backend">Backend &amp; integrations</a></li>
+      <li><a href="#rough-edges">Rough edges and what's next</a></li>
+    </ul>
+  </section>
+
+  <section id="areas">
+    <h2><span class="num">Areas</span>The workspace, area by area</h2>
+
+    <div class="area" id="picker">
+      <div class="area-head"><h3 class="area-title">Workspace Picker</h3></div>
+      <p>The landing page after login: a greeting, then your organizations and pending invites in one list, each with your role, an attention status, and when you last visited. Accept an invite here, create a workspace, or open "Manage organizations". A Sandbox section offers Demo Company, a shared practice workspace. Joining an existing organization is invite-only.</p>
+    </div>
+
+    <div class="area" id="dashboard">
+      <div class="area-head"><h3 class="area-title">Dashboard</h3></div>
+      <p>The landing page inside an organization: a "Since your last visit" summary, a Cooperative panel, and a "Needs attention" feed (unreviewed imports, upcoming renewals, expiring documents, outstanding receipt follow-ups).</p>
+    </div>
+
+    <div class="area" id="budget">
+      <div class="area-head"><h3 class="area-title">Budget</h3></div>
+      <p>The financial planning core, and home of the chart of accounts and programs. A twelve-month grid compares planned budget to actual spending by program and grant. Tabs:</p>
+      <ul>
+        <li><b>Personnel</b>: salaries and benefits, year-over-year copy, and a CSV template import that can split a person across programs</li>
+        <li><b>Insurance / Other Schedules</b>: recurring costs spread across the year</li>
+        <li><b>Indirect Costs</b>: costs calculated from the rest of the budget</li>
+        <li><b>Scenarios</b>: draft budgets branched from the live one and compared side by side, either as a quick overlay or as a detailed fork of the underlying inputs. Promoting one to live takes an admin or finance role.</li>
+      </ul>
+      <p>Budget Settings holds the chart of accounts, programs and activities, CSV imports, and a recode tool. A new organization gets a setup wizard: start from a standard nonprofit template, pull accounts from Xero, or upload a CSV.</p>
+    </div>
+
+    <div class="area" id="ledger">
+      <div class="area-head"><h3 class="area-title">Accounting</h3></div>
+      <p>Budget is the plan; Accounting is the record of what actually happened. Its eleven tabs cover the ledger, bank reconciliation, bills, invoices, fixed assets, expense claims, board designations, recoding, and gift postings. Detail is in the <a href="/docs/accounting-module-guide.html" target="_blank" rel="noopener">Accounting guide</a>.</p>
+      <p>Causal's own ledger is opt-in per organization and coexists with Xero. Hard accounting rules (balanced entries, locked fiscal years, no cross-organization references) are enforced by the database. Anything recorded in Funding or Membership becomes a ledger entry only when someone reviews and posts it in Accounting, never automatically.</p>
+    </div>
+
+    <div class="area" id="grants">
+      <div class="area-head"><h3 class="area-title">Funding</h3></div>
+      <p>One page with two tabs.</p>
+      <ul>
+        <li><b>Grants</b>: every grant applied for or received, with funder, amounts, dates, status, and next report due. Clicking a row opens a panel, and uploading a grant agreement can prefill it for review. Grants can be allocated across programs and years, flagged as federal awards, given an indirect cost rate, and exported as PDF reports. Where a grant posts in the ledger is set from Accounting, not here.</li>
+        <li><b>Contributions</b>: gifts and pledges, including in-kind gifts and multi-year pledges, with acknowledgments and donation receipts. A gift can be designated to a sponsored project.</li>
+      </ul>
+    </div>
+
+    <div class="area" id="contacts">
+      <div class="area-head"><h3 class="area-title">Contacts</h3></div>
+      <p>Every donor, vendor, and customer in one list shared across Accounting and Funding. A contact can be several things at once. Vendors carry tax ID and W-9 status, and an admin can export a calendar-year 1099 summary as CSV (tracking only, no e-filing).</p>
+    </div>
+
+    <div class="area" id="compliance">
+      <div class="area-head"><h3 class="area-title">Compliance</h3></div>
+      <p>Two tabs. <b>IRS Form 990</b> holds preparation views (Part IX functional expenses, Schedules B, D, G, I, J, and O) and the functional-expense classification. <b>Obligations</b> tracks other recurring filings and renewals, sorted into coming up and overdue.</p>
+    </div>
+
+    <div class="area" id="reports">
+      <div class="area-head"><h3 class="area-title">Reports</h3></div>
+      <p>The export hub: board report, 990 Part IX, balance sheet, budget views, giving summary, cash forecast, activity log, and the four standard nonprofit financial statements (Financial Position, Activities, Functional Expenses, Cash Flows), computed live from the ledger with net assets split into without and with donor restrictions.</p>
+      <p><b>Reconciliation &amp; Close</b> runs tie-out checks for a fiscal year and offers a reversible lock. An admin can freeze a year, then reopen it with a required reason. Locking is advisory, so an organization can lock an imperfect year on purpose while an audit is in progress.</p>
+    </div>
+
+    <div class="area" id="library">
+      <div class="area-head"><h3 class="area-title">Library</h3></div>
+      <p>Shared cooperative resources: financial report, grant, and board-material templates. Also reachable as a Cooperative tab, so the same content has two entry points.</p>
+    </div>
+
+    <div class="area" id="documents">
+      <div class="area-head"><h3 class="area-title">Document Vault</h3></div>
+      <p>Two tabs. <b>All documents</b>: upload by category, set expiration dates and retention periods, attach expense-claim receipts, and share with one person or a standing group. <b>Audit binder</b>: a fiscal-year checklist of 17 expected document types against what has been uploaded. Documents here are what syncs to the organization's Solid pod.</p>
+    </div>
+
+    <div class="area" id="solid-pod">
+      <div class="area-head"><h3 class="area-title">Solid Pod</h3></div>
+      <p>Data sovereignty: the organization's documents live in its own Solid pod, outside Causal's database. This page shows pod status, sync, the documents in the pod, Causal's own access (revocable here at any time), and who has been given access: individuals, standing groups, or one-time email-verified links for people without a Solid identity. Revoking a link stops access at once. It covers documents only. Full detail and current gaps are in the <a href="/docs/platform-guide.html" target="_blank" rel="noopener">Platform guide</a>.</p>
+    </div>
+
+    <div class="area" id="membership">
+      <div class="area-head"><h3 class="area-title">Membership</h3></div>
+      <p>For organizations with a paying membership program: <b>Members</b>, <b>Tiers</b>, <b>Renewals</b>, and <b>Payments</b>. A dues payment reaches the ledger through Bank Reconciliation when the deposit is coded, the same way cash gifts do.</p>
+    </div>
+
+    <div class="area" id="sponsored">
+      <div class="area-head"><h3 class="area-title">Sponsorship</h3></div>
+      <p>For organizations acting as fiscal sponsor; turned on under Settings. Each project is <b>Standard</b> (pass-through) or <b>Managed</b> (comprehensive). Standard projects track designated gifts, disbursements to the sponsee net of the admin fee (each needs a separate approval), the balance, and when the sponsee's next spending report is due. Managed projects link to their own activity under a program in the sponsor's regular books.</p>
+    </div>
+
+    <div class="area" id="cooperative">
+      <div class="area-head"><h3 class="area-title">Cooperative</h3></div>
+      <p>The one space shared across organizations, and where they collaborate. <b>Workshop</b> is the default tab.</p>
+      <ul>
+        <li><b>Members</b>: a directory of the organizations in the cooperative</li>
+        <li><b>Library</b>: shared resources and templates</li>
+        <li><b>Work Pool</b>: tasks any member organization can post or pick up</li>
+        <li><b>Workshop</b>: collaborative projects with threads, messages, proposals, documents, and a Systems Map for loop and cascade mapping. It includes the <b>Intervention Modeler</b>, which suggests which of Donella Meadows' 12 leverage-point levels a proposed intervention works at. Still developing, and not yet reviewed by anyone with real systems-change practice. Workshop content is the one thing that can be visible across organizations.</li>
+        <li><b>Engagement</b>: a thin, read-only list of items tagged as engagement artifacts from the shared library</li>
+      </ul>
+    </div>
+
+    <div class="area" id="settings">
+      <div class="area-head"><h3 class="area-title">Settings</h3></div>
+      <p>An organization's own configuration: profile and fiscal year; workspace users, roles, and program assignments; integrations (Xero; QuickBooks is marked coming soon); the fiscal-sponsorship and membership switches; and Security, where an admin can lengthen the session timeout (15 minutes to 8 hours). Expense-claim rules are set on the Expense Claims tab in Accounting, and the chart of accounts lives in Budget Settings.</p>
+    </div>
+  </section>
+
+  <section id="backend">
+    <h2><span class="num">Backend</span>Backend &amp; integrations</h2>
+    <p class="section-intro">Mostly deterministic accounting and CRM logic, plus a few Gemini-backed features that only pre-fill or suggest.</p>
+
+    <div class="spec">
+      <div class="spec-label">Access control</div>
+      Every org-scoped request checks that you are logged in, that the account has Cooperative access, and that you belong to <i>this</i> organization, which also resolves your role. The database enforces the same boundaries with row-level security, plus a program-level policy for the Program role.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Gemini (gemini-2.5-flash)</div>
+      The Workshop's Intervention Modeler prompts Gemini with Meadows' leverage-point hierarchy and the Earth4All turnarounds. Uploading a receipt, a scanned bill, invoice, or credit note, or a grant contract sends the file to Gemini to read out fields like vendor, date, amount, or grant terms. Bills and invoices are read for header fields only; account and program suggestions come from how that vendor was coded before. Reading only pre-fills the form, and nothing is saved until a person reviews it.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Xero</div>
+      A per-organization OAuth2 connection with an encrypted refresh token. Once connected it reads the chart of accounts and tracking categories, maps them to Causal accounts and programs, and imports P&amp;L actuals. The one write back to Xero is account-name updates. Disconnecting or deleting imported actuals is permanent.
+    </div>
+
+    <div class="spec">
+      <div class="spec-label">Plaid</div>
+      Bank Reconciliation can connect a bank through Plaid Link, syncing into the same queue CSV import fills. Manual sync is verified; the webhook signature check hasn't been exercised against a real delivery.
+    </div>
+
+    <div class="map-frame" style="padding:4px 20px;margin-top:16px;">
+      <table class="api-table">
+        <thead><tr><th>Service</th><th>Used for</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td class="svc">Xero API</td><td>Accounting sync</td><td>Per-organization OAuth2</td></tr>
+          <tr><td class="svc">Plaid</td><td>Live bank feeds</td><td>Optional; CSV import remains</td></tr>
+          <tr><td class="svc">Solid (Community Solid Server)</td><td>Document pod backup, permissions, sharing</td><td>Self-hosted; documents only</td></tr>
+          <tr><td class="svc">Postmark</td><td>Invites, acknowledgments, claim messages, share links and codes</td><td>Invite tokens stored as hash only</td></tr>
+          <tr><td class="svc">Puppeteer (headless Chromium)</td><td>Board, grant, and 990 PDFs</td><td>Renders server-side, no external PDF API</td></tr>
+          <tr><td class="svc">Google Gemini</td><td>Intervention Modeler; receipt, bill/invoice, and contract reading</td><td>Suggestions and prefill only</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:14px;color:var(--ink-soft);margin-top:10px;">Every number shown is a direct SQL aggregation, not a generated summary.</p>
+  </section>
+
+  <section id="rough-edges">
+    <div class="callout">
+      <h2>Rough edges and what's next</h2>
+      <p style="margin:12px 0 0;"><b>Rough today</b></p>
+      <ul>
+        <li>Deleting all synced financial data (Settings → Integrations) is irreversible, with no confirmation step beyond the button.</li>
+        <li>Membership and Sponsorship appear in the sidebar only when turned on; a direct link still works when hidden.</li>
+        <li>Open financial statements are not filtered by program.</li>
+        <li>The Solid identity login is a prototype. See the <a href="/docs/platform-guide.html" target="_blank" rel="noopener">Platform guide</a>.</li>
+      </ul>
+      <p style="margin:16px 0 0;"><b>Next</b></p>
+      <ul>
+        <li><b>Finished roles.</b> Program scoping is enforced in the database, but per-action role checks for much of the app are still to do.</li>
+        <li><b>More data in the pod.</b> Generated reports first, then periodic pod copies of live data such as budgets. Workshops would sync a one-way copy to each participating organization's pod.</li>
+        <li><b>QuickBooks integration.</b> Shown as coming soon in Settings.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    See the <a href="/docs/platform-guide.html" target="_blank" rel="noopener">Platform guide</a> for login, roles, and the Solid picture above this app, and the <a href="/docs/accounting-module-guide.html" target="_blank" rel="noopener">Accounting guide</a> for that area in depth.
+  </footer>
+
+</div>

@@ -1,0 +1,7 @@
+fiscal_year,month,account_code,program_code,activity_code,grant_code,amount,notes
+2026,1,6100,P01,,G-NSF-01,50000,Monthly salary - Q1
+2026,1,6140,P01,,G-NSF-01,5000,Benefits - Q1
+2026,1,4000,P01,,G-NSF-01,10000,Program revenue
+2026,2,6100,P01,,G-NSF-01,50000,
+2026,2,6140,P01,,G-NSF-01,5000,
+2026,2,4000,P01,,G-NSF-01,10000,

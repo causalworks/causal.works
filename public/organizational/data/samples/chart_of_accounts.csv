@@ -1,0 +1,47 @@
+account_code,account_name,account_type,category,subcategory,description,qb_xero_code,active
+_H1_REV,REVENUE,Income,,Earned and Contributed Revenue,,true
+_H2_EARNED,Earned Revenue,Income,,Earned Revenue,,,true
+4000,Program Service Fees,Income,,Earned Revenue,Fees for programs and services,,true
+4010,Event & Admission Revenue,Income,,Earned Revenue,Revenue from events and admissions,,true
+4200,Tuition & Training Fees,Income,,Earned Revenue,Educational program fees,,true
+4500,Sales - Products & Merchandise,Income,,Earned Revenue,Revenue from product sales,,true
+4600,Investment & Interest Income,Income,,Earned Revenue,Interest and investment earnings,,true
+_H2_CONTRIB,Contributed Revenue,Income,,Contributed Revenue,,,true
+5000,Individual Contributions,Income,,Contributed Revenue,Donations from individuals,,true
+5100,Board Contributions,Income,,Contributed Revenue,Contributions from board members,,true
+5200,Foundation Grants,Income,,Contributed Revenue,Grants from foundations,,true
+5300,Corporate Contributions,Income,,Contributed Revenue,Corporate donations,,true
+5400,Government Grants,Income,,Contributed Revenue,Government grants and contracts,,true
+_H1_INC,IN-KIND INCOME,Other Income,,In-Kind & Other Income,,,true
+5500,In-Kind Contributions,Other Income,,In-Kind Income,Donated goods and materials,,true
+5700,Release from Restriction,Other Income,,In-Kind Income,Revenue released after time restriction passes,,true
+_H1_EXP,EXPENSES,Expense,,Operating and Program Expenses,,true
+_H2_PROGRAM,Program Expenses,Expense,,Program Expenses,,,true
+6000,Salaries & Wages - Program Staff,Expense,,Program Expenses,Program staff salaries,,true
+6200,Program Supplies & Materials,Expense,,Program Expenses,Supplies for program activities,,true
+6250,Program Production Costs,Expense,,Program Expenses,Direct costs of program delivery,,true
+6300,Client Services,Expense,,Program Expenses,Direct service costs to clients,,true
+6400,Grants & Subgrants,Expense,,Program Expenses,Grants made to other organizations,,true
+_H2_OPERATING,Operating Expenses,Expense,,Operating Expenses,,,true
+6100,Salaries & Wages - Admin,Expense,,Operating Expenses,Administrative and operations staff,,true
+6150,Payroll Taxes & Benefits,Expense,,Operating Expenses,Employer payroll taxes and employee benefits,,true
+6500,Office Rent,Expense,,Operating Expenses,Office space rental costs,,true
+6600,Software & IT,Expense,,Operating Expenses,Software licenses and IT costs,,true
+6700,Office Supplies,Expense,,Operating Expenses,General office supplies,,true
+6800,Utilities & Communications,Expense,,Operating Expenses,Utilities and telecommunications,,true
+6900,Professional Services,Expense,,Operating Expenses,Consulting and professional fees,,true
+1000,Checking Account,Bank,Asset,Cash,Primary operating account,,true
+1010,Savings Account,Current Asset,Asset,Cash,Reserve savings account,,true
+1100,Accounts Receivable,Current Asset,Asset,Receivables,Money owed from clients,,true
+1200,Grants Receivable,Current Asset,Asset,Receivables,Pending grant payments,,true
+1300,Prepaid Expenses,Current Asset,Asset,Prepaid,Prepaid insurance and expenses,,true
+1500,Investments,Current Asset,Asset,Investments,Short-term investments,,true
+1700,Equipment & Fixed Assets,Fixed Asset,Asset,Fixed Assets,Office furniture and equipment,,true
+1800,Accumulated Depreciation,Fixed Asset,Asset,Fixed Assets,Cumulative depreciation,,true
+2000,Accounts Payable,Current Liability,Liability,Payable,Money owed to vendors,,true
+2100,Payroll Taxes Payable,Current Liability,Liability,Payable,Unpaid payroll taxes,,true
+2200,Accrued Expenses,Current Liability,Liability,Payable,Accrued expenses and liabilities,,true
+2500,Notes Payable,Long-Term Liability,Liability,Long-Term,Bank loans and credit lines,,true
+3000,Net Assets - Unrestricted,Net Assets,Equity,Net Assets,Unrestricted net assets,,true
+3100,Net Assets - Temporarily Restricted,Net Assets,Equity,Net Assets,Temporarily restricted net assets,,true
+3200,Net Assets - Permanently Restricted,Net Assets,Equity,Net Assets,Permanently restricted endowment,,true

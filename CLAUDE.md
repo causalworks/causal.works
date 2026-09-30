@@ -28,7 +28,7 @@ The graph does not update itself from SQL changes. Always re-sync after any `psq
 ---
 
 ## General behavior
-- Do not make git commits unless explicitly asked
+- Commit completed, verified units of work automatically (see "Git rules"); do not push unless told to
 - Do not restart the server unless explicitly asked
 - Read any file fully before editing it
 - **Read actual files for current state; use git log only for history** (what changed when, what a file looked like before)
@@ -174,24 +174,19 @@ handle) — design for that ordering explicitly, don't assume the tidy sequence.
 - **Default branch is `main`.** Work from `main` unless the user explicitly names another branch.
 - Before committing, confirm you are on the branch the user intends (`git branch --show-current`). If it does not match the task, stop and ask — do not switch branches unless told to.
 - Never switch branches on your own.
-- **Commit INFREQUENTLY — only after LARGE, COMPLETE blocks of work.** Do not commit after every small fix or file creation.
-- Batch ALL related work into a single commit. Prefer one comprehensive commit over many small ones.
-- Build and test thoroughly BEFORE even preparing a commit.
+- **Commit after each completed, verified unit of work** — a feature works, a sweep is finished, a migration is applied and verified, a doc edit is done. Not after every keystroke, and not one giant batch at the end. Several sessions share this one working tree, so uncommitted work is where they collide (changed 2026-09-30; the old rule was "commit infrequently" to save cost, but commits themselves cost almost nothing).
+- Build and test BEFORE committing.
 
-## Commits: Proactive Suggestions + User Approval
+## Commits: automatic, with guardrails
 
-- **Suggest a commit** when a logical milestone is complete: a feature phase is done, a sweep is finished, a migration is applied and verified, or a significant doc restructure lands. Don't wait to be asked.
-- When suggesting: show the proposed scope (which files) and the commit message. Ask for approval before running `git commit`.
-- Do **not** run `git commit` until the user explicitly approves the message and scope.
-- After approval, stage the specific files, commit, then run `git status` to confirm clean.
-- After approval, run `git push` to `origin` only if the user also says to push.
+Commits need no approval. The user has never declined one, so asking first guarded nothing. Commit on your own when a unit of work is done and verified, then report it in one line (hash + what it covers).
+
+- **Stage an explicit file list — never `git add -u`, `git add -A`, or `git commit -a`.** Run `git status` first. If any changed file was not touched by this session (another session's work), leave it out and say so.
+- **Stop and ask instead of committing** if: the branch isn't the one intended, `git status` shows `.env` or other sensitive files, tests or checks for the change are failing, or the diff contains something unrelated to the task.
+- Commit message: short summary line, then a few lines on what and why.
+- After committing, run `git status` to confirm only the files you meant to commit left the tree.
+- **Push is separate and needs the user to say so** — the repo is public, so a push publishes. At a real milestone, offer it in one line ("push?"). Don't mention commit or push status otherwise; it isn't news.
 - If push fails, report the error and stop — do not force-push unless explicitly asked.
-- **Format for suggesting a commit:**
-  > Milestone reached: [what's complete]. Ready to commit — proposed message:
-  > ```
-  > [commit message]
-  > ```
-  > Stage: [list of files]. Approve?
 
 ## Planetary Boundaries reference data
 

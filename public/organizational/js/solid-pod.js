@@ -720,7 +720,7 @@
     }
   }
 
-  // ─── Causal's sync/fetch permission (Part 2: org-given, not held) ───────
+  // ─── Sync/fetch permission (Part 2: org-given, not held) ───────
 
   function renderSyncPermission() {
     if (!syncPermissionStatusEl || !syncPermissionToggleBtn) return;
@@ -769,7 +769,7 @@
         syncPermissionResultEl.hidden = false;
         syncPermissionResultEl.textContent = wasGiven
           ? 'Revoked. Automated sync and downloads are paused until given again.'
-          : "Given. Causal's sync service can now sync and serve documents for this pod.";
+          : "Given. The platform's sync service can now sync and serve documents for this pod.";
       }
     } catch (e) {
       if (syncPermissionResultEl) { syncPermissionResultEl.hidden = false; syncPermissionResultEl.textContent = 'Could not update: ' + e.message; }

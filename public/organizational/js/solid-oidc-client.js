@@ -1,7 +1,7 @@
 /**
  * Real per-user Solid-OIDC login (Part 1 of the identity work) - the org
  * admin's OWN browser session, not a server-held credential. Everything
- * here runs client-side only: Causal's server never sees this person's
+ * here runs client-side only: the platform's server never sees this person's
  * password, access token, refresh token, or DPoP private key - they live
  * in this browser's IndexedDB alone. Deliberately no external Solid
  * library (no rdflib.js, no @inrupt/solid-client) - hand-rolled against
@@ -140,7 +140,7 @@
         token_endpoint_auth_method: 'none',
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
-        client_name: 'Causal',
+        client_name: 'causalworks',
       }),
     });
     const data = await res.json();

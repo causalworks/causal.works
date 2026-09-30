@@ -1121,7 +1121,7 @@ const NOTIFY_BADGE_LABELS = { boycott: 'Boycott', contact: 'Contact', comment: '
 // Above the card list on the Comments tab only — same "individual-hint" intro-copy
 // pattern used elsewhere (e.g. money.js's bank-alternatives intro), not a new class.
 const MOVES_COMMENTS_TAB_INTRO =
-  'These are regulatory and permitting notices Causal has identified as high-leverage ' +
+  'These are regulatory and permitting notices identified as high-leverage ' +
   "decisions — new infrastructure projects, before they're locked in. This feed is early: " +
   "right now it's a list of comment periods, but the goal is to connect each one directly " +
   'to the elected officials and financial institutions with real influence over the decision, ' +

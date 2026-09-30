@@ -141,7 +141,7 @@ async function resolveServiceCredential(pool) {
 
 async function getAuthenticatedFetchForService(pool) {
   const cred = await resolveServiceCredential(pool);
-  if (!cred) throw new Error("Causal's sync/fetch service identity has not been provisioned yet.");
+  if (!cred) throw new Error("The sync/fetch service identity has not been provisioned yet.");
   return podClient.getAuthenticatedFetchForCredential(cred.email, cred.password, cred.webId);
 }
 

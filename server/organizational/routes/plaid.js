@@ -126,7 +126,7 @@ function registerPlaidRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/plaid/link-token', ...npAdmin, async (req, res) => {
     try {
       const resp = await plaidClient.linkTokenCreate({
-        client_name: 'Causal',
+        client_name: 'causalworks',
         language: 'en',
         country_codes: ['US'],
         user: { client_user_id: 'org-' + req.orgId },

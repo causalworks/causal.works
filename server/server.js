@@ -58,6 +58,7 @@ const { activateOrgInCausal, normalizeOrgKey } = require('./individual/utils');
 const { computeBoundaryUrgencyScore } = require('./data/planetary-boundaries');
 const { BANK_FLAG_DATA } = require('./data/bank-flag-data');
 const { fetchUSReps, committeesToTurnarounds } = require('./rep/us-reps');
+const { matchReps } = require('./rep/rep-matcher');
 
 const app = express();
 // Must be first: gives every request its own isolated AsyncLocalStorage
@@ -355,6 +356,23 @@ const DEMO_CONFIG = {
   ledger_action_count: 8,            // how many recent actions to show as "completed"
 };
 
+// Real signups get their elected officials matched at the end of onboarding (user.js), but the
+// demo user is seeded already-onboarded and each entry point below only resets profile fields,
+// so a re-seeded demo user (new id) never got reps. This runs the same matchReps call when the
+// demo user has none. Waits up to 10s so a slow lookup can't block entry; matchReps keeps
+// running in the background and the next visit finds the rows.
+async function ensureDemoReps(uid) {
+  try {
+    const has = await pool.query(`SELECT 1 FROM user_representatives WHERE user_id = $1 LIMIT 1`, [uid]);
+    if (has.rowCount > 0) return;
+    const match = matchReps(pool, uid, DEMO_CONFIG.location_country, DEMO_CONFIG.location_zip);
+    match.catch(() => {});
+    await Promise.race([match, new Promise((resolve) => setTimeout(resolve, 10000))]);
+  } catch (err) {
+    console.warn('ensureDemoReps failed:', err.message);
+  }
+}
+
 // Demo account — public route; creates a session for the pre-seeded demo user and redirects.
 // On each visit: resets profile fields, org subscriptions, and completed-action ledger so the
 // demo always reflects the current state of the platform (no stale action IDs to maintain).
@@ -451,6 +469,7 @@ app.get('/demo', async (req, res) => {
       [uid]
     );
 
+    await ensureDemoReps(demoUser.id);
     await createSessionForUser(pool, demoUser.id, res);
     res.redirect(302, '/individual/');
   } catch (e) {
@@ -474,6 +493,7 @@ app.get('/demo-coop', async (req, res) => {
     await pool.query(`SELECT bootstrap_demo_org_membership($1)`, [uid]).catch((err) => {
       console.warn('/demo-coop: bootstrap_demo_org_membership failed:', err.message);
     });
+    await ensureDemoReps(uid);
     await createSessionForUser(pool, uid, res);
     const orgR = await pool.query(`SELECT slug FROM coop_members WHERE is_platform_demo = true LIMIT 1`);
     const slug = orgR.rows[0] ? orgR.rows[0].slug : 'demo-company';
@@ -973,6 +993,7 @@ app.get('/odi', async (req, res) => {
     await pool.query(`SELECT bootstrap_demo_org_membership($1)`, [r.rows[0].id]).catch((err) => {
       console.warn('/odi: bootstrap_demo_org_membership failed:', err.message);
     });
+    await ensureDemoReps(r.rows[0].id);
     await createSessionForUser(pool, r.rows[0].id, res);
     return res.redirect(302, '/app.html');
   } catch (err) {

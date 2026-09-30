@@ -210,7 +210,7 @@
     const pageTitle = document.getElementById('page-title');
     const pageSubtitle = document.getElementById('page-subtitle');
     if (pageTitle) {
-      pageTitle.textContent = titleMap[section] || 'Causal';
+      pageTitle.textContent = titleMap[section] || 'causalworks';
       if (subsection && subsectionTitle[subsection]) {
         pageTitle.textContent += ' • ' + subsectionTitle[subsection];
       }

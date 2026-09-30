@@ -58,7 +58,7 @@ function registerPodManagementRoutes(app, pool) {
       return res.json(result);
     } catch (e) {
       console.error('POST /cooperative/pod-management/sync-service/provision:', e.message);
-      return res.status(500).json({ error: "Could not provision Causal's sync service identity." });
+      return res.status(500).json({ error: "Could not provision the platform's sync service identity." });
     }
   });
 

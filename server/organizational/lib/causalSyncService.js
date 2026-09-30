@@ -39,7 +39,7 @@ async function provisionCausalSyncService(pool) {
 // covers sync's entire write surface with no per-category permission needed.
 async function giveServiceContainerAccess(pool, { orgId, orgSlug, canWrite, userId }) {
   const cred = await resolveServiceCredential(pool);
-  if (!cred) throw new Error("Causal's sync/fetch service identity has not been provisioned yet.");
+  if (!cred) throw new Error("The sync/fetch service identity has not been provisioned yet.");
 
   const containerUrl = `${podBaseForOrg(orgSlug)}documents/`;
   const existing = await pool.query(

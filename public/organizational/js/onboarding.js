@@ -439,7 +439,7 @@
           '<option value="' + currentFY + '"' + (targetFY === currentFY ? ' selected' : '') + '>Current fiscal year (FY' + currentFY + ')</option>' +
           '<option value="' + nextFY + '"' + (targetFY === nextFY ? ' selected' : '') + '>Upcoming fiscal year (FY' + nextFY + ')</option>' +
           '</select>' +
-          '<label>Go-live date <span class="organizational-label-soft">(optional — the date Causal becomes your source of truth; helps us suggest an opening-balances import)</span></label>' +
+          '<label>Go-live date <span class="organizational-label-soft">(optional — the date this becomes your source of truth; helps us suggest an opening-balances import)</span></label>' +
           '<input type="date" id="onb-conversion-date" value="' + escapeHtml(conversionDate) + '" />'
         );
       })() +
@@ -1291,7 +1291,7 @@
         if (!pushOut || !pushOut.res.ok) {
           xeroPushWarning =
             (pushOut && pushOut.data && pushOut.data.error) ||
-            'Chart saved in Causal, but pushing names to Xero failed. Check OAuth scope (accounting.settings), reconnect Xero, or update names in Xero manually.';
+            'Chart saved, but pushing names to Xero failed. Check OAuth scope (accounting.settings), reconnect Xero, or update names in Xero manually.';
         } else if (pushOut.data && pushOut.data.errors && pushOut.data.errors.length) {
           xeroPushWarning =
             'Chart saved. Some Xero name updates failed: ' +

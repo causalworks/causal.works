@@ -492,7 +492,7 @@
         if (!currentSlug) return;
         if (
           !confirm(
-            'Disconnect Xero for this workspace? Causal keeps your chart, budgets, and Xero account links; only the live login to Xero is removed. You can reconnect anytime. Revoke the app in Xero as well if that org should fully drop access.'
+            'Disconnect Xero for this workspace? Your chart, budgets, and Xero account links are kept; only the live login to Xero is removed. You can reconnect anytime. Revoke the app in Xero as well if that org should fully drop access.'
           )
         ) {
           return;

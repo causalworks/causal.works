@@ -32,7 +32,7 @@ async function authFetchForSync(pool) {
 // working).
 function classifyFetchFailure(status, text) {
   if (status === 403) {
-    return "This organization has not given Causal's sync service access to its pod, or that access was revoked.";
+    return "This organization has not given the platform's sync service access to its pod, or that access was revoked.";
   }
   return `${status} ${text}`;
 }

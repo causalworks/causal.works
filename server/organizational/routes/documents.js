@@ -444,7 +444,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         return res.status(503).json({
           error: 'Document temporarily unavailable',
           detail: permissionIssue
-            ? "This organization has not given Causal's sync service access to its pod, or that access was revoked."
+            ? "This organization has not given the platform's sync service access to its pod, or that access was revoked."
             : 'The stored copy could not be retrieved from the pod right now. Try again shortly.',
           document: { id: doc.id, title: doc.title, category: doc.category },
         });

@@ -273,7 +273,7 @@
       label: 'Paradigm',
       description: 'The shared assumptions, values, and beliefs from which the system\'s goals, structures, and rules emerge — what is considered real, natural, or possible.',
       examples: 'That nature is a resource for extraction. That economic growth and ecological health are fundamentally in tension. That individuals are primarily consumers. That the future is legitimately discountable.',
-      note: 'Most of Causal\'s purpose operates here — not adding pressure to an existing system but helping users see the system differently and act from that new understanding.',
+      note: 'Most of the platform\'s purpose operates here — not adding pressure to an existing system but helping users see the system differently and act from that new understanding.',
     },
     {
       level: 1,
@@ -422,7 +422,7 @@
     html += 'Changing the fundamental assumptions a system is built on — the paradigm — matters most of all.';
     html += '</p>';
     html += '<p style="font-size:14px; color:var(--text-secondary); line-height:1.6; margin:0 0 24px; max-width:640px;">';
-    html += 'Causal ranks actions partly by where in this hierarchy they intervene. ';
+    html += 'Actions are ranked partly by where in this hierarchy they intervene. ';
     html += 'Preventing an LNG terminal approval matters more than reducing individual energy consumption — not because one is virtuous and the other isn\'t, but because one happens before 30 years of infrastructure is locked in and the other happens after. ';
     html += 'Timing and structural position are the variables.';
     html += '</p>';

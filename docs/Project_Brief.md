@@ -18,7 +18,7 @@ This change is newly realistic because AI-assisted development lets a very small
 
 The current build was created by an experienced nonprofit professional working with coding agents. A functioning version exists that now needs experienced human collaborators in platform architecture, app functionality, UI and UX design, systems frameworks, and rollout path.
 
-The current live build has two parts. The **Cooperative** workspace is the sector-neutral operational core. It provides collaboration resources (peer network, library, work pool, and a workshop for systems analysis) alongside an enterprise management tool set: budgeting, accounting, fundraising, membership, sponsorship, compliance, and governance. **Agency** is a personal civic app that informs individual decision-making with leverage-point logic grounded in planetary boundaries science and the Earth4All turnarounds. It centralizes the actions people can take: where they bank and invest, petitions, comments on pending legislation, protests, volunteering, and advocacy to elected officials and proxies.
+The current live build has two parts. The **Cooperative** workspace is the sector-neutral operational core. It provides collaboration resources (peer network, library, work pool, and a workshop for systems analysis) alongside an enterprise management tool set: budgeting, accounting, fundraising, membership, sponsorship, compliance, and governance. **Agency** is a personal civic app that informs individual decision-making with [leverage-point logic](https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/) grounded in planetary boundaries science and the [Earth4All turnarounds](https://earth4all.life/the-five-extraordinary-turnarounds/). It centralizes the actions people can take: where they bank and invest, petitions, comments on pending legislation, protests, volunteering, and advocacy to elected officials and proxies.
 
 Where things stand:
 
@@ -49,7 +49,7 @@ Agency is the platform's first fully worked-out application, and a proof of conc
 - **Action** — A unified decision feed of actions you can take: petitions, public-comment filings, events, volunteer positions, donations, and bank-divestment steps. Sorted by urgency, location relevance, and system leverage points. You see the organizations you follow, and each action shows which systemic lever it pulls.
 - **Proxies** — Who is representing your interests and what they are doing: federal, state, and local elected officials, financial institutions, and advocacy organizations, based on your settings.
 - **Ledger** — A personal record of completed actions, direct giving, and moved capital such as bank transfers or divestment pledges.
-- **Systems** — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of [leverage points](https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/).
+- **Systems** — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of leverage points.
 
 ## How Groups Launch Their Own
 
@@ -63,7 +63,7 @@ The design is that Agency follows organizations from many Cooperative instances 
 
 ## Platform Logic & Intellectual Rigor
 
-In the Agency instance, [Earth4All's five turnarounds](https://earth4all.life/the-five-extraordinary-turnarounds/) (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.
+In the Agency instance, Earth4All's five turnarounds (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.
 
 Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is meant to be refined with direct input from the groups that produce these frameworks.
 

@@ -57,6 +57,7 @@ const {
 } = require('./org-resolution');
 const { activateOrgInCausal, normalizeOrgKey } = require('./individual/utils');
 const { computeBoundaryUrgencyScore } = require('./data/planetary-boundaries');
+const { clientIp } = require('./utils/clientIp');
 const { BANK_FLAG_DATA } = require('./data/bank-flag-data');
 const { fetchUSReps, committeesToTurnarounds } = require('./rep/us-reps');
 const { matchReps } = require('./rep/rep-matcher');
@@ -396,9 +397,7 @@ async function getDemoVisitKey() {
 }
 
 function demoVisitorHash(req, key) {
-  // No 'trust proxy' is set, so req.ip is nginx; the last X-Forwarded-For hop is the client.
-  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean);
-  const ip = xff.length ? xff[xff.length - 1] : (req.ip || 'unknown');
+  const ip = clientIp(req);
   const ua = String(req.headers['user-agent'] || '');
   return crypto.createHmac('sha256', key).update(ip + '|' + ua).digest('hex').slice(0, 16);
 }
@@ -1118,9 +1117,8 @@ app.post('/api/access-request', requireAuth(pool), async (req, res) => {
   }
 
   const now = Date.now();
-  // No 'trust proxy' is set, so req.ip is nginx; take the last X-Forwarded-For hop (the one nginx appended).
-  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean);
-  const ip = xff.length ? xff[xff.length - 1] : (req.ip || 'unknown');
+  // Per-client limit keyed on the real address (see utils/clientIp.js for why not X-Forwarded-For).
+  const ip = clientIp(req);
   const recent = (accessRequestHits.get(ip) || []).filter((t) => now - t < 3600000);
   accessRequestGlobal = accessRequestGlobal.filter((t) => now - t < 3600000);
   if (recent.length >= 5 || accessRequestGlobal.length >= 40) {

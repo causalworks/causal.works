@@ -373,10 +373,57 @@ async function ensureDemoReps(uid) {
   }
 }
 
+// Time-boxed visitor log for the demo entry points (migration 286). The demo is one shared
+// account, so this is the only way to tell visitors apart: a keyed one-way hash of IP + browser
+// (never the address), with referrer host and a bot flag. Stops by itself after
+// DEMO_VISIT_TRACKING_UNTIL; rows older than 30 days are deleted (privacy policy: server logs
+// are kept up to 30 days). Drop demo_visit_log / demo_visit_key when the review period ends.
+const DEMO_VISIT_TRACKING_UNTIL = Date.parse('2026-10-14T00:00:00Z');
+const DEMO_VISIT_BOT_RX = /bot|crawl|spider|scan|curl|python|go-http|headless|monitor|preview|facebookexternal|slurp|wget|okhttp/i;
+let demoVisitKey = null;
+let lastDemoVisitPurge = 0;
+
+async function getDemoVisitKey() {
+  if (demoVisitKey) return demoVisitKey;
+  await pool.query(
+    `INSERT INTO demo_visit_key (id, key) VALUES (1, $1) ON CONFLICT (id) DO NOTHING`,
+    [crypto.randomBytes(32).toString('hex')]
+  );
+  const r = await pool.query(`SELECT key FROM demo_visit_key WHERE id = 1`);
+  demoVisitKey = r.rows[0].key;
+  return demoVisitKey;
+}
+
+function demoVisitorHash(req, key) {
+  // No 'trust proxy' is set, so req.ip is nginx; the last X-Forwarded-For hop is the client.
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((v) => v.trim()).filter(Boolean);
+  const ip = xff.length ? xff[xff.length - 1] : (req.ip || 'unknown');
+  const ua = String(req.headers['user-agent'] || '');
+  return crypto.createHmac('sha256', key).update(ip + '|' + ua).digest('hex').slice(0, 16);
+}
+
+function logDemoVisit(req, entry) {
+  if (Date.now() > DEMO_VISIT_TRACKING_UNTIL) return;
+  (async () => {
+    const key = await getDemoVisitKey();
+    let referrerHost = null;
+    try { if (req.headers.referer) referrerHost = new URL(req.headers.referer).host.slice(0, 100); } catch (_) {}
+    await pool.query(
+      `INSERT INTO demo_visit_log (entry, visitor_hash, referrer_host, is_bot) VALUES ($1, $2, $3, $4)`,
+      [entry, demoVisitorHash(req, key), referrerHost, DEMO_VISIT_BOT_RX.test(String(req.headers['user-agent'] || ''))]
+    );
+    if (Date.now() - lastDemoVisitPurge > 3600000) {
+      lastDemoVisitPurge = Date.now();
+      await pool.query(`DELETE FROM demo_visit_log WHERE visited_at < now() - interval '30 days'`);
+    }
+  })().catch((err) => console.warn('⚠️ demo_visit_log insert failed:', err.message));
+}
+
 // Demo account — public route; creates a session for the pre-seeded demo user and redirects.
 // On each visit: resets profile fields, org subscriptions, and completed-action ledger so the
 // demo always reflects the current state of the platform (no stale action IDs to maintain).
 app.get('/demo', async (req, res) => {
+  logDemoVisit(req, 'demo');
   logPageView(pool, null, '/demo'); // anonymous entry-point hit, aggregate-only (no viewer identity)
   try {
     const result = await pool.query(
@@ -484,6 +531,7 @@ app.get('/demo', async (req, res) => {
 // directly without going through the authenticated /app.html flow first). This mirrors /odi's
 // session bootstrap but lands on the demo org's dashboard instead of the splash page.
 app.get('/demo-coop', async (req, res) => {
+  logDemoVisit(req, 'demo-coop');
   logPageView(pool, null, '/demo-coop'); // anonymous entry-point hit, aggregate-only (no viewer identity)
   try {
     const r = await pool.query(`SELECT id FROM users WHERE user_type = 'demo' LIMIT 1`);
@@ -987,6 +1035,7 @@ app.get('/auth/verify', async (req, res) => {
 // No separate reviewer account -- reviewers who want their own login are added to
 // allowed_emails and sign up normally.
 app.get('/odi', async (req, res) => {
+  logDemoVisit(req, 'odi');
   logPageView(pool, null, '/odi'); // anonymous entry-point hit, aggregate-only (no viewer identity)
   try {
     const r = await pool.query(`SELECT id FROM users WHERE user_type = 'demo' LIMIT 1`);
@@ -2249,6 +2298,45 @@ function requireAdmin(req, res, next) {
     return next();
   });
 }
+
+// Demo visitor summary (migration 286). JSON. ?exclude_me=1 leaves out the requester's own
+// visits (works when this is opened from the same browser and network used to visit the demo).
+app.get('/admin/demo-visits', requireAdmin, async (req, res) => {
+  try {
+    const key = await getDemoVisitKey();
+    const me = req.query.exclude_me === '1' ? demoVisitorHash(req, key) : null;
+    const base = `FROM demo_visit_log WHERE is_bot = false AND ($1::text IS NULL OR visitor_hash <> $1)`;
+    const [totals, perDay, byEntry, referrers, bots] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits, MIN(visited_at) AS since,
+                (SELECT COUNT(*)::int FROM (SELECT visitor_hash ${base} GROUP BY visitor_hash
+                   HAVING COUNT(DISTINCT (visited_at AT TIME ZONE 'UTC')::date) > 1) r) AS returning_visitors
+         ${base}`, [me]),
+      pool.query(
+        `SELECT (visited_at AT TIME ZONE 'UTC')::date AS day, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
+         ${base} GROUP BY 1 ORDER BY 1`, [me]),
+      pool.query(
+        `SELECT entry, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
+         ${base} GROUP BY entry ORDER BY visitors DESC`, [me]),
+      pool.query(
+        `SELECT COALESCE(referrer_host, '(none)') AS referrer, COUNT(DISTINCT visitor_hash)::int AS visitors
+         ${base} GROUP BY 1 ORDER BY visitors DESC LIMIT 10`, [me]),
+      pool.query(`SELECT COUNT(*)::int AS bot_hits FROM demo_visit_log WHERE is_bot = true`),
+    ]);
+    return res.json({
+      tracking_until: new Date(DEMO_VISIT_TRACKING_UNTIL).toISOString().slice(0, 10),
+      excluding_requester: !!me,
+      ...totals.rows[0],
+      bot_hits_excluded: bots.rows[0].bot_hits,
+      per_day: perDay.rows,
+      by_entry: byEntry.rows,
+      top_referrers: referrers.rows,
+    });
+  } catch (e) {
+    console.error('GET /admin/demo-visits:', e.message);
+    return res.status(500).json({ error: 'Could not load demo visits' });
+  }
+});
 
 app.post('/admin/np-orgs/:id/delete', requireAdmin, async (req, res) => {
   const id = Number.parseInt(String(req.params.id || ''), 10);

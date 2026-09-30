@@ -2362,7 +2362,7 @@ async function loadDemoVisitSummary(me) {
 
 function renderDemoVisitsSection(v, excludeMe) {
   if (!v) {
-    return '<h2>Demo visitors</h2><p style="font-size:12px;color:#6b7280;">Demo visit log unavailable (run db/migrations/286_demo_visit_log.sql).</p>';
+    return '<p style="font-size:12px;color:#6b7280;">Demo visit log unavailable (run db/migrations/286_demo_visit_log.sql).</p>';
   }
   const table = (heads, rows) =>
     `<table style="max-width:520px;"><thead><tr>${heads.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
@@ -2372,8 +2372,7 @@ function renderDemoVisitsSection(v, excludeMe) {
   const toggle = excludeMe
     ? '<a href="/admin">Include my visits</a>'
     : '<a href="/admin?exclude_me=1">Exclude my visits</a>';
-  return `<h2>Demo visitors</h2>
-<p style="font-size:12px;color:#6b7280;max-width:900px;">Distinct visitors to /demo, /demo-coop and /odi (migration 286). The demo is one shared account, so visitors are counted by a one-way hash of IP + browser; no addresses are stored. Crawlers are left out (${v.bot_hits_excluded} hits), and so are staff devices (${v.staff_devices_excluded} known: a staff account signed in while opening a demo link or this page). Logging stops ${escapeHtml(v.tracking_until)}. ${toggle} &middot; <a href="/admin/demo-visits">JSON</a></p>
+  return `<p style="font-size:12px;color:#6b7280;max-width:900px;">Distinct visitors to /demo, /demo-coop and /odi (migration 286). The demo is one shared account, so visitors are counted by a one-way hash of IP + browser; no addresses are stored. Crawlers are left out (${v.bot_hits_excluded} hits), and so are staff devices (${v.staff_devices_excluded} known: a staff account signed in while opening a demo link or this page). Logging stops ${escapeHtml(v.tracking_until)}. ${toggle} &middot; <a href="/admin/demo-visits">JSON</a></p>
 <p style="font-size:14px;"><strong>${v.visitors}</strong> distinct visitors &middot; ${v.hits} entries &middot; ${v.returning_visitors} came back on another day &middot; since ${escapeHtml(since)}${excludeMe ? ' &middot; <em>your own visits excluded (this browser and network)</em>' : ''}</p>
 ${table(['Day (UTC)', 'Visitors', 'Entries'], v.per_day.map((r) => [r.day, r.visitors, r.hits]))}
 ${table(['Entry point', 'Visitors', 'Entries'], v.by_entry.map((r) => [r.entry, r.visitors, r.hits]))}
@@ -3104,6 +3103,7 @@ app.get('/admin', requireAdmin, async (req, res) => {
       `<tr><td>${escapeHtml(pv.user_email)}</td><td><code style="font-size:12px;">${escapeHtml(pv.path)}</code></td><td style="font-size:11px;white-space:nowrap;">${fmtLastLogin(pv.created_at)}</td></tr>`
     ).join('');
 
+    const nRows = (html) => (String(html).match(/<tr/g) || []).length;
     const excludeMeOnPage = req.query.exclude_me === '1';
     let demoVisitsHtml;
     try {
@@ -3125,6 +3125,7 @@ body { font-family: system-ui, sans-serif; margin:0; background:#fff; color:#111
 header { background:#800020; color:#fff; padding:14px 18px; font-weight:700; }
 main { padding:16px; max-width:1100px; margin:0 auto; }
 h2 { margin:20px 0 10px; font-size:18px; }
+details > summary { margin:20px 0 10px; font-size:18px; font-weight:600; cursor:pointer; }
 table { width:100%; border-collapse:collapse; margin-bottom:14px; }
 th,td { border:1px solid #e5e7eb; padding:8px; text-align:left; font-size:13px; vertical-align:top; }
 th { background:#f9fafb; }
@@ -3144,20 +3145,9 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 </style></head>
 <body><header>Causal Admin</header><main>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/organizational/cooperative/pod-management">Solid Pod Management →</a> <span style="color:#6b7280;">(platform-admin only; pod status/sync across every org)</span></p>
+<details open><summary>Demo visitors</summary>
 ${demoVisitsHtml}
-<h2 id="coop-workspaces-admin">Nonprofit workspaces (<code>coop_members</code>)</h2>
-<p style="font-size:12px;color:#6b7280;max-width:900px;">Test cleanup: deleting a row removes the NP workspace and cascades to members, chart of accounts, budgets, programs, grants, Xero connection data, and related rows. Does not delete civic <code>orgs</code> directory records.</p>
-<table><thead><tr><th>ID</th><th>Display name</th><th>Slug</th><th>Created</th><th>Members</th><th>Action</th></tr></thead><tbody id="coop-workspaces-body">${coopWorkspacesTbody}</tbody></table>
-<h2>Pending org activations</h2>
-<table><thead><tr><th>Org</th><th>Website URL</th><th>Action</th></tr></thead><tbody>${rowsPending || '<tr><td colspan="3">No pending activations</td></tr>'}</tbody></table>
-<h2>Pick list suggestions</h2>
-<table><thead><tr><th>Org</th><th>EIN</th><th>Status</th><th>Users</th><th>Actions</th></tr></thead><tbody id="suggestions-body">${rowsSuggestions || '<tr><td colspan="5">No suggestions</td></tr>'}</tbody></table>
-<h2>Donation URL suggestions</h2>
-<table><thead><tr><th>Org</th><th>Suggested URL</th><th>User</th><th>Actions</th></tr></thead><tbody id="donation-url-suggestions-body">${donationUrlSuggestions.rows.length > 0 ? donationUrlSuggestions.rows.map((d) => `<tr data-donation-suggestion-id="${Number(d.id)}"><td>${escapeHtml(d.org_name)}</td><td><a href="${escapeHtml(d.suggested_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;max-width:300px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">${escapeHtml(d.suggested_url)}</a></td><td>${escapeHtml(d.user_email)}</td><td><button onclick="approveDonationUrl(${Number(d.id)})">Approve</button> <button onclick="rejectDonationUrl(${Number(d.id)})">Reject</button></td></tr>`).join('') : '<tr><td colspan="4">No donation URL suggestions</td></tr>'}</tbody></table>
-<h2>Community opportunity suggestions</h2>
-<table><thead><tr><th>Title</th><th>URL</th><th>Location</th><th>Kind</th><th>User</th><th>Actions</th></tr></thead><tbody id="community-opportunities-body">${communityOpportunities.rows.length > 0 ? communityOpportunities.rows.map((c) => `<tr data-community-opportunity-id="${Number(c.id)}"><td>${escapeHtml(c.title)}</td><td><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;max-width:260px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">${escapeHtml(c.url)}</a></td><td>${escapeHtml(c.location || '—')}</td><td>${escapeHtml(c.kind)}</td><td>${escapeHtml(c.user_email)}</td><td><button onclick="approveCommunityOpportunity(${Number(c.id)})">Approve</button> <button onclick="rejectCommunityOpportunity(${Number(c.id)})">Reject</button></td></tr>`).join('') : '<tr><td colspan="6">No community opportunity suggestions</td></tr>'}</tbody></table>
-<h2>Pipeline health (last 7 days)</h2>
-<table><thead><tr><th>Org</th><th>Actions ingested</th><th>Flag</th></tr></thead><tbody>${rowsPipeline || '<tr><td colspan="3">No org data</td></tr>'}</tbody></table>
+</details>
 ${coopAccessMigrationBanner}
 <h2>Users &amp; invites</h2>
 <p style="font-size:12px;color:#6b7280;max-width:720px;">Signup and login are gated by the invite list below. Every row is either a pending invite (no account yet) or a signed-up user &mdash; the <strong>Status</strong> column shows which. Civic app access is the default for all accounts; toggle <strong>nonprofit</strong> to grant <code>/np/</code> and <code>/api/np/*</code> on the same login. <strong>User type</strong> controls cooperative icon visibility (workers only). <strong>Causal address</strong> is the friendly handle@${CAUSAL_DOMAIN} alias for subscribing to orgs; <strong>Forwarding address</strong> is the address the individual app actually hands out for forwarding petition/action emails &mdash; they can differ per user (legacy accounts especially) and both are shown here for that reason. Deleting a signed-up user also removes their invite entry, so they can't sign back up without a new invite.</p>
@@ -3167,9 +3157,29 @@ ${coopAccessMigrationBanner}
 </form>
 <p style="font-size:11px;color:#9ca3af;max-width:560px;margin:-4px 0 10px;">Adds the email to the allowlist, creates the account, and emails them a link to set their password.</p>
 <table><thead><tr><th>Email</th><th>Status</th><th>Invited by</th><th>Causal address</th><th>Forwarding address</th><th>First login</th><th>Last login</th><th>Last platform access</th><th>Org count</th><th>Action count</th><th>NP access</th><th>User type</th><th>Action</th></tr></thead><tbody id="users-body">${rowsUsers || '<tr><td colspan="13">No users or invites</td></tr>'}</tbody></table>
-<h2>Recent page views</h2>
+<details><summary id="coop-workspaces-admin">Nonprofit workspaces (<code>coop_members</code>) (${coopOrgRows.length})</summary>
+<p style="font-size:12px;color:#6b7280;max-width:900px;">Test cleanup: deleting a row removes the NP workspace and cascades to members, chart of accounts, budgets, programs, grants, Xero connection data, and related rows. Does not delete civic <code>orgs</code> directory records.</p>
+<table><thead><tr><th>ID</th><th>Display name</th><th>Slug</th><th>Created</th><th>Members</th><th>Action</th></tr></thead><tbody id="coop-workspaces-body">${coopWorkspacesTbody}</tbody></table>
+</details>
+<details><summary>Pending org activations (${nRows(rowsPending)})</summary>
+<table><thead><tr><th>Org</th><th>Website URL</th><th>Action</th></tr></thead><tbody>${rowsPending || '<tr><td colspan="3">No pending activations</td></tr>'}</tbody></table>
+</details>
+<details><summary>Pick list suggestions (${nRows(rowsSuggestions)})</summary>
+<table><thead><tr><th>Org</th><th>EIN</th><th>Status</th><th>Users</th><th>Actions</th></tr></thead><tbody id="suggestions-body">${rowsSuggestions || '<tr><td colspan="5">No suggestions</td></tr>'}</tbody></table>
+</details>
+<details><summary>Donation URL suggestions (${donationUrlSuggestions.rows.length})</summary>
+<table><thead><tr><th>Org</th><th>Suggested URL</th><th>User</th><th>Actions</th></tr></thead><tbody id="donation-url-suggestions-body">${donationUrlSuggestions.rows.length > 0 ? donationUrlSuggestions.rows.map((d) => `<tr data-donation-suggestion-id="${Number(d.id)}"><td>${escapeHtml(d.org_name)}</td><td><a href="${escapeHtml(d.suggested_url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;max-width:300px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">${escapeHtml(d.suggested_url)}</a></td><td>${escapeHtml(d.user_email)}</td><td><button onclick="approveDonationUrl(${Number(d.id)})">Approve</button> <button onclick="rejectDonationUrl(${Number(d.id)})">Reject</button></td></tr>`).join('') : '<tr><td colspan="4">No donation URL suggestions</td></tr>'}</tbody></table>
+</details>
+<details><summary>Community opportunity suggestions (${communityOpportunities.rows.length})</summary>
+<table><thead><tr><th>Title</th><th>URL</th><th>Location</th><th>Kind</th><th>User</th><th>Actions</th></tr></thead><tbody id="community-opportunities-body">${communityOpportunities.rows.length > 0 ? communityOpportunities.rows.map((c) => `<tr data-community-opportunity-id="${Number(c.id)}"><td>${escapeHtml(c.title)}</td><td><a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;max-width:260px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;">${escapeHtml(c.url)}</a></td><td>${escapeHtml(c.location || '—')}</td><td>${escapeHtml(c.kind)}</td><td>${escapeHtml(c.user_email)}</td><td><button onclick="approveCommunityOpportunity(${Number(c.id)})">Approve</button> <button onclick="rejectCommunityOpportunity(${Number(c.id)})">Reject</button></td></tr>`).join('') : '<tr><td colspan="6">No community opportunity suggestions</td></tr>'}</tbody></table>
+</details>
+<details><summary>Pipeline health (last 7 days) (${nRows(rowsPipeline)})</summary>
+<table><thead><tr><th>Org</th><th>Actions ingested</th><th>Flag</th></tr></thead><tbody>${rowsPipeline || '<tr><td colspan="3">No org data</td></tr>'}</tbody></table>
+</details>
+<details><summary>Recent page views (${nRows(rowsRecentPageViews)})</summary>
 <p style="font-size:12px;color:#6b7280;max-width:900px;">Server-side page load log (migration 168) &mdash; recorded directly by the server, so it isn't affected by ad blockers the way the GA4 tag is. "Last login" above only updates on a fresh sign-in (session cookies last 30 days), while <strong>Last platform access</strong> reflects the most recent real page load. Covers every organizational page and the individual app shell; does not cover in-app tab switches within the individual app (those don't reload the page). Last 100 page loads across all users.</p>
 <table><thead><tr><th>User</th><th>Path</th><th>When</th></tr></thead><tbody id="page-views-body">${rowsRecentPageViews || '<tr><td colspan="3">No page views logged yet</td></tr>'}</tbody></table>
+</details>
 </main>
 <div id="edit-suggestion-modal" class="modal-overlay" onclick="if(event.target===this)closeEditSuggestion()">
   <div class="modal">

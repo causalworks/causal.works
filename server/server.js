@@ -26,6 +26,7 @@ const {
   LOGIN_GENERIC_ERROR,
   CAUSAL_DOMAIN,
   logPageView,
+  SESSION_COOKIE,
 } = require('./auth');
 const { mountOrganizationalRoutes } = require('./organizational');
 const { mountIndividualRoutes } = require('./individual');
@@ -402,10 +403,34 @@ function demoVisitorHash(req, key) {
   return crypto.createHmac('sha256', key).update(ip + '|' + ua).digest('hex').slice(0, 16);
 }
 
+// Staff accounts whose visits are left out of the counts (migration 287). The log holds no
+// emails, so staff are excluded by device: when one of these accounts is signed in and opens a
+// demo link or /admin, that browser's hash is saved to demo_visit_excluded, and the summary then
+// leaves out every visit with that hash (including ones logged earlier).
+const DEMO_VISIT_EXCLUDED_EMAILS = new Set(['gyacc@pm.me', 'loopy@causal.works', 'guy@causal.works']);
+const knownStaffHashes = new Set();
+
+async function noteStaffDevice(req, email) {
+  if (!DEMO_VISIT_EXCLUDED_EMAILS.has(String(email || '').trim().toLowerCase())) return;
+  const hash = demoVisitorHash(req, await getDemoVisitKey());
+  if (knownStaffHashes.has(hash)) return;
+  await pool.query(`INSERT INTO demo_visit_excluded (visitor_hash) VALUES ($1) ON CONFLICT DO NOTHING`, [hash]);
+  knownStaffHashes.add(hash);
+}
+
 function logDemoVisit(req, entry) {
   if (Date.now() > DEMO_VISIT_TRACKING_UNTIL) return;
   (async () => {
     const key = await getDemoVisitKey();
+    const token = req.cookies && req.cookies[SESSION_COOKIE];
+    if (token) {
+      const u = await pool.query(
+        `SELECT u.email FROM sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.token = $1 AND s.used = FALSE AND s.expires_at > NOW()`,
+        [token]
+      );
+      if (u.rows[0]) await noteStaffDevice(req, u.rows[0].email);
+    }
     let referrerHost = null;
     try { if (req.headers.referer) referrerHost = new URL(req.headers.referer).host.slice(0, 100); } catch (_) {}
     await pool.query(
@@ -2295,6 +2320,7 @@ function requireAdmin(req, res, next) {
     if (!isAdminEmail(req.user.email)) {
       return res.status(401).send('Unauthorized');
     }
+    noteStaffDevice(req, req.user.email).catch((err) => console.warn('⚠️ demo_visit_excluded insert failed:', err.message));
     return next();
   });
 }
@@ -2302,8 +2328,9 @@ function requireAdmin(req, res, next) {
 // Demo visitor summary (migration 286). Shared by GET /admin/demo-visits (JSON) and the /admin
 // page. `me` is the requester's own visitor hash to leave out, or null.
 async function loadDemoVisitSummary(me) {
-  const base = `FROM demo_visit_log WHERE is_bot = false AND ($1::text IS NULL OR visitor_hash <> $1)`;
-  const [totals, perDay, byEntry, referrers, bots] = await Promise.all([
+  const base = `FROM demo_visit_log WHERE is_bot = false AND ($1::text IS NULL OR visitor_hash <> $1)
+    AND visitor_hash NOT IN (SELECT visitor_hash FROM demo_visit_excluded)`;
+  const [totals, perDay, byEntry, referrers, bots, staff] = await Promise.all([
     pool.query(
       `SELECT COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits, MIN(visited_at) AS since,
               (SELECT COUNT(*)::int FROM (SELECT visitor_hash ${base} GROUP BY visitor_hash
@@ -2319,12 +2346,14 @@ async function loadDemoVisitSummary(me) {
       `SELECT COALESCE(referrer_host, '(none)') AS referrer, COUNT(DISTINCT visitor_hash)::int AS visitors
        ${base} GROUP BY 1 ORDER BY visitors DESC LIMIT 10`, [me]),
     pool.query(`SELECT COUNT(*)::int AS bot_hits FROM demo_visit_log WHERE is_bot = true`),
+    pool.query(`SELECT COUNT(*)::int AS n FROM demo_visit_excluded`),
   ]);
   return {
     tracking_until: new Date(DEMO_VISIT_TRACKING_UNTIL).toISOString().slice(0, 10),
     excluding_requester: !!me,
     ...totals.rows[0],
     bot_hits_excluded: bots.rows[0].bot_hits,
+    staff_devices_excluded: staff.rows[0].n,
     per_day: perDay.rows,
     by_entry: byEntry.rows,
     top_referrers: referrers.rows,
@@ -2344,7 +2373,7 @@ function renderDemoVisitsSection(v, excludeMe) {
     ? '<a href="/admin">Include my visits</a>'
     : '<a href="/admin?exclude_me=1">Exclude my visits</a>';
   return `<h2>Demo visitors</h2>
-<p style="font-size:12px;color:#6b7280;max-width:900px;">Distinct visitors to /demo, /demo-coop and /odi (migration 286). The demo is one shared account, so visitors are counted by a one-way hash of IP + browser; no addresses are stored. Crawlers are left out (${v.bot_hits_excluded} hits). Logging stops ${escapeHtml(v.tracking_until)}. ${toggle} &middot; <a href="/admin/demo-visits">JSON</a></p>
+<p style="font-size:12px;color:#6b7280;max-width:900px;">Distinct visitors to /demo, /demo-coop and /odi (migration 286). The demo is one shared account, so visitors are counted by a one-way hash of IP + browser; no addresses are stored. Crawlers are left out (${v.bot_hits_excluded} hits), and so are staff devices (${v.staff_devices_excluded} known: a staff account signed in while opening a demo link or this page). Logging stops ${escapeHtml(v.tracking_until)}. ${toggle} &middot; <a href="/admin/demo-visits">JSON</a></p>
 <p style="font-size:14px;"><strong>${v.visitors}</strong> distinct visitors &middot; ${v.hits} entries &middot; ${v.returning_visitors} came back on another day &middot; since ${escapeHtml(since)}${excludeMe ? ' &middot; <em>your own visits excluded (this browser and network)</em>' : ''}</p>
 ${table(['Day (UTC)', 'Visitors', 'Entries'], v.per_day.map((r) => [r.day, r.visitors, r.hits]))}
 ${table(['Entry point', 'Visitors', 'Entries'], v.by_entry.map((r) => [r.entry, r.visitors, r.hits]))}
@@ -3115,6 +3144,7 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 </style></head>
 <body><header>Causal Admin</header><main>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/organizational/cooperative/pod-management">Solid Pod Management →</a> <span style="color:#6b7280;">(platform-admin only; pod status/sync across every org)</span></p>
+${demoVisitsHtml}
 <h2 id="coop-workspaces-admin">Nonprofit workspaces (<code>coop_members</code>)</h2>
 <p style="font-size:12px;color:#6b7280;max-width:900px;">Test cleanup: deleting a row removes the NP workspace and cascades to members, chart of accounts, budgets, programs, grants, Xero connection data, and related rows. Does not delete civic <code>orgs</code> directory records.</p>
 <table><thead><tr><th>ID</th><th>Display name</th><th>Slug</th><th>Created</th><th>Members</th><th>Action</th></tr></thead><tbody id="coop-workspaces-body">${coopWorkspacesTbody}</tbody></table>
@@ -3137,7 +3167,6 @@ ${coopAccessMigrationBanner}
 </form>
 <p style="font-size:11px;color:#9ca3af;max-width:560px;margin:-4px 0 10px;">Adds the email to the allowlist, creates the account, and emails them a link to set their password.</p>
 <table><thead><tr><th>Email</th><th>Status</th><th>Invited by</th><th>Causal address</th><th>Forwarding address</th><th>First login</th><th>Last login</th><th>Last platform access</th><th>Org count</th><th>Action count</th><th>NP access</th><th>User type</th><th>Action</th></tr></thead><tbody id="users-body">${rowsUsers || '<tr><td colspan="13">No users or invites</td></tr>'}</tbody></table>
-${demoVisitsHtml}
 <h2>Recent page views</h2>
 <p style="font-size:12px;color:#6b7280;max-width:900px;">Server-side page load log (migration 168) &mdash; recorded directly by the server, so it isn't affected by ad blockers the way the GA4 tag is. "Last login" above only updates on a fresh sign-in (session cookies last 30 days), while <strong>Last platform access</strong> reflects the most recent real page load. Covers every organizational page and the individual app shell; does not cover in-app tab switches within the individual app (those don't reload the page). Last 100 page loads across all users.</p>
 <table><thead><tr><th>User</th><th>Path</th><th>When</th></tr></thead><tbody id="page-views-body">${rowsRecentPageViews || '<tr><td colspan="3">No page views logged yet</td></tr>'}</tbody></table>

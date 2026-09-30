@@ -3149,7 +3149,7 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 ${demoVisitsHtml}
 </details>
 ${coopAccessMigrationBanner}
-<h2>Users &amp; invites</h2>
+<details open><summary>Users &amp; invites</summary>
 <p style="font-size:12px;color:#6b7280;max-width:720px;">Signup and login are gated by the invite list below. Every row is either a pending invite (no account yet) or a signed-up user &mdash; the <strong>Status</strong> column shows which. Civic app access is the default for all accounts; toggle <strong>nonprofit</strong> to grant <code>/np/</code> and <code>/api/np/*</code> on the same login. <strong>User type</strong> controls cooperative icon visibility (workers only). <strong>Causal address</strong> is the friendly handle@${CAUSAL_DOMAIN} alias for subscribing to orgs; <strong>Forwarding address</strong> is the address the individual app actually hands out for forwarding petition/action emails &mdash; they can differ per user (legacy accounts especially) and both are shown here for that reason. Deleting a signed-up user also removes their invite entry, so they can't sign back up without a new invite.</p>
 <form id="invite-form" style="display:flex;gap:8px;max-width:560px;margin-bottom:10px;">
   <input type="email" id="invite-email" placeholder="email@example.com" required style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
@@ -3157,6 +3157,7 @@ ${coopAccessMigrationBanner}
 </form>
 <p style="font-size:11px;color:#9ca3af;max-width:560px;margin:-4px 0 10px;">Adds the email to the allowlist, creates the account, and emails them a link to set their password.</p>
 <table><thead><tr><th>Email</th><th>Status</th><th>Invited by</th><th>Causal address</th><th>Forwarding address</th><th>First login</th><th>Last login</th><th>Last platform access</th><th>Org count</th><th>Action count</th><th>NP access</th><th>User type</th><th>Action</th></tr></thead><tbody id="users-body">${rowsUsers || '<tr><td colspan="13">No users or invites</td></tr>'}</tbody></table>
+</details>
 <details><summary id="coop-workspaces-admin">Nonprofit workspaces (<code>coop_members</code>) (${coopOrgRows.length})</summary>
 <p style="font-size:12px;color:#6b7280;max-width:900px;">Test cleanup: deleting a row removes the NP workspace and cascades to members, chart of accounts, budgets, programs, grants, Xero connection data, and related rows. Does not delete civic <code>orgs</code> directory records.</p>
 <table><thead><tr><th>ID</th><th>Display name</th><th>Slug</th><th>Created</th><th>Members</th><th>Action</th></tr></thead><tbody id="coop-workspaces-body">${coopWorkspacesTbody}</tbody></table>

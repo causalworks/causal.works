@@ -328,15 +328,24 @@
         <div class="doc-subtitle">Project Brief</div>
 
         <p>Causal.works is an initiative to develop platform cooperatives for nonprofits and coalitions working on the human-systems change needed to live within Earth's planetary boundaries — climate action, civic action, education, social work, cultural work, and other fields. These groups share a common set of operational needs. The cooperatives form around shared purpose, owning and governing their own private data infrastructure. Causal.works can be retired once the platform template propagates to self-managed cooperatives, though it's possible that it perpetuates as some form of shared infrastructure for a federation of cooperatives.</p>
-        <p>The project addresses two problems that compound each other. Many advocacy groups report limited leverage when acting in parallel: each runs campaigns, mobilizes members, and targets decision-makers independently, without coordinated timing or concentrated pressure. Meanwhile the data systems these groups rely on are rented from vendors with no stake in their mission, and their records sit in the vendor's database, outside their control. Groups that own the tools managing their data begin to leverage new power.</p>
+        <p>The project addresses two problems that compound each other. Many advocacy groups report limited leverage when acting in parallel: each runs campaigns, mobilizes members, and targets decision-makers independently, without coordinated timing or concentrated pressure. Meanwhile the data systems these groups rely on are rented from vendors with no stake in their mission, and their records sit in the vendor's database, outside their control. Cooperatives that own the tools managing their members' data begin to leverage new power.</p>
         <p>The shift from rented software to shared ownership rests on three changes:</p>
         <ul>
             <li><strong>Common needs framework</strong> — The management tools (budgeting, grants, accounting, compliance) are built around the operational needs nonprofits share, so groups work from common structures instead of each improvising their own. Every organization's instance is completely private to it.</li>
             <li><strong>Cooperative structure</strong> — Collaboration happens in Workshop and the shared cooperative resources: the peer network, the work library, and the work pool. The organizations that use the tools shape those resources and, over time, help govern the platform. They are not a customer base a vendor draws revenue from.</li>
-            <li><strong>Data sovereignty</strong> — Each organization holds full control of its own records. Documents live in the organization's own Solid pod, not only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw.</li>
+            <li><strong>Data sovereignty</strong> — Each organization holds full control of its own records. An organization's documents are held in its own Solid pod rather than only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw.</li>
         </ul>
-        <p>This change is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure. The current build was created by an experienced nonprofit professional working with coding agents. A functioning version exists that now needs experienced human collaborators in platform architecture, app functionality, UI and UX design, systems frameworks, and rollout path.</p>
+        <p>This change is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure.</p>
+        <h2>Current Status</h2>
+        <p>The current build was created by an experienced nonprofit professional working with coding agents. A functioning version exists that now needs experienced human collaborators in platform architecture, app functionality, UI and UX design, systems frameworks, and rollout path.</p>
         <p>The current live build has two parts. The <strong>Cooperative</strong> workspace is the sector-neutral operational core. It provides collaboration resources (peer network, library, work pool, and a workshop for systems analysis) alongside an enterprise management tool set: budgeting, accounting, fundraising, membership, sponsorship, compliance, and governance. <strong>Agency</strong> is a personal civic app that informs individual decision-making with leverage-point logic grounded in planetary boundaries science and the Earth4All turnarounds. It centralizes the actions people can take: where they bank and invest, petitions, comments on pending legislation, protests, volunteering, and advocacy to elected officials and proxies.</p>
+        <p>Where things stand:</p>
+        <ul>
+            <li><strong>Data sovereignty</strong> — Documents can be held in an organization's own Solid pod. The platform still holds the credential that controls each pod, and removing that is the main technical goal (see Technical Stack &amp; Sovereignty).</li>
+            <li><strong>Workshop</strong> — Still developing, and not yet reviewed by a systems-change practitioner.</li>
+            <li><strong>Agency</strong> — Its features are a mix of live, scaffolded, and aspirational. Action tagging is rudimentary today.</li>
+            <li><strong>Instance governance</strong> — The curated multi-instance feed is documented but not built, and how advisors to new instances are admitted and held accountable is not yet decided.</li>
+        </ul>
 
         <h2>The Operational Model</h2>
         <p>Every instance running on Causal draws from one architecture, split into core infrastructure that any group can adapt and field-specific applications built on top of it.</p>
@@ -346,7 +355,7 @@
         <ul>
             <li>
                 <div class="brief-with-thumb">
-                    <span class="brief-text"><strong>Workshop</strong> — A collaborative workspace for mapping systemic problems, organizing projects, sharing documents, and modeling interventions. Still developing, and not yet reviewed by a systems-change practitioner.</span>
+                    <span class="brief-text"><strong>Workshop</strong> — A collaborative workspace for mapping systemic problems, organizing projects, sharing documents, and modeling interventions.</span>
                     <span class="brief-thumbs">
                         <img class="brief-thumb" src="screenshots/coop-workshop.png" alt="Cooperative — Workshop" data-caption="Cooperative — Workshop">
                     </span>
@@ -366,7 +375,7 @@
         </ul>
 
         <h3>Agency (First Instance)</h3>
-        <p>Agency is the platform's first fully worked-out application, and a proof of concept for how Causal's general infrastructure extends into public-facing civic engagement. Its features are a mix of live, scaffolded, and aspirational:</p>
+        <p>Agency is the platform's first fully worked-out application, and a proof of concept for how Causal's general infrastructure extends into public-facing civic engagement. Its features:</p>
         <ul>
             <li>
                 <div class="brief-with-thumb">
@@ -385,12 +394,12 @@
         <h2>How Groups Launch Their Own</h2>
         <p>The intended rollout is decentralized. A short-term startup team builds and hands over the tooling, rather than becoming a permanent administrative entity. Multiple cooperatives can then adopt it and fork the shared codebase for their own use cases. This also supports more complex structures, such as a worker cooperative serving the needs of a nonprofit cooperative.</p>
         <p>A fork is not just a copy of the code. It needs its own mapping onto Earth4All's turnarounds, decided by the people forming around it, with the same rigor Agency applies to planetary boundaries science. Systems thinking alone is a method, not a position: it can organize a supply chain as easily as a movement. What makes an instance trustworthy is that its actions are checked against measures of human wellbeing.</p>
-        <p>Deciding whether a proposed instance serves the turnarounds, rather than borrowing their language without their substance, is a governance question. A platform agent is meant to recommend whether a proposed instance fits, checked by a human advisory group that grows out of the adopters themselves. The first adopters would be advised by that agent and then take on advising later ones. How advisors are admitted and held accountable is not yet decided.</p>
-        <p>The design under discussion is that Agency follows organizations from many Cooperative instances and pulls from them, rather than every organization pushing into one shared feed. Which instances and organizations Agency includes would be a curated, human-approved list. This is documented but not built.</p>
+        <p>Deciding whether a proposed instance serves the turnarounds, rather than borrowing their language without their substance, is a governance question. A platform agent is meant to recommend whether a proposed instance fits, checked by a human advisory group that grows out of the adopters themselves. The first adopters would be advised by that agent and then take on advising later ones.</p>
+        <p>The design is that Agency follows organizations from many Cooperative instances and pulls from them, rather than every organization pushing into one shared feed. Which instances and organizations Agency includes would be a curated, human-approved list.</p>
 
         <h2>Platform Logic &amp; Intellectual Rigor</h2>
         <p>In the Agency instance, Earth4All's five turnarounds (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.</p>
-        <p>Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is rudimentary today and could improve a great deal, ideally with direct input from the groups that produce these frameworks.</p>
+        <p>Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is meant to be refined with direct input from the groups that produce these frameworks.</p>
         <p>The framework has clear limits:</p>
         <ul>
             <li><strong>Framework boundaries</strong> — Earth4All does not claim completeness by its own account. The Earth Commission, the research body behind planetary boundaries, now frames the boundaries as "safe and just," building distributive and procedural justice into where the lines sit. Dimensions such as racial, colonial, or historical equity sit near the open edge of current models, not fully inside the five turnarounds as originally published.</li>

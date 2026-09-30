@@ -49,7 +49,7 @@ Agency is the platform's first fully worked-out application, and a proof of conc
 - **Action** — A unified decision feed of actions you can take: petitions, public-comment filings, events, volunteer positions, donations, and bank-divestment steps. Sorted by urgency, location relevance, and system leverage points. You see the organizations you follow, and each action shows which systemic lever it pulls.
 - **Proxies** — Who is representing your interests and what they are doing: federal, state, and local elected officials, financial institutions, and advocacy organizations, based on your settings.
 - **Ledger** — A personal record of completed actions, direct giving, and moved capital such as bank transfers or divestment pledges.
-- **Systems** — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of leverage points.
+- **Systems** — The platform's empirical framework and action-filtering logic: planetary boundaries science, turnaround recommendations, and an overview of [leverage points](https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/).
 
 ## How Groups Launch Their Own
 
@@ -63,7 +63,7 @@ The design is that Agency follows organizations from many Cooperative instances 
 
 ## Platform Logic & Intellectual Rigor
 
-In the Agency instance, Earth4All's five turnarounds (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.
+In the Agency instance, [Earth4All's five turnarounds](https://earth4all.life/the-five-extraordinary-turnarounds/) (poverty, inequality, empowerment, food, and energy) are the benchmark for whether an intervention advances human wellbeing. Beneath them sits the planetary boundaries framework, which provides the ecological baselines.
 
 Research suggests that common actions like petition signing have lower impact than, for example, changing where people bank and invest. Lower-impact actions stay in the platform, on the idea that coordinating them raises engagement and effectiveness. Action tagging is meant to be refined with direct input from the groups that produce these frameworks.
 

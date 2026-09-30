@@ -216,6 +216,8 @@
         </a>
     </div>
 
+    <p class="project-brief-link" id="first-login-note" hidden>Start with either one. You can switch to the other anytime from the My account menu. Cooperative setup begins in the Turning Tide demo cooperative, which you join, and you can create your own organization from there.</p>
+
     <p class="project-brief-link"><a href="/shared/project-brief/#project-brief" target="_blank" rel="noopener">Read the project brief &rarr;</a></p>
     <p class="project-brief-link"><a href="mailto:guy@causal.works">guy@causal.works</a></p>
 
@@ -254,6 +256,12 @@
                 document.getElementById('card-agency').href = '/individual/';
                 document.getElementById('btn-coop').textContent = 'Enter Cooperative';
                 document.getElementById('btn-agency').textContent = 'Enter Agency';
+                // First login: Agency onboarding hasn't been finished yet, so offer setup.
+                if (!me.onboarding_complete) {
+                    document.getElementById('btn-coop').textContent = 'Set up Cooperative';
+                    document.getElementById('btn-agency').textContent = 'Set up Agency';
+                    document.getElementById('first-login-note').hidden = false;
+                }
             }
             show();
         })

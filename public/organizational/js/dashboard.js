@@ -248,7 +248,7 @@
       eyebrowEl.textContent = 'Welcome' + (name ? ', ' + name : '');
       headingEl.textContent = "Let's set up your organization";
       if (subheadEl) {
-        subheadEl.textContent = 'Create a workspace below to get started, or explore the sandbox first.';
+        subheadEl.textContent = 'Create a workspace below to get started, or explore the Turning Tide demo cooperative first.';
         subheadEl.hidden = false;
       }
       return;
@@ -357,28 +357,25 @@
     const orgs = orgsOut.data.orgs || [];
     const invites = (invitesOut && invitesOut.res.ok) ? (invitesOut.data.invites || []) : [];
 
-    // Self-serve org creation isn't a real path yet -- Turning Tide (the platform demo org,
-    // flagged is_platform_demo) is the only real cooperative right now, and every new signup is
-    // already auto-enrolled into it as staff (bootstrap_demo_org_membership, migration 155).
-    // Landing on "Let's set up your organization" for someone who already has a real membership
-    // in the only cooperative that exists pointed them at a path that doesn't actually go
-    // anywhere yet. Skip straight to it instead -- same place /demo and /odi already send
-    // people. A pending invite still takes priority (that's a real, separate thing to review),
-    // as does already having an org of one's own.
+    // This is the Cooperative start page. Someone with no workspace of their own sees the create
+    // form and the Sandbox card for the Turning Tide demo cooperative (every signup is already
+    // enrolled in it as staff, bootstrap_demo_org_membership, migration 155), and chooses.
+    // Until 2026-09-30 this redirected straight into the demo because self-serve org creation
+    // was thought not to work; it does (POST /orgs grants admin), so the redirect hid the
+    // create option from a first-time user. ?create=1 (account.html's "Create a new
+    // organization") still opens the create panel.
     const realOrgs = orgs.filter(function (o) { return !o.is_platform_demo; });
-    const demoOrgs = orgs.filter(function (o) { return o.is_platform_demo; });
-    // ?create=1 (linked from account.html's "Create a new organization") explicitly opts out
-    // of the auto-redirect below -- someone who wants to try setting up their own org can still
-    // reach this page and its Create workspace form; it's just no longer where a fresh signup
-    // lands by default.
-    const skipRedirect = new URLSearchParams(window.location.search).get('create') === '1';
-    if (!skipRedirect && realOrgs.length === 0 && invites.length === 0 && demoOrgs.length > 0) {
-      window.location.replace('/organizational/o/' + encodeURIComponent(demoOrgs[0].slug) + '/dashboard');
-      return;
+    const openCreate = new URLSearchParams(window.location.search).get('create') === '1';
+
+    // With no workspace yet, every sidebar link would go nowhere (they need an org slug in the
+    // URL), so this first-time view shows no sidebar.
+    if (realOrgs.length === 0) {
+      const sidebarMount = document.getElementById('organizational-sidebar-mount');
+      if (sidebarMount) sidebarMount.hidden = true;
     }
 
     renderOrgs(orgs, invites);
-    if (skipRedirect) openCreatePanel();
+    if (openCreate) openCreatePanel();
   }
 
   if (form) {

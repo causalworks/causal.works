@@ -138,6 +138,27 @@
             </div>
           </div>
 
+          <!-- Systems Tab -->
+          <div id="organizational-organizational-panel-systems" class="organizational-settings-panel" data-organizational-panel="systems" hidden>
+            <p class="organizational-hint" style="max-width: 640px; margin: 0 0 16px;">
+              How <a href="https://www.pik-potsdam.de/en/institute/labs/pbscience/pbscience" target="_blank" rel="noopener">planetary boundaries</a>,
+              <a href="https://earth4all.life/the-five-extraordinary-turnarounds/" target="_blank" rel="noopener">structural turnarounds</a>, and
+              <a href="https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/" target="_blank" rel="noopener">leverage points</a>
+              fit together. The Workshop uses the same turnarounds and leverage levels when you map a project or model an intervention.
+            </p>
+            <div class="organizational-tabs" id="organizational-systems-tabs">
+              <button type="button" class="organizational-tab active" data-organizational-systems-tab="overview">Overview</button>
+              <button type="button" class="organizational-tab" data-organizational-systems-tab="boundaries">Boundaries</button>
+              <button type="button" class="organizational-tab" data-organizational-systems-tab="turnarounds">Turnarounds</button>
+              <button type="button" class="organizational-tab" data-organizational-systems-tab="leverage">Leverage Points</button>
+            </div>
+            <p id="organizational-systems-error" class="organizational-error" hidden></p>
+            <div data-organizational-systems-panel="overview"></div>
+            <div data-organizational-systems-panel="boundaries" hidden></div>
+            <div data-organizational-systems-panel="turnarounds" hidden></div>
+            <div data-organizational-systems-panel="leverage" hidden></div>
+          </div>
+
           <!-- Work Pool Tab -->
           <div id="organizational-organizational-panel-work-pool" class="organizational-settings-panel" data-organizational-panel="work-pool" hidden>
             <!-- Section A: Your org's posted needs -->
@@ -331,6 +352,7 @@
   <script src="/organizational/js/strings.js" defer></script>
   <script src="/organizational/js/sidebar.js" defer></script>
   <script src="/organizational/js/library-shared.js" defer></script>
+  <script src="/organizational/js/cooperative-systems.js" defer></script>
   <script src="/organizational/js/cooperative.js" defer></script>
   <div id="organizational-overlay-container"></div>
   <script>

@@ -654,6 +654,9 @@ app.get('/organizational/o/:slug/cooperative/members', requireAuthPage(pool), re
 app.get('/organizational/o/:slug/cooperative/work-pool', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
   res.sendFile(coopCooperativeHtml);
 });
+app.get('/organizational/o/:slug/cooperative/systems', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
+  res.sendFile(coopCooperativeHtml);
+});
 app.get('/organizational/o/:slug/library', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'organizational', 'library.html'));
 });

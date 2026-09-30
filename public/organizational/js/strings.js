@@ -22,6 +22,7 @@ const ORGANIZATIONAL_STRINGS = {
     'cooperative/library': 'Library',
     'cooperative/members': 'Members',
     'cooperative/work-pool': 'Work pool',
+    'cooperative/systems': 'Systems',
     settings: 'Settings',
   },
   backToIndividual: 'Agency',

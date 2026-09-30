@@ -10,6 +10,7 @@
   const panelLibrary = document.getElementById('organizational-organizational-panel-library');
   const panelWorkPool = document.getElementById('organizational-organizational-panel-work-pool');
   const panelWorkshop = document.getElementById('organizational-organizational-panel-workshop');
+  const panelSystems = document.getElementById('organizational-organizational-panel-systems');
   const membersList = document.getElementById('organizational-members-list');
   const engagementResources = document.getElementById('organizational-engagement-resources');
   const libraryList = document.getElementById('organizational-library-list');
@@ -87,10 +88,10 @@
   }
 
   function parseCooperativePath() {
-    const m = (window.location.pathname || '').match(/^\/organizational\/o\/([^/]+)\/cooperative(?:\/(members|activities|library|work-pool|workshop))?\/?$/);
+    const m = (window.location.pathname || '').match(/^\/organizational\/o\/([^/]+)\/cooperative(?:\/(members|activities|library|work-pool|workshop|systems))?\/?$/);
     if (!m) return { slug: '', tab: 'workshop' };
     const slug = decodeURIComponent(m[1]);
-    const validTabs = ['members', 'activities', 'library', 'work-pool', 'workshop'];
+    const validTabs = ['members', 'activities', 'library', 'work-pool', 'workshop', 'systems'];
     const tab = m[2] && validTabs.includes(m[2]) ? m[2] : 'workshop';
     return { slug, tab };
   }
@@ -101,16 +102,18 @@
     library: 'Library',
     members: 'Members',
     'work-pool': 'Work pool',
+    systems: 'Systems',
   };
 
   function applyCooperativeTab(tab) {
-    const validTabs = ['members', 'activities', 'library', 'work-pool', 'workshop'];
+    const validTabs = ['members', 'activities', 'library', 'work-pool', 'workshop', 'systems'];
     const t = validTabs.includes(tab) ? tab : 'workshop';
     if (panelMembers) panelMembers.hidden = t !== 'members';
     if (panelActivities) panelActivities.hidden = t !== 'activities';
     if (panelLibrary) panelLibrary.hidden = t !== 'library';
     if (panelWorkPool) panelWorkPool.hidden = t !== 'work-pool';
     if (panelWorkshop) panelWorkshop.hidden = t !== 'workshop';
+    if (panelSystems) panelSystems.hidden = t !== 'systems';
     if (titleEl) titleEl.textContent = 'Cooperative | ' + TAB_TITLES[t];
     if (workshopProposeBtn) workshopProposeBtn.hidden = t !== 'workshop';
   }
@@ -1030,6 +1033,8 @@
       if (openId) await openWorkshopDetail(openId);
     } else if (tab === 'activities') {
       await loadEngagementResources();
+    } else if (tab === 'systems') {
+      if (window.loadCooperativeSystems) await window.loadCooperativeSystems();
     }
 
     initHeader();

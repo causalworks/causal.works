@@ -2,7 +2,9 @@
 
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
-const { MEADOWS_LEVEL_LABELS } = require('../../data/meadows-leverage');
+const { MEADOWS_LEVEL_LABELS, MEADOWS_LEVELS } = require('../../data/meadows-leverage');
+const { PLANETARY_BOUNDARIES, BOUNDARIES_SOURCE_URL } = require('../../data/planetary-boundaries');
+const { TURNAROUND_FRAMEWORK } = require('../../data/turnarounds-framework');
 const { suggestInterventionFields } = require('../../ai/intervention-suggestion');
 const { syncWorkshopToPod } = require('../lib/workshopPodSync');
 
@@ -50,6 +52,25 @@ async function getViewerCoopOrgId(pool, userId, slug) {
 function registerCooperativeRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess];
+
+  // GET /api/organizational/cooperative/systems-framework - read-only reference content for the
+  // Systems page (boundaries, turnarounds, leverage points). Not org data; same for every org.
+  app.get('/api/organizational/cooperative/systems-framework', ...orgAuth, (req, res) => {
+    const boundaries = PLANETARY_BOUNDARIES.map((b) => ({
+      id: b.id,
+      name: b.name,
+      status: b.status,
+      trend: b.trend,
+      description: b.description,
+      turnaround_ids: b.turnaround_ids || [],
+    }));
+    res.json({
+      boundaries,
+      boundaries_source_url: BOUNDARIES_SOURCE_URL,
+      turnarounds: TURNAROUND_FRAMEWORK,
+      leverage_levels: MEADOWS_LEVELS,
+    });
+  });
 
   // GET /api/organizational/cooperative/members - Get all cooperative member orgs except viewer's own
   app.get('/api/organizational/cooperative/members', ...orgAuth, async (req, res) => {

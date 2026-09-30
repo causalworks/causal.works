@@ -74,10 +74,10 @@ The framework has clear limits:
 
 ## Core Approach
 
-- **Sovereignty first** — Data ownership belongs to the person and the collective. Documents and choices live in user-controlled stores, not locked inside a central system.
+- **Sovereignty first** — Data ownership belongs to the person or the collective. Documents and choices live in user-controlled stores, not locked inside a central system.
 - **Sector frameworks grounded in evidence** — Every instance uses frameworks grounded in expert research to identify high-leverage interventions for its area.
 - **Systems & leverage dynamics** — Tools use system-dynamics methods to map root causes, locate intervention points, and redirect institutional capital toward mission-aligned outcomes.
-- **Ownership by adopters** — Each group that launches on Causal owns and governs its own platform. Causal supplies the tooling and a starting codebase.
+- **Ownership by adopters** — Each group that launches a platform cooperative owns and governs its own platform. The platform template supplies the tooling and a starting codebase.
 
 ## Technical Stack & Sovereignty
 

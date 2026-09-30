@@ -28,7 +28,7 @@ The graph does not update itself from SQL changes. Always re-sync after any `psq
 ---
 
 ## General behavior
-- Commit completed, verified units of work automatically (see "Git rules"); do not push unless told to
+- Commit and push completed, verified units of work automatically (see "Git rules")
 - Do not restart the server unless explicitly asked
 - Read any file fully before editing it
 - **Read actual files for current state; use git log only for history** (what changed when, what a file looked like before)
@@ -179,14 +179,14 @@ handle) — design for that ordering explicitly, don't assume the tidy sequence.
 
 ## Commits: automatic, with guardrails
 
-Commits need no approval. The user has never declined one, so asking first guarded nothing. Commit on your own when a unit of work is done and verified, then report it in one line (hash + what it covers).
+Commits and pushes need no approval (push added 2026-09-30). The user has never declined a commit, so asking first guarded nothing. When a unit of work is done and verified, commit and push on your own, then report it in one line (hash + what it covers).
 
 - **Stage an explicit file list — never `git add -u`, `git add -A`, or `git commit -a`.** Run `git status` first. If any changed file was not touched by this session (another session's work), leave it out and say so.
-- **Stop and ask instead of committing** if: the branch isn't the one intended, `git status` shows `.env` or other sensitive files, tests or checks for the change are failing, or the diff contains something unrelated to the task.
+- **Stop and ask instead of committing or pushing** if: the branch isn't the one intended, `git status` shows `.env` or other sensitive files, tests or checks for the change are failing, or the diff contains something unrelated to the task.
 - Commit message: short summary line, then a few lines on what and why.
 - After committing, run `git status` to confirm only the files you meant to commit left the tree.
-- **Push is separate and needs the user to say so** — the repo is public, so a push publishes. At a real milestone, offer it in one line ("push?"). Don't mention commit or push status otherwise; it isn't news.
-- If push fails, report the error and stop — do not force-push unless explicitly asked.
+- **Push to `origin` right after each commit.** The repo is public, so this publishes: the file-list and `.env` checks above are the safeguard, so don't skip them. Never force-push unless explicitly asked.
+- If push fails, report the error and stop. Don't mention commit or push status otherwise; it isn't news.
 
 ## Planetary Boundaries reference data
 

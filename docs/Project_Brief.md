@@ -2,19 +2,19 @@
 
 *Editable source for the content that renders live at `public/shared/project-brief/` (`#project-brief`). Edit here; mirror changes back into that HTML page so the two don't drift.*
 
-Causal is creating tooling for groups to launch and run their own platform cooperatives. Most software available to nonprofits and grassroots groups is rented from vendors with no stake in their mission, and the records inside it live in the vendor's database. Causal aims to replace that arrangement with shared infrastructure that the groups own and govern themselves. Causal itself is an initiative, not a cooperative. The groups that adopt the tooling form and govern their own.
+Causal.works is an initiative to develop platform cooperatives for nonprofits and coalitions working on the human-systems change needed to live within Earth's planetary boundaries — climate action, civic action, education, social work, cultural work, and other fields. These groups share a common set of operational needs. The cooperatives form around shared purpose, owning and governing their own private data infrastructure. Causal.works can be retired once the platform template propagates to self-managed cooperatives, though it's possible that it perpetuates as some form of shared infrastructure for a federation of cooperatives.
 
-The organizations it serves are any nonprofits, or coalitions forming around collaborative work and common needs. That includes climate action, civic action, social work, cultural work, and other fields. What they share is a common set of operational needs, and shared work they want to do together.
+Two problems compound each other. Many advocacy groups report limited leverage when acting in parallel: each runs campaigns, mobilizes members, and targets decision-makers independently, without coordinated timing or concentrated pressure. Meanwhile the data systems these groups rely on are rented from vendors with no stake in their mission, and their records sit in the vendor's database, outside their control. Groups that own the tools managing their data begin to leverage new power.
 
 The shift from rented software to shared ownership rests on three changes:
 
-- **Data sovereignty** — Each organization holds full control of its own records. Documents live in the organization's own Solid pod, not only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw.
+- **Data sovereignty** — Each organization holds full control of its own records. Documents live in the organization's own Solid pod, not only in a vendor's database, and access to them is something the organization grants, limits, and can withdraw. Today the platform still holds the credential that controls each pod; removing that is the main technical goal.
 - **Common needs framework** — The management tools (budgeting, grants, accounting, compliance) are built around the operational needs nonprofits share, so groups work from common structures instead of each improvising their own. Every organization's instance is completely private to it.
 - **Cooperative structure** — Collaboration happens in Workshop and the shared cooperative resources: the peer network, the work library, and the work pool. The organizations that use the tools shape those resources and, over time, help govern the platform. They are not a customer base a vendor draws revenue from.
 
-This is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure. That is how Causal itself is being built.
+This is newly realistic because AI-assisted development lets a very small team build and maintain infrastructure. The current build was created by an experienced nonprofit professional working with coding agents. A functioning version exists that now needs experienced human collaborators in platform architecture, app functionality, UI and UX design, systems frameworks, and rollout path.
 
-The current live build has two parts. **Cooperative** is the sector-neutral operational core. **Agency** is the first instance built on it, for grassroots advocacy and climate action. Agency shows what the underlying infrastructure produces when it is worked out fully within one field: it connects individual decision-making to leverage points and system-level intervention models grounded in these frameworks.
+The current live build has two parts. The **Cooperative** workspace is the sector-neutral operational core. It provides collaboration resources (peer network, library, work pool, and a workshop for systems analysis) alongside an enterprise management tool set: budgeting, accounting, fundraising, membership, sponsorship, compliance, and governance. **Agency** is a personal civic app that informs individual decision-making with leverage-point logic grounded in planetary boundaries science and the Earth4All turnarounds. It centralizes the actions people can take: where they bank and invest, petitions, comments on pending legislation, protests, volunteering, and advocacy to elected officials and proxies.
 
 ## The Operational Model
 
@@ -104,7 +104,7 @@ Institutional leadership experience at federated legal advocacy organizations po
 
 ## Unbuilt & Active Development Pipeline
 
-These are active engineering priorities or capabilities not yet built:
+Overall, the roadmap is to complete the tool set, integrate expert feedback and user testing, attain certifications, and roll out to a first cohort of real organizations. These are the active engineering priorities and capabilities not yet built:
 
 - **Pod sync beyond documents** — Generated reports are the next candidate; live data such as budgets would sync as periodic pod copies rather than being removed from Causal's database. Co-owned Workshop content would sync a copy to each participating organization's pod.
 - **Per-user Solid identity tied to roles** — Deriving an individual's pod permissions from their organization role and program scope, and verifying link recipients by Solid identity rather than email.

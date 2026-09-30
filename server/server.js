@@ -2299,39 +2299,65 @@ function requireAdmin(req, res, next) {
   });
 }
 
-// Demo visitor summary (migration 286). JSON. ?exclude_me=1 leaves out the requester's own
-// visits (works when this is opened from the same browser and network used to visit the demo).
+// Demo visitor summary (migration 286). Shared by GET /admin/demo-visits (JSON) and the /admin
+// page. `me` is the requester's own visitor hash to leave out, or null.
+async function loadDemoVisitSummary(me) {
+  const base = `FROM demo_visit_log WHERE is_bot = false AND ($1::text IS NULL OR visitor_hash <> $1)`;
+  const [totals, perDay, byEntry, referrers, bots] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits, MIN(visited_at) AS since,
+              (SELECT COUNT(*)::int FROM (SELECT visitor_hash ${base} GROUP BY visitor_hash
+                 HAVING COUNT(DISTINCT (visited_at AT TIME ZONE 'UTC')::date) > 1) r) AS returning_visitors
+       ${base}`, [me]),
+    pool.query(
+      `SELECT to_char((visited_at AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD') AS day, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
+       ${base} GROUP BY 1 ORDER BY 1`, [me]),
+    pool.query(
+      `SELECT entry, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
+       ${base} GROUP BY entry ORDER BY visitors DESC`, [me]),
+    pool.query(
+      `SELECT COALESCE(referrer_host, '(none)') AS referrer, COUNT(DISTINCT visitor_hash)::int AS visitors
+       ${base} GROUP BY 1 ORDER BY visitors DESC LIMIT 10`, [me]),
+    pool.query(`SELECT COUNT(*)::int AS bot_hits FROM demo_visit_log WHERE is_bot = true`),
+  ]);
+  return {
+    tracking_until: new Date(DEMO_VISIT_TRACKING_UNTIL).toISOString().slice(0, 10),
+    excluding_requester: !!me,
+    ...totals.rows[0],
+    bot_hits_excluded: bots.rows[0].bot_hits,
+    per_day: perDay.rows,
+    by_entry: byEntry.rows,
+    top_referrers: referrers.rows,
+  };
+}
+
+function renderDemoVisitsSection(v, excludeMe) {
+  if (!v) {
+    return '<h2>Demo visitors</h2><p style="font-size:12px;color:#6b7280;">Demo visit log unavailable (run db/migrations/286_demo_visit_log.sql).</p>';
+  }
+  const table = (heads, rows) =>
+    `<table style="max-width:520px;"><thead><tr>${heads.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+    (rows.length ? rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${heads.length}">No visits logged yet</td></tr>`) +
+    '</tbody></table>';
+  const since = v.since ? new Date(v.since).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '—';
+  const toggle = excludeMe
+    ? '<a href="/admin">Include my visits</a>'
+    : '<a href="/admin?exclude_me=1">Exclude my visits</a>';
+  return `<h2>Demo visitors</h2>
+<p style="font-size:12px;color:#6b7280;max-width:900px;">Distinct visitors to /demo, /demo-coop and /odi (migration 286). The demo is one shared account, so visitors are counted by a one-way hash of IP + browser; no addresses are stored. Crawlers are left out (${v.bot_hits_excluded} hits). Logging stops ${escapeHtml(v.tracking_until)}. ${toggle} &middot; <a href="/admin/demo-visits">JSON</a></p>
+<p style="font-size:14px;"><strong>${v.visitors}</strong> distinct visitors &middot; ${v.hits} entries &middot; ${v.returning_visitors} came back on another day &middot; since ${escapeHtml(since)}${excludeMe ? ' &middot; <em>your own visits excluded (this browser and network)</em>' : ''}</p>
+${table(['Day (UTC)', 'Visitors', 'Entries'], v.per_day.map((r) => [r.day, r.visitors, r.hits]))}
+${table(['Entry point', 'Visitors', 'Entries'], v.by_entry.map((r) => [r.entry, r.visitors, r.hits]))}
+${table(['Referrer', 'Visitors'], v.top_referrers.map((r) => [r.referrer, r.visitors]))}`;
+}
+
+// JSON form of the summary. ?exclude_me=1 leaves out the requester's own visits (works when this
+// is opened from the same browser and network used to visit the demo).
 app.get('/admin/demo-visits', requireAdmin, async (req, res) => {
   try {
     const key = await getDemoVisitKey();
     const me = req.query.exclude_me === '1' ? demoVisitorHash(req, key) : null;
-    const base = `FROM demo_visit_log WHERE is_bot = false AND ($1::text IS NULL OR visitor_hash <> $1)`;
-    const [totals, perDay, byEntry, referrers, bots] = await Promise.all([
-      pool.query(
-        `SELECT COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits, MIN(visited_at) AS since,
-                (SELECT COUNT(*)::int FROM (SELECT visitor_hash ${base} GROUP BY visitor_hash
-                   HAVING COUNT(DISTINCT (visited_at AT TIME ZONE 'UTC')::date) > 1) r) AS returning_visitors
-         ${base}`, [me]),
-      pool.query(
-        `SELECT (visited_at AT TIME ZONE 'UTC')::date AS day, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
-         ${base} GROUP BY 1 ORDER BY 1`, [me]),
-      pool.query(
-        `SELECT entry, COUNT(DISTINCT visitor_hash)::int AS visitors, COUNT(*)::int AS hits
-         ${base} GROUP BY entry ORDER BY visitors DESC`, [me]),
-      pool.query(
-        `SELECT COALESCE(referrer_host, '(none)') AS referrer, COUNT(DISTINCT visitor_hash)::int AS visitors
-         ${base} GROUP BY 1 ORDER BY visitors DESC LIMIT 10`, [me]),
-      pool.query(`SELECT COUNT(*)::int AS bot_hits FROM demo_visit_log WHERE is_bot = true`),
-    ]);
-    return res.json({
-      tracking_until: new Date(DEMO_VISIT_TRACKING_UNTIL).toISOString().slice(0, 10),
-      excluding_requester: !!me,
-      ...totals.rows[0],
-      bot_hits_excluded: bots.rows[0].bot_hits,
-      per_day: perDay.rows,
-      by_entry: byEntry.rows,
-      top_referrers: referrers.rows,
-    });
+    return res.json(await loadDemoVisitSummary(me));
   } catch (e) {
     console.error('GET /admin/demo-visits:', e.message);
     return res.status(500).json({ error: 'Could not load demo visits' });
@@ -3049,6 +3075,19 @@ app.get('/admin', requireAdmin, async (req, res) => {
       `<tr><td>${escapeHtml(pv.user_email)}</td><td><code style="font-size:12px;">${escapeHtml(pv.path)}</code></td><td style="font-size:11px;white-space:nowrap;">${fmtLastLogin(pv.created_at)}</td></tr>`
     ).join('');
 
+    const excludeMeOnPage = req.query.exclude_me === '1';
+    let demoVisitsHtml;
+    try {
+      const visitKey = await getDemoVisitKey();
+      demoVisitsHtml = renderDemoVisitsSection(
+        await loadDemoVisitSummary(excludeMeOnPage ? demoVisitorHash(req, visitKey) : null),
+        excludeMeOnPage
+      );
+    } catch (visitErr) {
+      console.warn('⚠️ /admin: demo visit summary failed (run db/migrations/286_demo_visit_log.sql):', visitErr.message);
+      demoVisitsHtml = renderDemoVisitsSection(null, false);
+    }
+
     res.set('Content-Type', 'text/html').set('Cache-Control', 'no-store').send(`<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Causal Admin</title>
@@ -3098,6 +3137,7 @@ ${coopAccessMigrationBanner}
 </form>
 <p style="font-size:11px;color:#9ca3af;max-width:560px;margin:-4px 0 10px;">Adds the email to the allowlist, creates the account, and emails them a link to set their password.</p>
 <table><thead><tr><th>Email</th><th>Status</th><th>Invited by</th><th>Causal address</th><th>Forwarding address</th><th>First login</th><th>Last login</th><th>Last platform access</th><th>Org count</th><th>Action count</th><th>NP access</th><th>User type</th><th>Action</th></tr></thead><tbody id="users-body">${rowsUsers || '<tr><td colspan="13">No users or invites</td></tr>'}</tbody></table>
+${demoVisitsHtml}
 <h2>Recent page views</h2>
 <p style="font-size:12px;color:#6b7280;max-width:900px;">Server-side page load log (migration 168) &mdash; recorded directly by the server, so it isn't affected by ad blockers the way the GA4 tag is. "Last login" above only updates on a fresh sign-in (session cookies last 30 days), while <strong>Last platform access</strong> reflects the most recent real page load. Covers every organizational page and the individual app shell; does not cover in-app tab switches within the individual app (those don't reload the page). Last 100 page loads across all users.</p>
 <table><thead><tr><th>User</th><th>Path</th><th>When</th></tr></thead><tbody id="page-views-body">${rowsRecentPageViews || '<tr><td colspan="3">No page views logged yet</td></tr>'}</tbody></table>

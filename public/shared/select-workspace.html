@@ -201,7 +201,11 @@
 <main id="workspace-main" style="visibility:hidden;">
     <div class="intro">
         <div class="eyebrow">CausalWorks Platform Coop Initiative</div>
-        <h1>Choose a workspace</h1>
+        <h1 id="workspace-heading">Choose a workspace</h1>
+    </div>
+
+    <div id="first-login-note" hidden style="max-width:640px; margin:0 auto 28px; padding:16px 20px; background:var(--surface-card); border:1px solid var(--border); border-left:4px solid var(--brand-dark); border-radius:var(--radius-md); font-size:15px; line-height:1.5;">
+        <strong>Start with either one.</strong> You can switch to the other anytime from the My account menu. Cooperative setup begins in the Turning Tide demo cooperative, which you join, and you can create your own organization from there.
     </div>
 
     <div class="workspace-grid">
@@ -215,8 +219,6 @@
             <div class="tagline">Personal app</div>
         </a>
     </div>
-
-    <p class="project-brief-link" id="first-login-note" hidden>Start with either one. You can switch to the other anytime from the My account menu. Cooperative setup begins in the Turning Tide demo cooperative, which you join, and you can create your own organization from there.</p>
 
     <p class="project-brief-link"><a href="/shared/project-brief/#project-brief" target="_blank" rel="noopener">Read the project brief &rarr;</a></p>
     <p class="project-brief-link"><a href="mailto:guy@causal.works">guy@causal.works</a></p>
@@ -261,6 +263,7 @@
                     document.getElementById('btn-coop').textContent = 'Set up Cooperative';
                     document.getElementById('btn-agency').textContent = 'Set up Agency';
                     document.getElementById('first-login-note').hidden = false;
+                    document.getElementById('workspace-heading').textContent = 'Choose where to start';
                 }
             }
             show();

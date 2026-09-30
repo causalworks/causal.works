@@ -2,7 +2,7 @@
 
 *Editable source for the content that renders live at `public/shared/project-brief/` (`#project-brief`). Edit here; mirror changes back into that HTML page so the two don't drift.*
 
-Causal.works is an initiative to develop platform cooperatives for nonprofits and coalitions working on the human-systems change needed to live within Earth's planetary boundaries — climate action, civic action, education, social work, cultural work, and other fields. These groups share a common set of operational needs. The cooperatives form around shared purpose, owning and governing their own private data infrastructure. Causal.works can be retired once the platform template propagates to self-managed cooperatives, though it's possible that it perpetuates as some form of shared infrastructure for a federation of cooperatives.
+Causal.works is an initiative to develop platform cooperatives for nonprofits and coalitions working on the human-systems change needed to live within Earth's planetary boundaries — climate action, civic action, education, social work, cultural work, and other fields. These groups share a common set of operational needs. The cooperatives form around shared purpose, owning and governing their own private data infrastructure.
 
 The project addresses two problems that compound each other. Many advocacy groups report limited leverage when acting in parallel: each runs campaigns, mobilizes members, and targets decision-makers independently, without coordinated timing or concentrated pressure. Meanwhile the data systems these groups rely on are rented from vendors with no stake in their mission, and their records sit in the vendor's database, outside their control. Cooperatives that own the tools managing their members' data begin to leverage new power.
 
@@ -26,6 +26,7 @@ Where things stand:
 - **Workshop** — Still developing, and not yet reviewed by a systems-change practitioner.
 - **Agency** — Its features are a mix of live, scaffolded, and aspirational. Action tagging is rudimentary today.
 - **Instance governance** — The curated multi-instance feed is documented but not built, and how advisors to new instances are admitted and held accountable is not yet decided.
+- **Role of Causal.works** — Causal.works can be retired once the platform template propagates to self-managed cooperatives, though it's possible that it perpetuates as some form of shared infrastructure for a federation of cooperatives.
 
 ## The Operational Model
 

@@ -2069,12 +2069,9 @@ app.post('/inbound', async (req, res) => {
     const actionUserIdForDb =
       actionSource === 'user' && org_id != null ? null : user_id;
 
-    // Full email text is stored only if the forwarding user opted in, and never on org-wide shared rows.
-    let rawContentForDb = null;
-    if (actionUserIdForDb != null) {
-      const keepRes = await pool.query(`SELECT keep_forwarded_email_text FROM users WHERE id = $1`, [user_id]).catch(() => ({ rows: [] }));
-      if (keepRes.rows[0]?.keep_forwarded_email_text) rawContentForDb = contentToAnalyze.substring(0, 10000);
-    }
+    // Full email text is kept only for platform-subscribed org mail (source 'causal'): organization emails, not personal mail.
+    // Mail sent to a user's personal Causal address (source 'user') is read but its text is not stored.
+    const rawContentForDb = actionSource === 'causal' ? contentToAnalyze.substring(0, 10000) : null;
 
     if (existingActionId) {
       await pool.query(

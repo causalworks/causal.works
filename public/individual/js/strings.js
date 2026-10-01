@@ -27,7 +27,7 @@ const INDIVIDUAL_STRINGS = {
   },
   movesTab: {
     sign: 'Sign',
-    attend: 'Attend',
+    attend: 'Events',
     volunteer: 'Volunteer',
     give: 'Give',
     vest: 'Assets',

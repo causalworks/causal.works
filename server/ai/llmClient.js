@@ -7,6 +7,8 @@
  * Defaults are Gemini 2.5 Flash for every task. Providers: gemini, mistral (text only so far; file
  * inputs and search grounding are Gemini-only). Adding one means adding an entry to PROVIDERS.
  *
+ * Optional LLM_FALLBACK_<TASK>=<provider> (and LLM_FALLBACK_MODEL_<TASK>) retries on that provider if the primary call throws.
+ *
  * Tasks: email_extract, intervention_suggest, org_summary, receipt_ocr, bill_invoice_ocr,
  * grant_contract_ocr, bank_pressure.
  */
@@ -17,8 +19,13 @@ require('dotenv').config();
 const DEFAULT_PROVIDER = 'gemini';
 const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash', mistral: 'mistral-small-latest' };
 
-function taskConfig(task) {
+function taskConfig(task, fallback = false) {
   const key = String(task).toUpperCase();
+  if (fallback) {
+    const provider = String(process.env[`LLM_FALLBACK_${key}`] || '').trim().toLowerCase();
+    if (!provider) return null;
+    return { provider, model: String(process.env[`LLM_FALLBACK_MODEL_${key}`] || DEFAULT_MODELS[provider] || '').trim() };
+  }
   const provider = String(process.env[`LLM_PROVIDER_${key}`] || DEFAULT_PROVIDER).trim().toLowerCase();
   const model = String(process.env[`LLM_MODEL_${key}`] || DEFAULT_MODELS[provider] || '').trim();
   return { provider, model };
@@ -100,8 +107,10 @@ const PROVIDERS = {
   },
 };
 
-function providerFor(task) {
-  const { provider, model } = taskConfig(task);
+function providerFor(task, fallback = false) {
+  const cfg = taskConfig(task, fallback);
+  if (!cfg) return null;
+  const { provider, model } = cfg;
   const impl = PROVIDERS[provider];
   if (!impl) throw new Error(`Unknown LLM provider "${provider}" for task ${task}`);
   return { impl, model };
@@ -120,7 +129,22 @@ function isConfigured(task) {
  * @returns {Promise<string>} raw response text (callers parse JSON themselves)
  */
 async function generate(task, input, opts = {}) {
-  const { impl, model } = providerFor(task);
+  const primary = providerFor(task);
+  const fb = providerFor(task, true);
+  const useFallback = fb && fb.impl !== primary.impl;
+  try {
+    const out = await generateWith(primary, task, input, opts);
+    if (useFallback && opts.json && !String(out || '').trim()) throw new Error('empty response');
+    return out;
+  } catch (e) {
+    // Optional per-task fallback (LLM_FALLBACK_<TASK>=gemini) so a provider outage does not fail the feature.
+    if (!useFallback) throw e;
+    console.warn(`LLM ${task}: primary provider failed (${String(e.message).slice(0, 80)}); using fallback`);
+    return generateWith(fb, task, input, opts);
+  }
+}
+
+async function generateWith({ impl, model }, task, input, opts) {
   const parts = typeof input === 'string'
     ? input
     : input.map((p) => (p.file

@@ -2321,7 +2321,8 @@ app.post('/admin/validate-org', async (req, res) => {
 
 function requireAdmin(req, res, next) {
   return requireAuth(pool)(req, res, () => {
-    if (!isAdminEmail(req.user.email)) {
+    // ADMIN_EMAIL (single address, also the admin mail recipient) or any account flagged users.is_platform_admin.
+    if (!isAdminEmail(req.user.email) && !req.user.is_platform_admin) {
       return res.status(401).send('Unauthorized');
     }
     noteStaffDevice(req, req.user.email).catch((err) => console.warn('⚠️ demo_visit_excluded insert failed:', err.message));

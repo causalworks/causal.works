@@ -50,6 +50,19 @@ const SESSION_UNATTENDED_TIMEOUT_MINUTES = 15;
 // defeating the extend-on-activity mechanism below.
 const SESSION_COOKIE_MAX_AGE_DAYS = 30;
 
+// Opt-in "stay signed in" for named accounts (PERSISTENT_SESSION_EMAILS, comma-separated, in .env;
+// empty/unset = nobody). For these accounts the server-side idle window is 30 days instead of
+// 30 minutes, so e.g. the /admin page doesn't ask for a login every time. Nothing else changes:
+// other accounts keep the normal window, the browser's unattended-logout timer on the org and
+// Agency pages (public/shared/js/idle-logout.js) is untouched, and the session still ends at the
+// cookie's 30-day ceiling or on logout. Intended for a trusted personal device only.
+const PERSISTENT_SESSION_MINUTES = 30 * 24 * 60;
+
+function persistentSessionEmails() {
+  return String(process.env.PERSISTENT_SESSION_EMAILS || '')
+    .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+}
+
 function sessionExpiryFromNow() {
   return new Date(Date.now() + SESSION_IDLE_TIMEOUT_MINUTES * 60 * 1000);
 }
@@ -75,12 +88,17 @@ function cookieExpiryFromNow() {
 function touchSession(pool, token, timeoutMinutes) {
   const minutes = Number(timeoutMinutes) > 0 ? Number(timeoutMinutes) : SESSION_IDLE_TIMEOUT_MINUTES;
   const debounce = Math.min(SESSION_TOUCH_DEBOUNCE_MINUTES, Math.floor(minutes / 2));
+  const persistentDebounce = Math.max(SESSION_TOUCH_DEBOUNCE_MINUTES, 60);
   pool.query(
-    `UPDATE sessions
-        SET expires_at = NOW() + ($2 || ' minutes')::interval
-      WHERE token = $1 AND used = FALSE AND expires_at > NOW()
-        AND expires_at <= NOW() + ($3 || ' minutes')::interval`,
-    [token, String(minutes), String(minutes - debounce)]
+    `UPDATE sessions s
+        SET expires_at = NOW() + ((CASE WHEN p.persistent THEN $5::text ELSE $2::text END) || ' minutes')::interval
+       FROM (SELECT s2.token, (LOWER(u.email) = ANY($4::text[])) AS persistent
+               FROM sessions s2 JOIN users u ON u.id = s2.user_id
+              WHERE s2.token = $1) p
+      WHERE s.token = p.token AND s.used = FALSE AND s.expires_at > NOW()
+        AND s.expires_at <= NOW() + ((CASE WHEN p.persistent THEN $6::text ELSE $3::text END) || ' minutes')::interval`,
+    [token, String(minutes), String(minutes - debounce), persistentSessionEmails(),
+     String(PERSISTENT_SESSION_MINUTES), String(PERSISTENT_SESSION_MINUTES - persistentDebounce)]
   ).catch((err) => console.error('touchSession failed:', err.message));
 }
 

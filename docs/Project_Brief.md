@@ -127,3 +127,13 @@ Overall, the roadmap is to complete the tool set, integrate expert feedback and 
 - **Agency financial and pledge tools** — Automated card and payee tracking for personal financial positions; aggregated bank and fund divestment pledges; bundled giving apportioned across followed organizations; user-added local and union officials.
 - **Worker cooperative and credit distribution** — Internal work-management and credit-tracking systems for worker cooperatives.
 - **Legislative and lobbying intelligence** — Professional-tier data services (Bloomberg Government, FiscalNote, Quorum), which need legal review of their display licensing before any integration.
+- **Payment execution** — Sending payments (ACH, check, card) from within the platform. Parked because of money-transmitter liability; recording payments made elsewhere already works.
+- **Multi-currency** — Support for organizations that hold and report in more than one currency, needed for a European build.
+- **Online donations through Stripe Connect** — Online giving, a donate page, and matching Stripe payouts to bank deposits.
+- **Federal award reporting** — A Schedule of Expenditures of Federal Awards report, and subaward tracking so the indirect-cost base can exclude subaward amounts correctly.
+- **Activity-level budgeting** — Entering and rolling up budget amounts at the activity level beneath a program.
+- **Platform instance record and founding organization** — A record naming each instance for the cooperative that launches it, and the founding organization responsible for its administration.
+- **Contracts module** — Contract tracking alongside Grants.
+- **Auditor access and finer roles** — A read-only auditor role and more granular permissions on financial work.
+- **Actuals source switch** — A screen to switch an organization's actuals between Xero and the internal ledger.
+- **Guided budget onboarding and migration** — A step-by-step setup wizard for importing an organization's existing budget data.

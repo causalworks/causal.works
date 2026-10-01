@@ -11,6 +11,8 @@ const path = require('path');
 const CONTENT_PATH = path.join(__dirname, '..', 'data', 'accounting-review.json');
 const PAGE_PATH = path.join(__dirname, 'accounting-review.html');
 
+// Only this login can enter decisions, responses and decision-log rows (the shared fields).
+const DECIDER_EMAIL = 'loopy@causal.works';
 const SHARED = 'shared';
 const ITEM_ID_RE = /^(?:[BPIQ]\d{2}|[AL]-\d{10,16})$/;
 const MINE_FIELDS = new Set([
@@ -36,6 +38,7 @@ function cleanData(body, allowed) {
 
 function registerAccountingReview(app, { pool, requireAdmin }) {
   const me = (req) => String(req.user.email).toLowerCase();
+  const canDecide = (req) => me(req) === DECIDER_EMAIL;
 
   app.get('/admin/accounting-review', requireAdmin, (req, res) => {
     res.type('html').send(fs.readFileSync(PAGE_PATH, 'utf8'));
@@ -46,7 +49,7 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
       const content = JSON.parse(fs.readFileSync(CONTENT_PATH, 'utf8'));
       const r = await pool.query(
         'SELECT item_id, reviewer, data, updated_at FROM accounting_review_entry ORDER BY item_id, reviewer');
-      return res.json({ content, me: me(req), entries: r.rows });
+      return res.json({ content, me: me(req), can_decide: canDecide(req), entries: r.rows });
     } catch (e) {
       console.error('GET /admin/api/accounting-review:', e.message);
       return res.status(500).json({ error: 'Could not load the review' });
@@ -60,6 +63,7 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     if (!ITEM_ID_RE.test(itemId)) return res.status(400).json({ error: 'Bad item id' });
     const scope = req.body && req.body.scope;
     if (scope !== 'mine' && scope !== 'shared') return res.status(400).json({ error: 'Bad scope' });
+    if (scope === 'shared' && !canDecide(req)) return res.status(403).json({ error: 'Only the admin can enter decisions' });
     const data = cleanData(req.body.data, scope === 'mine' ? MINE_FIELDS : SHARED_FIELDS);
     if (!data) return res.status(400).json({ error: 'Bad data' });
     const reviewer = scope === 'mine' ? me(req) : SHARED;
@@ -103,6 +107,7 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     }
     try {
       if (itemId.startsWith('L-')) {
+        if (!canDecide(req)) return res.status(403).json({ error: 'Only the admin can edit the decision log' });
         await pool.query('DELETE FROM accounting_review_entry WHERE item_id = $1', [itemId]);
       } else {
         const own = await pool.query(

@@ -46,6 +46,7 @@
   .fields select, .fields textarea, .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong, #d1cfc9); border-radius: var(--radius-sm, 6px); font: inherit; background: #fffdf3; }
   .fields .sh select, .fields .sh textarea, .fields .sh input { background: var(--surface-card, #fff); }
   .fields textarea { min-height: 54px; resize: vertical; }
+  .fields [disabled] { background: var(--surface-active, #f0eee8) !important; color: var(--text-muted, #9ca3af); cursor: not-allowed; }
   .oth { margin-top: 10px; padding: 8px 10px; background: var(--surface-page, #f7f7f5); border-radius: var(--radius-sm, 6px); font-size: 13px; }
   .oth + .oth { margin-top: 6px; }
   .oth .kv { margin: 3px 0 0; }
@@ -124,7 +125,7 @@
   ];
   var ANSWER_KEYS = ['works', 'priority', 'answer', 'comments', 'issue'];
 
-  var content = null, entries = {}, me = '', active = 'readme';
+  var content = null, entries = {}, me = '', canDecide = false, active = 'readme';
   var filt = { q: '', area: '', open: false, cmp: 'any' };
   var timers = {}, pending = {};
   var statusEl = document.getElementById('status');
@@ -196,17 +197,18 @@
   }
 
   function fieldHtml(f, id, val, off) {
+    if (f.sh && !canDecide) off = 'decision';
     var cls = (f.sh ? 'sh' : 'mine') + (f.wide ? ' wide' : '');
     var dom = 'f_' + id + '_' + f.k;
     var attrs = ' id="' + dom + '" data-id="' + id + '" data-k="' + f.k + '" data-scope="' + (f.sh ? 'shared' : 'mine') + '"';
     var inner;
     if (f.t === 's') {
-      inner = '<select' + attrs + '><option value=""></option>' +
+      inner = '<select' + attrs + (off ? ' disabled' : '') + '><option value=""></option>' +
         f.o.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
     } else if (f.t === 'i') {
-      inner = '<input' + attrs + ' value="' + esc(val) + '" maxlength="4000">';
+      inner = '<input' + attrs + ' value="' + esc(val) + '" maxlength="4000"' + (off ? ' disabled' : '') + '>';
     } else {
-      inner = '<textarea' + attrs + ' maxlength="4000"' + (off ? ' disabled placeholder="Write your answer first"' : '') + '>' + esc(val) + '</textarea>';
+      inner = '<textarea' + attrs + ' maxlength="4000"' + (off ? ' disabled placeholder="' + (off === 'decision' ? 'Only the admin enters decisions' : 'Write your answer first') + '"' : '') + '>' + esc(val) + '</textarea>';
     }
     return '<div class="' + cls + '"><label for="' + dom + '">' + esc(f.l) + '</label>' + inner + '</div>';
   }
@@ -246,7 +248,7 @@
     if (it.topic) h += '<span class="chip">' + esc(it.topic) + '</span>';
     var t = titleOf(it);
     if (t) h += '<span class="title">' + esc(t) + '</span>';
-    if (def.add) h += '<button type="button" class="act del" data-del="' + it.id + '">Delete</button>';
+    if (def.add && !(def.key === 'log' && !canDecide)) h += '<button type="button" class="act del" data-del="' + it.id + '">Delete</button>';
     h += '</div>';
     var w = whatOf(it);
     if (w) h += '<p class="what">' + esc(w) + '</p>';
@@ -269,7 +271,7 @@
       else h += '<p>' + esc(r.text) + '</p>';
     });
     h += '<h2>TWO OF US, SEPARATE ANSWERS</h2>';
-    h += '<p>Each of us has our own answers, saved under our own login. You can\'t overwrite each other. Decisions, responses and the decision log are shared, because those are for both of us.</p>';
+    h += '<p>Each of us has our own answers, saved under our own login. You can\'t overwrite each other. Decisions, responses and the decision log are shared by both of us, and only the admin enters them. The rest is greyed out for everyone else.</p>';
     h += '<p>On each card, the other person\'s answer stays hidden until you\'ve answered it yourself, so we don\'t anchor on each other. (The checkbox at the top turns that off.) The Compare tab puts everyone\'s answers side by side and flags where they differ.</p>';
     h += '<p>Answers save as you type and are stored in the database.</p></div>';
     return h;
@@ -299,7 +301,7 @@
     var all = compareItems();
     var people = {};
     Object.keys(entries).forEach(function (id) { Object.keys(entries[id]).forEach(function (r) { if (r !== SHARED) people[r] = 1; }); });
-    var h = '<p class="note">Everyone\'s answers side by side. Amber means two people picked different ratings. Decisions are shared, so either of you can write one here.</p>';
+    var h = '<p class="note">Everyone\'s answers side by side. Amber means two people picked different ratings. Decisions are shared, and only the admin can enter them.</p>';
     h += '<div class="bar"><select id="cmpf">' + [['any', 'Everything answered'], ['differ', 'Where we differ'], ['theirs', 'They answered, I haven\'t'], ['mine', 'I answered, they haven\'t']].map(function (o) {
       return '<option value="' + o[0] + '"' + (filt.cmp === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
     }).join('') + '</select></div>';
@@ -349,7 +351,9 @@
     its.forEach(function (i) { var a = i.area || i.topic; if (a) areas[a] = 1; });
     h += '<div class="bar">';
     if (def.add) {
-      h += '<button type="button" class="act" id="add">+ Add ' + (def.add === 'A' ? 'a gap or suggestion' : 'a decision') + '</button>';
+      var locked = def.add === 'L' && !canDecide;
+      h += '<button type="button" class="act" id="add"' + (locked ? ' disabled' : '') + '>+ Add ' + (def.add === 'A' ? 'a gap or suggestion' : 'a decision') + '</button>';
+      if (locked) h += '<span class="note" style="margin:0">Only the admin can add decisions.</span>';
     } else {
       h += '<input type="search" id="q" placeholder="Search…" value="' + esc(filt.q) + '">';
       h += '<select id="area"><option value="">All areas</option>' + Object.keys(areas).sort().map(function (a) { return '<option' + (a === filt.area ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select>';
@@ -500,7 +504,7 @@
   fetch('/admin/api/accounting-review', { credentials: 'same-origin' })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (j) {
-      content = j.content; me = j.me;
+      content = j.content; me = j.me; canDecide = !!j.can_decide;
       j.entries.forEach(function (r) { entries[r.item_id] = entries[r.item_id] || {}; entries[r.item_id][r.reviewer] = r.data || {}; });
       setStatus('Loaded');
       render();

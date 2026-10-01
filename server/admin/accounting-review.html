@@ -37,7 +37,6 @@
   .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border, #e8e6e0); }
   .fields .wide { grid-column: 1 / -1; }
   .fields label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary, #5a5955); margin-bottom: 2px; }
-  .fields .bk label::after { content: " · bookkeeper"; text-transform: none; font-weight: 400; }
   .fields select, .fields textarea, .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong, #d1cfc9); border-radius: var(--radius-sm, 6px); font: inherit; background: #fffdf3; }
   .fields .own select, .fields .own textarea, .fields .own input { background: var(--surface-card, #fff); }
   .fields textarea { min-height: 54px; resize: vertical; }
@@ -79,31 +78,31 @@
       { k: 'works', l: 'Does it work?', t: 's', o: WORKS, bk: 1 },
       { k: 'priority', l: 'Priority to fix', t: 's', o: NEED, bk: 1 },
       { k: 'comments', l: 'Comments / what you would change', t: 't', bk: 1, wide: 1 },
-      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1 } ] },
     { key: 'planned', label: 'Planned, unbuilt', fields: [
       { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED, bk: 1 },
       { k: 'comments', l: 'Comments', t: 't', bk: 1, wide: 1 },
-      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1 } ] },
     { key: 'ideas', label: 'Ideas', fields: [
       { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED, bk: 1 },
       { k: 'comments', l: 'Comments / how you do it today', t: 't', bk: 1, wide: 1 },
-      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1 } ] },
     { key: 'questions', label: 'Questions', fields: [
       { k: 'answer', l: 'Answer', t: 't', bk: 1, wide: 1 },
       { k: 'reasoning', l: 'Reasoning / source', t: 't', bk: 1, wide: 1 },
-      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1 } ] },
     { key: 'additions', label: 'Their additions', add: 'A', fields: [
       { k: 'area', l: 'Area', t: 'i', bk: 1 },
       { k: 'frequency', l: 'How often?', t: 's', o: FREQ, bk: 1 },
       { k: 'priority', l: 'Priority', t: 's', o: NEED, bk: 1 },
       { k: 'issue', l: 'What is missing or wrong', t: 't', bk: 1, wide: 1 },
       { k: 'example', l: 'Example / how you handle it today', t: 't', bk: 1, wide: 1 },
-      { k: 'response', l: 'Owner response', t: 't', wide: 1 } ] },
+      { k: 'response', l: 'Response', t: 't', wide: 1 } ] },
     { key: 'log', label: 'Decision log', add: 'L', fields: [
       { k: 'date', l: 'Date', t: 'i' }, { k: 'items', l: 'Item IDs', t: 'i' },
       { k: 'who', l: 'Who decided', t: 'i' },
       { k: 'decision', l: 'Decision', t: 't', wide: 1 }, { k: 'reasoning', l: 'Reasoning', t: 't', wide: 1 },
-      { k: 'build', l: 'Build status', t: 's', o: BUILD }, { k: 'verified', l: 'Verified by bookkeeper?', t: 's', o: YESNO } ] }
+      { k: 'build', l: 'Build status', t: 's', o: BUILD }, { k: 'verified', l: 'Verified?', t: 's', o: YESNO } ] }
   ];
   var ANSWER_KEYS = ['works', 'priority', 'answer', 'comments', 'issue', 'decision'];
 

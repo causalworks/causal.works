@@ -622,7 +622,7 @@
    "id": "I02",
    "area": "Month-end",
    "idea": "Lock by month, not only fiscal year",
-   "why": "Today the lock is by fiscal year. Bookkeepers normally lock each closed month.",
+   "why": "Today the lock is by fiscal year. Most bookkeepers lock each closed month.",
    "size": "Medium",
    "source": "Gap vs. QBO/Xero lock dates"
   },
@@ -750,7 +750,7 @@
    "id": "I18",
    "area": "Allocation",
    "idea": "Shared-cost allocation engine (rent, utilities, admin) by percent, headcount, square footage",
-   "why": "Allocation schedules exist for indirect costs; ask whether bookkeepers want monthly posted allocations to programs and funders.",
+   "why": "Allocation schedules exist for indirect costs; do you want monthly posted allocations to programs and funders.",
    "size": "Medium",
    "source": "Functional expense practice"
   },
@@ -774,7 +774,7 @@
    "id": "I21",
    "area": "Reports",
    "idea": "Trial balance and general ledger detail reports",
-   "why": "No standalone trial balance or GL detail report found in Reports. Bookkeepers and auditors ask for both first.",
+   "why": "No standalone trial balance or GL detail report found in Reports. Bookkeepers and auditors usually ask for both first.",
    "size": "Small",
    "source": "Gap checked 2026-10-01"
   },
@@ -917,7 +917,7 @@
   {
    "id": "I39",
    "area": "Platform",
-   "idea": "Bookkeeper workspace across several client orgs",
+   "idea": "A workspace for bookkeepers across several client orgs",
    "why": "One login, many client nonprofits, with a work queue (what's unreconciled, what's overdue for close). The org-membership model is per-org today.",
    "size": "Large",
    "source": "Plan notes multi-org user case"
@@ -1031,7 +1031,7 @@
   {
    "id": "Q17",
    "topic": "Naming",
-   "question": "Do the labels (Cash Coding, Gift Postings, Board Designations, Find & Recode) make sense to a bookkeeper, or do you use different terms?",
+   "question": "Do the labels (Cash Coding, Gift Postings, Board Designations, Find & Recode) make sense to you, or do you use different terms?",
    "why": "Our labels came from Xero/Aplos and our own terms."
   },
   {
@@ -1049,35 +1049,35 @@
  ],
  "readme": [
   {
-   "text": "Accounting module — bookkeeper review workbook",
+   "text": "Accounting module review",
    "kind": "title"
   },
   {
-   "text": "Prepared 2026-10-01. Source: Causal's own plan files, specs and review notes, checked against the live code on that date. Nothing here has been shared outside the owner yet.",
+   "text": "Written 2026-10-01 from our own plans, specs and notes, checked against the live code that day. Nothing here has gone outside the team.",
    "kind": null
   },
   {
-   "text": "WHAT WE ARE ASKING",
+   "text": "WHAT I'D LOVE YOUR TAKE ON",
    "kind": "h"
   },
   {
-   "text": "1. Tell us whether what is already built matches how a working bookkeeper actually does the job (tab 'Built - Review').",
+   "text": "1. Built: does what's already there match how you actually do the job?",
    "kind": null
   },
   {
-   "text": "2. Tell us which of the planned-but-unbuilt items matter in practice, and in what order (tab 'Planned - Unbuilt').",
+   "text": "2. Planned, unbuilt: which of these matter in real life, and in what order?",
    "kind": null
   },
   {
-   "text": "3. React to ideas we have not committed to (tab 'Ideas - Aspirational'). These are suggestions from outside research, not promises.",
+   "text": "3. Ideas: things we haven't committed to. Some are from outside research, some are just 'what would a good tool do'. React freely.",
    "kind": null
   },
   {
-   "text": "4. Answer the accounting-judgment questions we could not settle from published sources (tab 'Questions').",
+   "text": "4. Questions: accounting judgment calls I couldn't settle from published sources.",
    "kind": null
   },
   {
-   "text": "5. Add anything we missed (tab 'Their Additions').",
+   "text": "5. Their additions: anything we missed.",
    "kind": null
   },
   {
@@ -1085,63 +1085,63 @@
    "kind": "h"
   },
   {
-   "text": "Yellow columns are for the bookkeeper. Grey/white columns are ours. Use the dropdowns where offered; free-text comments are the most valuable part.",
+   "text": "The yellow fields are yours. Answers save as you type. Comments are worth more than ratings.",
    "kind": null
   },
   {
-   "text": "Items marked 'Verify' in the 'Confidence' column are claims from our notes we have not re-checked against the running app. Treat them as questions, not facts.",
+   "text": "Anything marked 'Verify' is something from our notes I haven't re-checked against the running app, so treat it as a question, not a fact.",
    "kind": null
   },
   {
-   "text": "Please say what you would do in your own practice (QuickBooks, Xero, Aplos, spreadsheets), not what you think we want to hear. 'We would never use that' is a useful answer.",
+   "text": "Tell me what you'd really do (QuickBooks, Xero, Aplos, spreadsheets), not what you think we want to hear. 'I'd never use that' is a great answer.",
    "kind": null
   },
   {
-   "text": "PROCESS (suggested, about 4 sessions over 3-4 weeks)",
+   "text": "A SUGGESTED FLOW (about 4 sessions over 3-4 weeks)",
    "kind": "h"
   },
   {
-   "text": "Step 0 - Setup (owner, 30 min): give the bookkeeper a login to the Demo Company workspace (confirm the current slug first; it changes if the org is renamed). Send this sheet plus docs/Grant_Accounting_Test_Walkthrough.md. Do not give access to any real org's data.",
+   "text": "0. Setup (30 min): get you a login to the Demo Company workspace (I'll confirm the current slug first, it changes if the org is renamed) and send you docs/Grant_Accounting_Test_Walkthrough.md. Demo data only.",
    "kind": null
   },
   {
-   "text": "Step 1 - Guided tour (60-90 min, screen share): walk Accounting tab by tab in the order on 'Built - Review'. Bookkeeper talks aloud while we take notes straight into the sheet. Goal: first reactions, not detailed review.",
+   "text": "1. Tour (60-90 min, screen share): we go through Accounting tab by tab in the order on the Built tab. Think out loud; I'll take notes straight into this page. First reactions only.",
    "kind": null
   },
   {
-   "text": "Step 2 - Solo hands-on (bookkeeper, 2-4 hours over a week): run a month-end in the demo org (code bank lines, enter a bill, an invoice, an expense claim, a depreciation run, lock the month/year). Fill in the yellow columns on 'Built - Review'.",
+   "text": "2. Hands-on (2-4 hours over a week, on your own): run a month-end in the demo org: code bank lines, enter a bill, an invoice and an expense claim, run depreciation, lock the year. Fill in the Built tab as you go.",
    "kind": null
   },
   {
-   "text": "Step 3 - Triage session (60 min): go through 'Planned - Unbuilt' and 'Ideas' together. Bookkeeper rates each; we agree a short ranked list (aim for no more than 8 items) and mark them in the 'Decision' column.",
+   "text": "3. Triage (60 min): go through Planned and Ideas together, rate each, and agree a short ranked list (8 items or fewer). Mark them in the Decision field.",
    "kind": null
   },
   {
-   "text": "Step 4 - Judgment questions (45 min): the 'Questions' tab. These need a professional opinion (GAAP presentation, internal controls for small orgs). Record the answer and the reasoning, not just yes/no.",
+   "text": "4. Judgment calls (45 min): the Questions tab. These want an opinion with the reasoning, not just yes or no.",
    "kind": null
   },
   {
-   "text": "Step 5 - Build, then re-review: we build the ranked list, the bookkeeper re-tests each shipped item and flips its status to Verified. Repeat from Step 3 with the next batch.",
+   "text": "5. Build, then re-test: I build the ranked list, you re-test each shipped item, and we mark it verified. Then repeat from step 3.",
    "kind": null
   },
   {
-   "text": "RULES OF THE ROAD",
+   "text": "GROUND RULES",
    "kind": "h"
   },
   {
-   "text": "- The bookkeeper is reviewing, not approving payroll or posting real books. Use demo data only until we agree otherwise.",
+   "text": "- Demo data only until we agree otherwise.",
    "kind": null
   },
   {
-   "text": "- Anything touching what the app does with real money (payment execution) is deliberately parked; ignore it unless you have a strong view.",
+   "text": "- Moving money from inside the app (payment execution) is parked on purpose. Ignore it unless you have a strong view.",
    "kind": null
   },
   {
-   "text": "- Causal posts to the ledger only after a person confirms inside Accounting. If that feels like extra friction compared with your usual tool, say so on the 'Questions' tab (Q1).",
+   "text": "- Entries post to the ledger only after someone confirms them inside Accounting. If that feels like extra friction next to your usual tool, say so on Questions (second one).",
    "kind": null
   },
   {
-   "text": "- When a comment becomes a decision, copy it into the 'Decision' column with a date so we do not re-argue it.",
+   "text": "- When a comment turns into a decision, put it in the Decision field with a date so we don't re-argue it.",
    "kind": null
   },
   {
@@ -1149,7 +1149,7 @@
    "kind": "h"
   },
   {
-   "text": "Built - Review | Planned - Unbuilt | Ideas - Aspirational | Questions | Their Additions | Decision Log",
+   "text": "Built | Planned, unbuilt | Ideas | Questions | Their additions | Decision log",
    "kind": null
   }
  ]

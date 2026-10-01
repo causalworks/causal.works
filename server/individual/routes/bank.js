@@ -4,6 +4,7 @@ const { requireAuth } = require('../../auth');
 const { removeBankSegmentFromCsv, extractUsStateFromAddress } = require('../utils');
 const { BANK_FLAG_DATA } = require('../../data/bank-flag-data');
 const { BANK_ALTERNATIVES } = require('../../data/bank-alternatives');
+const { generateGrounded, isConfigured } = require('../../ai/llmClient');
 
 function getFlagKeyAndData(institutionName) {
   if (!institutionName) return { flag_key: null, flagData: null };
@@ -155,8 +156,7 @@ function registerBankRoutes(app, pool) {
   app.get('/api/bank/pressure', requireAuth(pool), async (req, res) => {
     const bank = String(req.query.bank || '').trim();
     if (!bank) return res.status(400).json({ results: [] });
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.json({ results: [] });
+    if (!isConfigured('bank_pressure')) return res.json({ results: [] });
 
     const prompt = `Find 2-3 current (2025-2026) campaigns, shareholder resolutions, or divestment
 actions targeting ${bank} specifically for its fossil fuel financing.
@@ -165,22 +165,7 @@ url, source (org name), and one sentence description. Return as JSON array,
 no markdown, no preamble.`;
 
     try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
-        {
-          method: 'POST',
-          signal: AbortSignal.timeout(8000),
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tools: [{ google_search: {} }],
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      if (!r.ok) return res.json({ results: [] });
-      const data = await r.json().catch(() => null);
-      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || '').join('\n').trim() || '';
+      const text = (await generateGrounded('bank_pressure', prompt, { json: true, timeoutMs: 8000 })).trim();
       if (!text) return res.json({ results: [] });
       const parsed = JSON.parse(text);
       if (!Array.isArray(parsed)) return res.json({ results: [] });

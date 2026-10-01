@@ -13,18 +13,10 @@
  * :vendor-coding-suggestion / :customer-coding-suggestion), not by OCR guessing a GL account.
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../../ai/llmClient');
 
-let cachedModel = null;
 function getModel() {
-  if (cachedModel) return cachedModel;
-  if (!process.env.GEMINI_API_KEY) return null;
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  cachedModel = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { responseMimeType: 'application/json' },
-  });
-  return cachedModel;
+  return isConfigured('bill_invoice_ocr');
 }
 
 function buildPrompt(kind) {
@@ -66,11 +58,10 @@ async function extractBillOrInvoiceFields(fileBuffer, mimeType, kind) {
   }
 
   try {
-    const result = await model.generateContent([
+    const textResponse = await generate('bill_invoice_ocr', [
       { text: buildPrompt(kind) },
-      { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-    ]);
-    const textResponse = result.response.text();
+      { file: { buffer: fileBuffer, mimeType } },
+    ], { json: true });
     if (!textResponse) return { extracted: null, error: 'No response from document scanner.' };
 
     const parsed = JSON.parse(textResponse.trim());

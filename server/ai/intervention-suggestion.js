@@ -1,25 +1,17 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
+const { generate } = require('./llmClient');
 const { MEADOWS_LEVELS } = require('../data/meadows-leverage');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  generationConfig: {
-    responseMimeType: 'application/json',
-    // Classification task, not creative writing — a lower temperature cuts
-    // down on wildly-off outlier picks (e.g. calling a lending-pressure
-    // campaign a "stock" instead of a feedback/rule question) while still
-    // leaving genuine ambiguity between adjacent levels visible rather than
-    // papered over. See leverage-level discussion: 0.2 mostly converges on
-    // one answer for a clear-cut case, but doesn't fully erase disagreement
-    // on cases that are legitimately underspecified by the input text.
-    temperature: 0.2,
-  },
-});
+// Classification task, not creative writing — a lower temperature cuts
+// down on wildly-off outlier picks (e.g. calling a lending-pressure
+// campaign a "stock" instead of a feedback/rule question) while still
+// leaving genuine ambiguity between adjacent levels visible rather than
+// papered over. See leverage-level discussion: 0.2 mostly converges on
+// one answer for a clear-cut case, but doesn't fully erase disagreement
+// on cases that are legitimately underspecified by the input text.
+const GENERATION_OPTS = { json: true, temperature: 0.2 };
 
 const LEVELS_TEXT = MEADOWS_LEVELS.map(lvl =>
   `${lvl.level}. ${lvl.label} — ${lvl.description}${lvl.examples ? ' Examples: ' + lvl.examples : ''}`
@@ -72,8 +64,7 @@ Return a JSON object with exactly these fields:
   "effect_estimate": "1-2 sentence draft per TASK 3"
 }`;
 
-  const result = await model.generateContent(prompt);
-  const textResponse = result.response.text();
+  const textResponse = await generate('intervention_suggest', prompt, GENERATION_OPTS);
   if (!textResponse) throw new Error('Empty AI response');
 
   const parsed = JSON.parse(textResponse.trim());

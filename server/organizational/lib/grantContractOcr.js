@@ -8,18 +8,10 @@
  * review and correct before anything is POSTed to org_grants.
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../../ai/llmClient');
 
-let cachedModel = null;
 function getModel() {
-  if (cachedModel) return cachedModel;
-  if (!process.env.GEMINI_API_KEY) return null;
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  cachedModel = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { responseMimeType: 'application/json' },
-  });
-  return cachedModel;
+  return isConfigured('grant_contract_ocr');
 }
 
 const PROMPT = `You are reading a scanned grant agreement, award letter, or contract for a nonprofit's Grants/Funders tracker. Extract what you can read with confidence. Return ONLY a JSON object with this exact shape:
@@ -63,11 +55,10 @@ async function extractGrantContractFields(fileBuffer, mimeType) {
   }
 
   try {
-    const result = await model.generateContent([
+    const textResponse = await generate('grant_contract_ocr', [
       { text: PROMPT },
-      { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-    ]);
-    const textResponse = result.response.text();
+      { file: { buffer: fileBuffer, mimeType } },
+    ], { json: true });
     if (!textResponse) return { extracted: null, error: 'No response from contract scanner.' };
 
     const parsed = JSON.parse(textResponse.trim());

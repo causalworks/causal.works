@@ -1,15 +1,6 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 require('dotenv').config();
+const { generate } = require('./llmClient');
 const { TURNAROUND_ALIASES, VALID_PARAMETERS } = require('../data/turnarounds');
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json",
-  },
-});
 
 // ------------------------------------------------------------
 // E4A FRAMEWORK — 5 TURNAROUNDS
@@ -270,8 +261,7 @@ Content to analyze:
 ${contentToAnalyze}`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const textResponse = result.response.text();
+    const textResponse = await generate('email_extract', prompt, { json: true });
 
     if (!textResponse) throw new Error("Empty AI response");
 

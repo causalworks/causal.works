@@ -14,18 +14,10 @@
  * read -- always resolves to { extracted, error }.
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../../ai/llmClient');
 
-let cachedModel = null;
 function getModel() {
-  if (cachedModel) return cachedModel;
-  if (!process.env.GEMINI_API_KEY) return null;
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  cachedModel = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: { responseMimeType: 'application/json' },
-  });
-  return cachedModel;
+  return isConfigured('receipt_ocr');
 }
 
 const PROMPT = `You are reading a scanned receipt or invoice image for a nonprofit staff/board expense reimbursement claim. Extract what you can read with confidence. Return ONLY a JSON object with this exact shape:
@@ -68,11 +60,10 @@ async function extractReceiptFields(fileBuffer, mimeType) {
   }
 
   try {
-    const result = await model.generateContent([
+    const textResponse = await generate('receipt_ocr', [
       { text: PROMPT },
-      { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-    ]);
-    const textResponse = result.response.text();
+      { file: { buffer: fileBuffer, mimeType } },
+    ], { json: true });
     if (!textResponse) return { extracted: null, error: 'No response from receipt scanner.' };
 
     const parsed = JSON.parse(textResponse.trim());

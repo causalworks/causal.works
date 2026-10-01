@@ -1,16 +1,12 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { generate, isConfigured } = require('../../ai/llmClient');
 
-const MODEL = 'gemini-2.5-flash';
 const CACHE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — action content changes faster than nonprofit financials
 const ACTION_LIMIT = 15;
 
 function getModel() {
-  const key = String(process.env.GEMINI_API_KEY || '').trim();
-  if (!key) return null;
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({ model: MODEL });
+  return isConfigured('org_summary');
 }
 
 async function generateActivitySummary(orgName, actions) {
@@ -28,11 +24,7 @@ async function generateActivitySummary(orgName, actions) {
   const prompt = `You are summarizing a nonprofit/advocacy organization's recent activity for a supporter who wants to understand what the org actually does, at a glance. Given these recent actions from "${orgName}" (JSON below), write exactly 1-2 sentences (max ~40 words) describing what they're working on right now. If their activity goes beyond petitions (e.g. boycotts, comment periods, lobbying, direct contact campaigns, litigation, volunteering), call that out specifically — that's the most useful signal for a supporter deciding how deep this org's work goes. Do not invent facts not in the data. Do not use the word "petition" if all they do is petitions — just describe the topic focus instead. Data: ${JSON.stringify(payload)}`;
 
   try {
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini API timeout')), 15000)),
-    ]);
-    let t = result.response && result.response.text ? result.response.text() : '';
+    let t = await generate('org_summary', prompt, { timeoutMs: 15000 });
     t = String(t || '').trim().replace(/\s+/g, ' ');
     if (!t) return null;
     if (t.length > 300) t = `${t.slice(0, 297)}...`;
@@ -115,11 +107,7 @@ async function generateFirstEmailSummary(pool, orgId, orgName) {
   const prompt = `You are summarizing a nonprofit/advocacy organization's work for a supporter who wants to understand what the org actually does, at a glance. This is the earliest email we have on file from "${orgName}" (subject + preview, not a formal petition/ask). Write exactly 1-2 sentences (max ~40 words) describing what they do, based only on this text — if it doesn't clearly describe a mission, say so briefly rather than guessing. Subject: ${first.subject || ''}\nPreview: ${first.preview || ''}`;
 
   try {
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini API timeout')), 15000)),
-    ]);
-    let t = result.response && result.response.text ? result.response.text() : '';
+    let t = await generate('org_summary', prompt, { timeoutMs: 15000 });
     t = String(t || '').trim().replace(/\s+/g, ' ');
     if (!t) return null;
     if (t.length > 300) t = `${t.slice(0, 297)}...`;
@@ -142,11 +130,7 @@ async function generateWebsiteSummary(orgName, websiteUrl) {
   const prompt = `You are summarizing a nonprofit/advocacy organization's work for a supporter who wants to understand what the org actually does, at a glance. Given this raw text scraped from "${orgName}"'s homepage, write exactly 1-2 sentences (max ~40 words) describing what they do. Do not invent facts not present in the text — if the text doesn't clearly describe a mission, say so briefly rather than guessing. Homepage text: ${pageText}`;
 
   try {
-    const result = await Promise.race([
-      model.generateContent(prompt),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Gemini API timeout')), 15000)),
-    ]);
-    let t = result.response && result.response.text ? result.response.text() : '';
+    let t = await generate('org_summary', prompt, { timeoutMs: 15000 });
     t = String(t || '').trim().replace(/\s+/g, ' ');
     if (!t) return null;
     if (t.length > 300) t = `${t.slice(0, 297)}...`;

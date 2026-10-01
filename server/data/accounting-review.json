@@ -1,0 +1,1156 @@
+{
+ "built": [
+  {
+   "id": "B01",
+   "area": "Dashboard",
+   "feature": "Accounting dashboard",
+   "what": "Summary tiles and recent-activity feed for the org's books.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B02",
+   "area": "Transactions",
+   "feature": "Ledger transactions list",
+   "what": "Double-entry ledger; every posting has balanced debit/credit lines (database enforces balance). List, void, approve.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B03",
+   "area": "Transactions",
+   "feature": "Manual journal entry",
+   "what": "Multi-line entry form with a live debits-vs-credits total and balanced check. Manual-source entries are flagged in the review queue. No templates, attachments, recurrence or auto-reversal.",
+   "confidence": "Checked 2026-10-01"
+  },
+  {
+   "id": "B04",
+   "area": "Transactions",
+   "feature": "Void and correcting entries",
+   "what": "Posted entries are never edited; a void or reversing entry is posted instead. Field-level audit log on every ledger write.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B05",
+   "area": "Transactions",
+   "feature": "Approval policy + flagged review",
+   "what": "Configurable approval rules; export of policy; a review queue of flagged transactions.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B06",
+   "area": "Transactions",
+   "feature": "Federal award second approver",
+   "what": "Spending against a grant marked federal needs a different person to approve (2 CFR 200.303). Grant must be flagged federal for it to fire.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B07",
+   "area": "Transactions",
+   "feature": "Statistical accounts",
+   "what": "Non-dollar KPIs (clients served) kept in the chart of accounts but excluded from all dollar totals.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B08",
+   "area": "Bank Reconciliation",
+   "feature": "Plaid bank feed",
+   "what": "Connect a bank, map accounts, manual 'sync now'. Webhook path is coded but untested against a real delivery.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B09",
+   "area": "Bank Reconciliation",
+   "feature": "Reconciliation report to statement balance",
+   "what": "Enter a statement date and ending balance; the report compares it with the ledger. Whether a signed-off report is saved per month is not confirmed.",
+   "confidence": "Checked 2026-10-01"
+  },
+  {
+   "id": "B10",
+   "area": "Bank Reconciliation",
+   "feature": "Reconcile view",
+   "what": "Match bank lines to bills/invoices/payments/grant gifts; multi-match; transfers between accounts; unreconcile; discussion thread per line; reconciliation report.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B11",
+   "area": "Bank Reconciliation",
+   "feature": "Cash Coding",
+   "what": "Code unmatched bank lines to account/program/grant; bulk coding; suggestion from the most recent similar line.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B12",
+   "area": "Bank Reconciliation",
+   "feature": "Bank Rules",
+   "what": "Saved rules (substring + amount range) that pre-fill coding. Never post automatically. Rule edit/retire.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B13",
+   "area": "Purchases",
+   "feature": "Bills",
+   "what": "Create/submit/approve/pay (partial payments supported); edit lock once approved except due date/reference; $15K+ procurement-quote gate.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B14",
+   "area": "Purchases",
+   "feature": "Debit/credit notes",
+   "what": "Apply or void against bills.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B15",
+   "area": "Purchases",
+   "feature": "Recurring bill schedules",
+   "what": "Create and deactivate recurring bill templates.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B16",
+   "area": "Purchases",
+   "feature": "Vendor compliance + 1099 tracking",
+   "what": "W-9/tax-ID capture (encrypted), 1099-NEC/MISC threshold tracking by calendar year ($2,000 from 2026 payments), summary and export. No e-filing.",
+   "confidence": "Verify"
+  },
+  {
+   "id": "B17",
+   "area": "Purchases",
+   "feature": "Bill OCR prefill",
+   "what": "Upload a bill; header fields prefilled. Not click-tested end to end after the last fixes.",
+   "confidence": "Verify"
+  },
+  {
+   "id": "B18",
+   "area": "Sales",
+   "feature": "Invoices and credit notes",
+   "what": "Create/send/pay/void/write off; metadata-only edits after sending; AR aging.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B19",
+   "area": "Expense Claims",
+   "feature": "Expense claims",
+   "what": "Personal-funds reimbursement: receipt OCR prefill, receipt-latitude/affidavit for missing receipts, pre-approval or post-payout confirmation, mileage lines.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B20",
+   "area": "Fixed Assets",
+   "feature": "Asset register + depreciation",
+   "what": "Straight-line depreciation run (human-triggered), disposal with gain/loss, feeds Form 990 Schedule D.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B21",
+   "area": "Gift Postings",
+   "feature": "In-kind gifts",
+   "what": "Land unposted, post on confirm; void.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B22",
+   "area": "Gift Postings",
+   "feature": "Multi-year pledges",
+   "what": "Present-value discounting and accretion postings; gross face value and rate kept on the gift record.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B23",
+   "area": "Gift Postings",
+   "feature": "Grant cash gifts / suspense",
+   "what": "Three orderings handled: grant first, bank first, bank first before grant exists (suspense account 'Unallocated Donor Receipts' reclassified later).",
+   "confidence": "Built"
+  },
+  {
+   "id": "B24",
+   "area": "Gift Postings",
+   "feature": "Indirect cost recovery",
+   "what": "Computes MTDC base from ledger expenses minus flagged exclusions; warns when subawards exist (cannot compute that exclusion).",
+   "confidence": "Built"
+  },
+  {
+   "id": "B25",
+   "area": "Find & Recode",
+   "feature": "Condition search + recode",
+   "what": "Xero-style condition builder; posts correcting journal, never edits lines in place; blocks system accounts.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B26",
+   "area": "Board Designations",
+   "feature": "Board-designated funds",
+   "what": "Designations tracked as net assets without donor restriction.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B27",
+   "area": "Approval Policy",
+   "feature": "Approval policy settings",
+   "what": "Who must approve what, and thresholds.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B28",
+   "area": "Reports",
+   "feature": "Statement of Financial Position",
+   "what": "Net assets split with/without donor restrictions. Computed live from the ledger. CSV export.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B29",
+   "area": "Reports",
+   "feature": "Statement of Activities",
+   "what": "Revenue/expenses by net-asset class; explicit 'released from restriction' row. CSV.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B30",
+   "area": "Reports",
+   "feature": "Statement of Functional Expenses",
+   "what": "Natural x functional matrix (program, management & general, fundraising). CSV.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B31",
+   "area": "Reports",
+   "feature": "Statement of Cash Flows",
+   "what": "Indirect method; ties to balance-sheet cash in testing. Non-cash flag on accounts. CSV.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B32",
+   "area": "Reports",
+   "feature": "Statements for Xero-sourced orgs",
+   "what": "Not available: statements return 'not available' for orgs whose actuals come from Xero.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B33",
+   "area": "Reports",
+   "feature": "Other reports",
+   "what": "Board report, grant reports, giving summary, budget, cash forecast page, donation receipt PDF. AR/AP aging lives in Purchases/Sales and the dashboard, not the Reports index. No standalone trial balance or general-ledger detail report found.",
+   "confidence": "Checked 2026-10-01"
+  },
+  {
+   "id": "B34",
+   "area": "Period close",
+   "feature": "Fiscal-year lock / reopen + reconciliation",
+   "what": "Admin can lock a whole fiscal year and reopen it with a reason; controls and the tie-out view sit in Reports > Reconciliation. No month-level lock.",
+   "confidence": "Checked 2026-10-01"
+  },
+  {
+   "id": "B35",
+   "area": "Contacts",
+   "feature": "Contacts (vendors/customers/donors in one list)",
+   "what": "Single contact list with vendor and customer role flags. Origin was donor-CRM, so its 'type' list is donor-shaped.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B36",
+   "area": "Compliance",
+   "feature": "990 support",
+   "what": "Schedule D, Schedule J (officer comp), Part IX functional expense editor, obligations calendar.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B37",
+   "area": "Controls",
+   "feature": "Roles",
+   "what": "Roles in use: admin, finance (older name staff), fundraising, program, editor, convener, vendor, donor. Admin-only on recode, approval policy and similar. No read-only auditor role.",
+   "confidence": "Checked 2026-10-01"
+  },
+  {
+   "id": "B38",
+   "area": "Audit",
+   "feature": "Activity log",
+   "what": "Filterable who-changed-what log across accounting tables.",
+   "confidence": "Built"
+  },
+  {
+   "id": "B39",
+   "area": "Data",
+   "feature": "Data import",
+   "what": "CSV import for accounts, budget lines etc. Import-preview exists as a process, not as a tab.",
+   "confidence": "Verify"
+  }
+ ],
+ "planned": [
+  {
+   "id": "P01",
+   "area": "Gifts / Grants",
+   "item": "Plain cash donations through the Gift Postings flow",
+   "what": "Grant gifts and in-kind gifts land as unposted items and post on confirm. Ordinary cash donations with no grant have no equivalent path today.",
+   "source": "grants-wired-into-accounting.md ('Not built')",
+   "status": "Planned follow-up",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P02",
+   "area": "Grants",
+   "item": "Award vs. allocation vs. actual-cash reconciliation",
+   "what": "Three numbers can silently drift: grant award, budget allocations by year/program, cash actually received. Nothing flags the difference.",
+   "source": "grants-wired-into-accounting.md",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P03",
+   "area": "Grants",
+   "item": "Per-program split when matching a grant deposit",
+   "what": "A deposit codes to the grant's single primary program even if the grant funds several programs.",
+   "source": "grants-wired-into-accounting.md",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P04",
+   "area": "Pledges",
+   "item": "Auto-mark a pledge installment collected",
+   "what": "When the matching deposit posts, the installment stays 'expected' until someone marks it by hand.",
+   "source": "grants-wired-into-accounting.md",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P05",
+   "area": "Grants / Federal",
+   "item": "Per-subaward tracking for MTDC",
+   "what": "The subaward portion above $50,000 (was $25,000 before Oct 2024) is excluded from MTDC. Today we only warn; we cannot compute it.",
+   "source": "grants-wired-into-accounting.md",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P06",
+   "area": "Reports",
+   "item": "SEFA (Schedule of Expenditures of Federal Awards)",
+   "what": "Data fields exist on grants (assistance listing no., agency, pass-through). No SEFA report is built; needed for a Single Audit.",
+   "source": "comprehensive-organizational-plan.md item 11",
+   "status": "Unbuilt",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P07",
+   "area": "Reports",
+   "item": "Financial statements for Xero-sourced orgs",
+   "what": "Statements only work when the internal ledger is the source of truth.",
+   "source": "financial-statements-spec.md",
+   "status": "Follow-up",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P08",
+   "area": "Settings",
+   "item": "Actuals source toggle (Xero vs internal ledger) UI",
+   "what": "The setting exists in the database with no screen. Design question first: what happens to the superseded actuals when switching back.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "Unbuilt",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P09",
+   "area": "Reports",
+   "item": "Unmapped actuals shown in the UI",
+   "what": "Actuals with an account but no program are computed server-side as 'unallocated' but not displayed. Actuals with no account mapping are dropped from budget-vs-actual entirely.",
+   "source": "coop-app-missing-features-review.md (2026-07-31)",
+   "status": "Known gap",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P10",
+   "area": "Grants",
+   "item": "Warning when a grant has no revenue account",
+   "what": "Grants without a revenue account are silently left out of budget write-through.",
+   "source": "coop-app-missing-features-review.md",
+   "status": "Known gap",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P11",
+   "area": "Plaid",
+   "item": "Webhook signature check against a real delivery",
+   "what": "Manual sync is verified; automatic webhook sync needs a public HTTPS callback to test. Production-readiness item.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "Needs prod test",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P12",
+   "area": "OCR",
+   "item": "End-to-end test of OCR on bills, invoices, credit notes, expense claims",
+   "what": "Code-checked only; no real file upload test since the last fixes.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "Needs test",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P13",
+   "area": "OCR",
+   "item": "Line-item proposal from OCR (not just header)",
+   "what": "Account and program can't be read from a document; v1 prefills header only. Open: propose lines? auto-create vendor? (current answer: never auto-create).",
+   "source": "bills-invoices-ocr-scoping.md",
+   "status": "Open decision",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P14",
+   "area": "UX",
+   "item": "Formula entry in all money fields",
+   "what": "'=192+268.50' works in bills, invoices, expense claims only. Budget grid deliberately excluded for now.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "Partial",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P15",
+   "area": "Find & Recode",
+   "item": "Recode history page; recode contact; tax-rate field",
+   "what": "Xero has a Recode History page. Today recodes are visible in the Activity Log only.",
+   "source": "find-recode-accounting-only-rebuild.md",
+   "status": "Not built",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P16",
+   "area": "Fixed Assets",
+   "item": "Other depreciation methods",
+   "what": "Straight-line only (what nonprofit GAAP reporting overwhelmingly uses).",
+   "source": "fixed-assets-depreciation-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P17",
+   "area": "Fixed Assets",
+   "item": "Suggest registering an asset when a bill line is over the threshold",
+   "what": "Needs an answer on a per-org capitalization threshold (federal $10,000 is a floor, not every org's policy).",
+   "source": "fixed-assets-depreciation-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P18",
+   "area": "Fixed Assets",
+   "item": "Scheduled (automatic) depreciation",
+   "what": "Deliberately human-triggered, same principle as Bank Rules.",
+   "source": "fixed-assets-depreciation-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P19",
+   "area": "Expense Claims",
+   "item": "Partial payment of a claim",
+   "what": "Claim must be paid in full today.",
+   "source": "expense-claims-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P20",
+   "area": "Expense Claims",
+   "item": "Per-line receipt requirements / dollar thresholds",
+   "what": "Mirrors the bill procurement-quote gate.",
+   "source": "expense-claims-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P21",
+   "area": "Expense Claims",
+   "item": "Org-wide mileage rate setting",
+   "what": "Rate is entered on each line today.",
+   "source": "expense-claims-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P22",
+   "area": "Expense Claims",
+   "item": "Corporate card import / reconciliation",
+   "what": "Different feature from reimbursements; closer to Bank Reconciliation.",
+   "source": "expense-claims-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P23",
+   "area": "Bank Rules",
+   "item": "Auto-apply with no confirmation; regex/OR conditions; split-coding rules; retroactive apply",
+   "what": "All explicitly excluded from v1 to keep a human in the loop.",
+   "source": "bank-rules-spec.md",
+   "status": "Out of v1",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P24",
+   "area": "1099",
+   "item": "E-filing of 1099s",
+   "what": "Tracking and export only.",
+   "source": "1099-threshold-tracking.md",
+   "status": "Out of scope",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P25",
+   "area": "Controls",
+   "item": "Role-based access beyond 'admin'; auditor view-only role",
+   "what": "Eight roles exist and gate routes (see Built B-Roles). Still no read-only auditor/outside-accountant role, and no per-action matrix for finance tasks (e.g. who may approve vs post vs reconcile).",
+   "source": "financial-integrity-monitoring.md; roles checked in code 2026-10-01",
+   "status": "Partly built",
+   "confidence": "Checked"
+  },
+  {
+   "id": "P26",
+   "area": "Controls",
+   "item": "Nightly integrity check + integrity log + drill-down",
+   "what": "Planned job that runs invariant checks (schedule sums, duplicates, orphaned lines) and shows pass/warn/fail.",
+   "source": "financial-integrity-monitoring.md",
+   "status": "Planned (written for Budget)",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P27",
+   "area": "Controls",
+   "item": "GL reconciliation view for imported Xero actuals",
+   "what": "Compare GL balance to budget-actual rows per account; status reconciled / discrepancy / unreviewed.",
+   "source": "financial-integrity-monitoring.md",
+   "status": "Planned",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P28",
+   "area": "Controls",
+   "item": "Login / record-access history",
+   "what": "Data changes are logged; sign-ins and views are not.",
+   "source": "financial-integrity-monitoring.md",
+   "status": "Unbuilt",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P29",
+   "area": "Integrations",
+   "item": "Xero write-back (push journals/bills/invoices to Xero)",
+   "what": "Only account-name push exists. Matters only for orgs that keep Xero as primary.",
+   "source": "coop-app-missing-features-review.md",
+   "status": "Deferred",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P30",
+   "area": "Modules",
+   "item": "Contracts module (sibling to Grants)",
+   "what": "Deferred pending Xero generalization.",
+   "source": "coop-app-missing-features-review.md",
+   "status": "Deferred",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P31",
+   "area": "Budget",
+   "item": "Activity-level budgeting",
+   "what": "Budget lines can't be entered at activity level; needs a roll-up design decision. Matters for activity-based cost reporting.",
+   "source": "activity-level-budgeting-scope-correction.md",
+   "status": "Not scheduled",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P32",
+   "area": "Budget",
+   "item": "Per-program fiscal year",
+   "what": "Fiscal year is org-level only.",
+   "source": "coop-app-missing-features-review.md",
+   "status": "Not started",
+   "confidence": "Verify"
+  },
+  {
+   "id": "P33",
+   "area": "Naming",
+   "item": "Rename one of the two 'Compliance' features",
+   "what": "Sidebar 'Compliance' (990/obligations) vs 'vendor compliance' (W-9) under Purchases.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "UX cleanup",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P34",
+   "area": "Contacts",
+   "item": "Contact 'type' list fits vendors/customers",
+   "what": "Type dropdown is donor-shaped (foundation/individual/board/prospect/member org); no 'business we pay'.",
+   "source": "CLAUDE.md (data-model note)",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P35",
+   "area": "Contacts",
+   "item": "Unified contacts (Membership people are a separate table)",
+   "what": "Members live in their own table, not in Contacts.",
+   "source": "CURRENT_PRIORITIES.md",
+   "status": "Known gap",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P36",
+   "area": "Payments",
+   "item": "Payment execution (ACH/check/card from inside the app)",
+   "what": "Parked on purpose: money-transmitter liability. Recording a payment already works.",
+   "source": "comprehensive-organizational-plan.md item 15",
+   "status": "Parked",
+   "confidence": "Confirmed"
+  },
+  {
+   "id": "P37",
+   "area": "Currency",
+   "item": "Multi-currency",
+   "what": "Needed for a future European build; every amount is a plain integer without a currency today.",
+   "source": "comprehensive-organizational-plan.md item 17",
+   "status": "Future",
+   "confidence": "Confirmed"
+  }
+ ],
+ "ideas": [
+  {
+   "id": "I01",
+   "area": "Month-end",
+   "idea": "Month-end close checklist",
+   "why": "A per-month checklist (bank reconciled, bills/invoices cut off, accruals, depreciation run, payroll tied out, board designations updated, then lock). Shows what's blocking the lock. Most close tools (Aplos, QBO close checklist) have this.",
+   "size": "Medium",
+   "source": "Industry practice; builds on built fiscal-year lock"
+  },
+  {
+   "id": "I02",
+   "area": "Month-end",
+   "idea": "Lock by month, not only fiscal year",
+   "why": "Today the lock is by fiscal year. Bookkeepers normally lock each closed month.",
+   "size": "Medium",
+   "source": "Gap vs. QBO/Xero lock dates"
+  },
+  {
+   "id": "I03",
+   "area": "Month-end",
+   "idea": "Accrual / prepaid / deferred revenue entries with auto-reversal",
+   "why": "Recurring adjusting journals (prepaid insurance, accrued payroll, deferred grants) that auto-reverse next period.",
+   "size": "Medium",
+   "source": "Standard close workflow"
+  },
+  {
+   "id": "I04",
+   "area": "Journals",
+   "idea": "Journal templates, recurring and auto-reversing journals, attachments",
+   "why": "A manual journal form exists (balanced check, review flag). Missing: saved templates, recurrence, auto-reverse, file attachments, import from spreadsheet.",
+   "size": "Medium",
+   "source": "Gap checked 2026-10-01"
+  },
+  {
+   "id": "I05",
+   "area": "Bank",
+   "idea": "Saved, signed-off monthly bank reconciliations",
+   "why": "A report against an entered ending balance exists. Idea: keep one per account per month with preparer/reviewer sign-off and a lock on reconciled lines.",
+   "size": "Small",
+   "source": "Gap checked 2026-10-01"
+  },
+  {
+   "id": "I06",
+   "area": "Bank",
+   "idea": "Duplicate and 'looks wrong' detection on feed lines",
+   "why": "Flag same-amount-same-day duplicates, round-number outliers, and vendors with sudden amount jumps.",
+   "size": "Small",
+   "source": "Expense-audit practice"
+  },
+  {
+   "id": "I07",
+   "area": "Bank",
+   "idea": "Credit card statement import (CSV/OFX) without Plaid",
+   "why": "Many small orgs have no Plaid-supported connection. CSV/OFX upload with the same coding and rules flow.",
+   "size": "Medium",
+   "source": "Common request"
+  },
+  {
+   "id": "I08",
+   "area": "Bank",
+   "idea": "Auto-apply rules with confidence tiers",
+   "why": "After a rule has a clean track record, optionally apply it on import to lines under a dollar limit, still leaving them 'unconfirmed'.",
+   "size": "Small",
+   "source": "bank-rules-spec v2 note"
+  },
+  {
+   "id": "I09",
+   "area": "Purchases",
+   "idea": "Bill intake by email (forward to a unique address)",
+   "why": "Vendor emails a PDF; it lands in a review queue pre-filled by OCR. Bill.com/Dext/Ramp do this. Inbound email infrastructure (Postmark) already exists for other uses.",
+   "size": "Medium",
+   "source": "Industry; Postmark inbound exists"
+  },
+  {
+   "id": "I10",
+   "area": "Purchases",
+   "idea": "Batch pay and payment-run files (NACHA/check run export)",
+   "why": "Select approved bills, produce a payment file or check list to be executed outside the app. Stays on the right side of the 'we don't move money' decision.",
+   "size": "Medium",
+   "source": "Fits parked payment decision"
+  },
+  {
+   "id": "I11",
+   "area": "Purchases",
+   "idea": "Three-way match (PO, receipt, bill)",
+   "why": "Likely too heavy for small orgs; ask whether purchase orders matter at all.",
+   "size": "Large",
+   "source": "Industry; probably skip"
+  },
+  {
+   "id": "I12",
+   "area": "Purchases",
+   "idea": "Vendor self-service portal (submit W-9, see payment status)",
+   "why": "Named in the comprehensive plan as reasonable to build without payment rails.",
+   "size": "Medium",
+   "source": "comprehensive plan item 15 note"
+  },
+  {
+   "id": "I13",
+   "area": "Sales",
+   "idea": "Customer statements and dunning reminders",
+   "why": "Automated AR reminders and monthly statements.",
+   "size": "Small",
+   "source": "Standard AR practice"
+  },
+  {
+   "id": "I14",
+   "area": "Sales",
+   "idea": "Pledge and grant receivable aging",
+   "why": "Aging of pledges and grants receivable the same way invoices age; allowance for uncollectible pledges.",
+   "size": "Medium",
+   "source": "ASC 958 practice"
+  },
+  {
+   "id": "I15",
+   "area": "Funds",
+   "idea": "Fund accounting view (restricted funds roll-forward)",
+   "why": "Net-asset roll-forward by fund and by restriction purpose/time, with releases. We have class-level releases; a per-fund roll-forward is what many auditors ask for.",
+   "size": "Medium",
+   "source": "ASC 958 disclosure practice"
+  },
+  {
+   "id": "I16",
+   "area": "Funds",
+   "idea": "Restriction tracking against grant spend",
+   "why": "Warn when spending against a restricted grant exceeds the award or falls outside its period/budget categories.",
+   "size": "Medium",
+   "source": "financial-integrity-monitoring.md gap table"
+  },
+  {
+   "id": "I17",
+   "area": "Funds",
+   "idea": "Net-asset release by time (pledges with time restrictions)",
+   "why": "Automatic release when a time restriction expires.",
+   "size": "Small",
+   "source": "ASC 958"
+  },
+  {
+   "id": "I18",
+   "area": "Allocation",
+   "idea": "Shared-cost allocation engine (rent, utilities, admin) by percent, headcount, square footage",
+   "why": "Allocation schedules exist for indirect costs; ask whether bookkeepers want monthly posted allocations to programs and funders.",
+   "size": "Medium",
+   "source": "Functional expense practice"
+  },
+  {
+   "id": "I19",
+   "area": "Allocation",
+   "idea": "Time-and-effort / payroll allocation capture",
+   "why": "Federal awards require personnel cost support (timesheets or effort certifications).",
+   "size": "Medium",
+   "source": "2 CFR 200.430"
+  },
+  {
+   "id": "I20",
+   "area": "Payroll",
+   "idea": "Payroll journal import (Gusto/ADP/Paychex) with automatic split",
+   "why": "Import a payroll register and post the journal across programs by employee allocation, including taxes and benefits liabilities.",
+   "size": "Medium",
+   "source": "Common bookkeeping chore"
+  },
+  {
+   "id": "I21",
+   "area": "Reports",
+   "idea": "Trial balance and general ledger detail reports",
+   "why": "No standalone trial balance or GL detail report found in Reports. Bookkeepers and auditors ask for both first.",
+   "size": "Small",
+   "source": "Gap checked 2026-10-01"
+  },
+  {
+   "id": "I22",
+   "area": "Reports",
+   "idea": "Budget vs. actual by program/grant on the internal ledger with drill-down",
+   "why": "Click a variance to see transactions. Check how this behaves today for ledger-sourced orgs.",
+   "size": "Small",
+   "source": "Verify what exists"
+  },
+  {
+   "id": "I23",
+   "area": "Reports",
+   "idea": "Board-ready financial package (one PDF: statements + variance narrative + cash)",
+   "why": "Single exportable pack each month/quarter.",
+   "size": "Medium",
+   "source": "Board practice"
+  },
+  {
+   "id": "I24",
+   "area": "Reports",
+   "idea": "Funder financial reports by grant (cash basis and accrual)",
+   "why": "A report per grant showing budget, spend by line, indirect applied, remaining. A grant report exists; ask whether it matches what funders ask for.",
+   "size": "Small",
+   "source": "Verify"
+  },
+  {
+   "id": "I25",
+   "area": "Reports",
+   "idea": "Reports scheduled by email",
+   "why": "Auto-send aging, close status, or board pack to chosen recipients.",
+   "size": "Small",
+   "source": "Industry"
+  },
+  {
+   "id": "I26",
+   "area": "Reports",
+   "idea": "Year-over-year and 12-month trend comparatives on statements",
+   "why": "Comparative columns are standard in audited nonprofit statements.",
+   "size": "Small",
+   "source": "ASC 958 presentation"
+  },
+  {
+   "id": "I27",
+   "area": "Reports",
+   "idea": "Form 990 line-item worksheet (Parts VIII, IX, X from the ledger)",
+   "why": "Part IX exists; Parts VIII (revenue) and X (balance sheet) mapping would complete a 990 prep package.",
+   "size": "Medium",
+   "source": "Natural extension of Schedule D/J"
+  },
+  {
+   "id": "I28",
+   "area": "Audit",
+   "idea": "Auditor / PBC (prepared-by-client) request list and binder",
+   "why": "A checklist of what a CPA asks for at audit time with links to the documents and reports. Document Vault/Audit Binder already exists.",
+   "size": "Medium",
+   "source": "Audit-prep practice"
+  },
+  {
+   "id": "I29",
+   "area": "Audit",
+   "idea": "Read-only auditor / outside-accountant role with expiring access",
+   "why": "Time-limited view-only access that cannot see unrelated modules.",
+   "size": "Small",
+   "source": "Gap confirmed in code 2026-10-01"
+  },
+  {
+   "id": "I30",
+   "area": "Audit",
+   "idea": "Journal-entry testing view (unusual entries: weekends, round amounts, post-close, same-user create+approve)",
+   "why": "What auditors run. Cheap to produce from the audit log.",
+   "size": "Small",
+   "source": "Fraud-risk practice"
+  },
+  {
+   "id": "I31",
+   "area": "Controls",
+   "idea": "Segregation-of-duties check dashboard",
+   "why": "Flags where one person created, approved, and reconciled the same item; options for small orgs where that is unavoidable.",
+   "size": "Small",
+   "source": "Q1/Q2 on the Questions tab"
+  },
+  {
+   "id": "I32",
+   "area": "Controls",
+   "idea": "Gift acknowledgement and tax receipt rules (quid pro quo, $250 / $75 disclosures)",
+   "why": "Receipt PDF exists; check disclosure wording logic for goods/services received.",
+   "size": "Small",
+   "source": "IRS rules"
+  },
+  {
+   "id": "I33",
+   "area": "Tax",
+   "idea": "State sales/use tax or UBIT tracking",
+   "why": "UBIT (unrelated business income) tracking for orgs with earned revenue. Sales tax/VAT is on our skip list.",
+   "size": "Medium",
+   "source": "990-T practice"
+  },
+  {
+   "id": "I34",
+   "area": "Tax",
+   "idea": "Payroll / contractor annual filings (W-2, 1099) hand-off exports",
+   "why": "Export in the format filing services accept. We do not e-file.",
+   "size": "Small",
+   "source": "1099 tracking follow-on"
+  },
+  {
+   "id": "I35",
+   "area": "Data",
+   "idea": "Opening balances and migration wizard from QuickBooks/Xero",
+   "why": "Import chart of accounts, opening trial balance, and open bills/invoices for a mid-year switch. Budget onboarding wizard is a related idea.",
+   "size": "Large",
+   "source": "Customer onboarding"
+  },
+  {
+   "id": "I36",
+   "area": "Data",
+   "idea": "Chart-of-accounts templates for nonprofits (e.g. Unified Chart of Accounts / NCCS)",
+   "why": "Pick a standard chart at setup; map to 990 lines automatically.",
+   "size": "Small",
+   "source": "Industry standard (UCOA)"
+  },
+  {
+   "id": "I37",
+   "area": "Data",
+   "idea": "Attachments on every transaction with required-document rules",
+   "why": "Require receipt/invoice/approval doc over a threshold, with retention rules.",
+   "size": "Small",
+   "source": "Documents module exists"
+  },
+  {
+   "id": "I38",
+   "area": "Data",
+   "idea": "Multi-entity / sponsored-project separate books",
+   "why": "Full fund separation for a fiscal sponsor's projects, with combined and standalone statements.",
+   "size": "Large",
+   "source": "Fiscal sponsorship work"
+  },
+  {
+   "id": "I39",
+   "area": "Platform",
+   "idea": "Bookkeeper workspace across several client orgs",
+   "why": "One login, many client nonprofits, with a work queue (what's unreconciled, what's overdue for close). The org-membership model is per-org today.",
+   "size": "Large",
+   "source": "Plan notes multi-org user case"
+  },
+  {
+   "id": "I40",
+   "area": "Platform",
+   "idea": "AI-assisted coding review",
+   "why": "Surface likely miscoded transactions (e.g. same vendor coded two ways) for human review. Never auto-post.",
+   "size": "Medium",
+   "source": "Builds on coding-suggestion"
+  }
+ ],
+ "questions": [
+  {
+   "id": "Q01",
+   "topic": "Controls",
+   "question": "Should a small org (2-3 person finance team) be able to let one person both record and approve/classify? Is a read-only field in one screen a sufficient control, or do we need real role enforcement?",
+   "why": "Our grant-revenue account design assumes recording and authorizing are separate roles. We inferred that from general segregation-of-duties guidance, not from a standard."
+  },
+  {
+   "id": "Q02",
+   "topic": "Posting model",
+   "question": "Is the 'land as unposted, then explicit confirm' step the right friction? Comparable unified platforms auto-post and put control upstream (who sets up fund-to-account mappings).",
+   "why": "This is our own requirement, not validated against comparable products. Which flows deserve auto-posting?"
+  },
+  {
+   "id": "Q03",
+   "topic": "Suspense",
+   "question": "Is 'Unallocated Donor Receipts' correctly a liability? Should it be a clearing account with no GAAP type, or treated like deferred revenue?",
+   "why": "Money sits there until classified. If it crosses a period end it shows as a liability though it may economically be revenue."
+  },
+  {
+   "id": "Q04",
+   "topic": "Suspense",
+   "question": "Should we require reclassifying suspense before period close, and block the lock if a balance remains?",
+   "why": "Presentation problem at year end."
+  },
+  {
+   "id": "Q05",
+   "topic": "Pledges",
+   "question": "Is posting accretion straight to the receivable (no separate 'Discount on pledges receivable' contra account) acceptable, or does an auditor expect to see gross receivable and discount separately?",
+   "why": "We keep gross face value and discount rate on the gift record, but the ledger shows only the net."
+  },
+  {
+   "id": "Q06",
+   "topic": "Indirect costs",
+   "question": "Is computing MTDC from ledger expense accounts minus a per-account exclusion flag a reasonable approach? Which exclusions do small orgs most often miss (participant support, equipment, tuition, rent of off-site)?",
+   "why": "We warn about subawards but cannot compute that exclusion."
+  },
+  {
+   "id": "Q07",
+   "topic": "Month-end",
+   "question": "What does a clean month-end look like for you, step by step? Which steps would you want the app to track?",
+   "why": "Drives the close-checklist idea (I01)."
+  },
+  {
+   "id": "Q08",
+   "topic": "Month-end",
+   "question": "Do you lock by month or only at year end? Do you ever reopen a locked period, and how do you document it?",
+   "why": "Today we lock by fiscal year with a reopen reason."
+  },
+  {
+   "id": "Q09",
+   "topic": "Bank",
+   "question": "Do you reconcile to the statement's ending balance each month? We have a report that takes the ending balance; is that enough, or do you need a saved, signed-off record per month?",
+   "why": "Decides whether saved monthly reconciliations are needed."
+  },
+  {
+   "id": "Q10",
+   "topic": "Chart of accounts",
+   "question": "Which chart of accounts structure do you start clients on? Do you use classes/tags/programs instead of sub-accounts?",
+   "why": "We use account + program + grant dimensions. Check it matches real practice."
+  },
+  {
+   "id": "Q11",
+   "topic": "Coding",
+   "question": "Where does coding take you the most time today, and what would save the most?",
+   "why": "Prioritizes rules, OCR, email intake, and AI review."
+  },
+  {
+   "id": "Q12",
+   "topic": "Grants",
+   "question": "How do you track a grant's budget vs. spend per line today? What does a funder expect on a financial report?",
+   "why": "Check our grant report against actual funder templates."
+  },
+  {
+   "id": "Q13",
+   "topic": "Payroll",
+   "question": "How does payroll reach the books (journal from provider, bank-only, or entered by hand)? Any allocation by program?",
+   "why": "Decides priority of payroll import."
+  },
+  {
+   "id": "Q14",
+   "topic": "Audit",
+   "question": "What do your clients' CPAs ask for at audit time that you have to dig up by hand?",
+   "why": "Drives the PBC / binder idea."
+  },
+  {
+   "id": "Q15",
+   "topic": "Receipts",
+   "question": "Are you comfortable with a missing-receipt affidavit path for expense claims? What threshold and wording do you use?",
+   "why": "We built a 60-day follow-up and affidavit."
+  },
+  {
+   "id": "Q16",
+   "topic": "1099",
+   "question": "Is tracking + export enough, or do clients expect to file from the tool? How do you decide what's reportable (card payments excluded, etc.)?",
+   "why": "We track calendar-year totals and cap mixed-bill amounts."
+  },
+  {
+   "id": "Q17",
+   "topic": "Naming",
+   "question": "Do the labels (Cash Coding, Gift Postings, Board Designations, Find & Recode) make sense to a bookkeeper, or do you use different terms?",
+   "why": "Our labels came from Xero/Aplos and our own terms."
+  },
+  {
+   "id": "Q18",
+   "topic": "Tools",
+   "question": "Which tools do your clients use now (QBO, Xero, Aplos, spreadsheets)? What would make switching realistic, and what would be a deal-breaker?",
+   "why": "Prioritizes migration wizard and integrations."
+  },
+  {
+   "id": "Q19",
+   "topic": "Scope",
+   "question": "What do you wish we would NOT build?",
+   "why": "Keeps the product small."
+  }
+ ],
+ "readme": [
+  {
+   "text": "Accounting module — bookkeeper review workbook",
+   "kind": "title"
+  },
+  {
+   "text": "Prepared 2026-10-01. Source: Causal's own plan files, specs and review notes, checked against the live code on that date. Nothing here has been shared outside the owner yet.",
+   "kind": null
+  },
+  {
+   "text": "WHAT WE ARE ASKING",
+   "kind": "h"
+  },
+  {
+   "text": "1. Tell us whether what is already built matches how a working bookkeeper actually does the job (tab 'Built - Review').",
+   "kind": null
+  },
+  {
+   "text": "2. Tell us which of the planned-but-unbuilt items matter in practice, and in what order (tab 'Planned - Unbuilt').",
+   "kind": null
+  },
+  {
+   "text": "3. React to ideas we have not committed to (tab 'Ideas - Aspirational'). These are suggestions from outside research, not promises.",
+   "kind": null
+  },
+  {
+   "text": "4. Answer the accounting-judgment questions we could not settle from published sources (tab 'Questions').",
+   "kind": null
+  },
+  {
+   "text": "5. Add anything we missed (tab 'Their Additions').",
+   "kind": null
+  },
+  {
+   "text": "HOW TO FILL IT IN",
+   "kind": "h"
+  },
+  {
+   "text": "Yellow columns are for the bookkeeper. Grey/white columns are ours. Use the dropdowns where offered; free-text comments are the most valuable part.",
+   "kind": null
+  },
+  {
+   "text": "Items marked 'Verify' in the 'Confidence' column are claims from our notes we have not re-checked against the running app. Treat them as questions, not facts.",
+   "kind": null
+  },
+  {
+   "text": "Please say what you would do in your own practice (QuickBooks, Xero, Aplos, spreadsheets), not what you think we want to hear. 'We would never use that' is a useful answer.",
+   "kind": null
+  },
+  {
+   "text": "PROCESS (suggested, about 4 sessions over 3-4 weeks)",
+   "kind": "h"
+  },
+  {
+   "text": "Step 0 - Setup (owner, 30 min): give the bookkeeper a login to the Demo Company workspace (confirm the current slug first; it changes if the org is renamed). Send this sheet plus docs/Grant_Accounting_Test_Walkthrough.md. Do not give access to any real org's data.",
+   "kind": null
+  },
+  {
+   "text": "Step 1 - Guided tour (60-90 min, screen share): walk Accounting tab by tab in the order on 'Built - Review'. Bookkeeper talks aloud while we take notes straight into the sheet. Goal: first reactions, not detailed review.",
+   "kind": null
+  },
+  {
+   "text": "Step 2 - Solo hands-on (bookkeeper, 2-4 hours over a week): run a month-end in the demo org (code bank lines, enter a bill, an invoice, an expense claim, a depreciation run, lock the month/year). Fill in the yellow columns on 'Built - Review'.",
+   "kind": null
+  },
+  {
+   "text": "Step 3 - Triage session (60 min): go through 'Planned - Unbuilt' and 'Ideas' together. Bookkeeper rates each; we agree a short ranked list (aim for no more than 8 items) and mark them in the 'Decision' column.",
+   "kind": null
+  },
+  {
+   "text": "Step 4 - Judgment questions (45 min): the 'Questions' tab. These need a professional opinion (GAAP presentation, internal controls for small orgs). Record the answer and the reasoning, not just yes/no.",
+   "kind": null
+  },
+  {
+   "text": "Step 5 - Build, then re-review: we build the ranked list, the bookkeeper re-tests each shipped item and flips its status to Verified. Repeat from Step 3 with the next batch.",
+   "kind": null
+  },
+  {
+   "text": "RULES OF THE ROAD",
+   "kind": "h"
+  },
+  {
+   "text": "- The bookkeeper is reviewing, not approving payroll or posting real books. Use demo data only until we agree otherwise.",
+   "kind": null
+  },
+  {
+   "text": "- Anything touching what the app does with real money (payment execution) is deliberately parked; ignore it unless you have a strong view.",
+   "kind": null
+  },
+  {
+   "text": "- Causal posts to the ledger only after a person confirms inside Accounting. If that feels like extra friction compared with your usual tool, say so on the 'Questions' tab (Q1).",
+   "kind": null
+  },
+  {
+   "text": "- When a comment becomes a decision, copy it into the 'Decision' column with a date so we do not re-argue it.",
+   "kind": null
+  },
+  {
+   "text": "TABS",
+   "kind": "h"
+  },
+  {
+   "text": "Built - Review | Planned - Unbuilt | Ideas - Aspirational | Questions | Their Additions | Decision Log",
+   "kind": null
+  }
+ ]
+}

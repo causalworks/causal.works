@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Accounting Module Review</title>
+<link rel="stylesheet" href="/shared/css/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text-primary, #1a1a1a); background: var(--surface-page, #f7f7f5); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--surface-card, #fff); border-bottom: 1px solid var(--border, #e8e6e0); padding: 10px 16px; }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .top h1 { font-size: 17px; margin: 0; }
+  .top a { color: var(--text-secondary, #5a5955); font-size: 13px; }
+  .top .grow { flex: 1; }
+  #status { font-size: 12px; color: var(--text-secondary, #5a5955); min-width: 90px; text-align: right; }
+  #status.err { color: #b91c1c; font-weight: 600; }
+  nav { display: flex; gap: 4px; overflow-x: auto; margin-top: 8px; }
+  nav button { flex: none; border: 1px solid var(--border, #e8e6e0); background: var(--surface-card, #fff); border-radius: var(--radius-sm, 6px); padding: 6px 10px; font: inherit; cursor: pointer; color: var(--text-secondary, #5a5955); }
+  nav button.active { background: var(--text-primary, #1a1a1a); color: #fff; border-color: var(--text-primary, #1a1a1a); }
+  nav .count { font-size: 11px; opacity: .75; margin-left: 4px; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .bar input[type=search], .bar select { padding: 6px 8px; border: 1px solid var(--border-strong, #d1cfc9); border-radius: var(--radius-sm, 6px); font: inherit; background: var(--surface-card, #fff); }
+  .bar input[type=search] { flex: 1; min-width: 160px; }
+  .bar label { font-size: 13px; color: var(--text-secondary, #5a5955); display: flex; gap: 4px; align-items: center; }
+  .card { background: var(--surface-card, #fff); border: 1px solid var(--border, #e8e6e0); border-radius: var(--radius-md, 10px); padding: 12px 14px; margin-bottom: 10px; }
+  .card.done { border-left: 4px solid #15803d; }
+  .head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; }
+  .id { font: 600 12px ui-monospace, monospace; color: var(--text-secondary, #5a5955); }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-active, #f0eee8); color: var(--text-secondary, #5a5955); }
+  .chip.warn { background: #fef3c7; color: #92400e; }
+  .title { font-weight: 600; }
+  .what { margin: 6px 0 0; color: var(--text-primary, #1a1a1a); }
+  .meta { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary, #5a5955); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border, #e8e6e0); }
+  .fields .wide { grid-column: 1 / -1; }
+  .fields label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary, #5a5955); margin-bottom: 2px; }
+  .fields .bk label::after { content: " · bookkeeper"; text-transform: none; font-weight: 400; }
+  .fields select, .fields textarea, .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong, #d1cfc9); border-radius: var(--radius-sm, 6px); font: inherit; background: #fffdf3; }
+  .fields .own select, .fields .own textarea, .fields .own input { background: var(--surface-card, #fff); }
+  .fields textarea { min-height: 54px; resize: vertical; }
+  button.act { border: 1px solid var(--border-strong, #d1cfc9); background: var(--surface-card, #fff); border-radius: var(--radius-sm, 6px); padding: 6px 12px; font: inherit; cursor: pointer; }
+  button.act:hover { background: var(--surface-hover, #f7f5f0); }
+  button.del { color: #991b1b; border-color: #fecaca; margin-left: auto; font-size: 12px; padding: 2px 8px; }
+  .readme p { margin: 0 0 8px; max-width: 80ch; }
+  .readme h2 { font-size: 14px; margin: 18px 0 6px; color: #1f3a5f; }
+  .readme h1 { font-size: 20px; margin: 0 0 8px; }
+  .empty { color: var(--text-secondary, #5a5955); padding: 20px 0; }
+  @media (max-width: 640px) { main { padding: 12px; } #status { text-align: left; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Accounting module review</h1>
+    <a href="/admin">&larr; Admin</a>
+    <span class="grow"></span>
+    <span id="status">Loading…</span>
+    <button class="act" id="export" type="button">Export CSV</button>
+  </div>
+  <nav id="tabs" aria-label="Review sections"></nav>
+</header>
+<main id="main"></main>
+
+<script>
+(function () {
+  var WORKS = ["Works as I'd expect", "Works but clunky", "Wrong / confusing", "Missing something", "Haven't tested"];
+  var NEED = ["Must have now", "Soon", "Nice to have", "Don't need", "Unsure"];
+  var FREQ = ["Daily", "Weekly", "Monthly", "Yearly", "Rarely"];
+  var BUILD = ["Not started", "In progress", "Shipped", "Dropped"];
+  var YESNO = ["Yes", "No", "N/A"];
+
+  // kind: s = select, t = textarea, i = input. bk = bookkeeper-facing (yellow), else owner.
+  var TABS = [
+    { key: 'readme', label: 'Start here' },
+    { key: 'built', label: 'Built', fields: [
+      { k: 'works', l: 'Does it work?', t: 's', o: WORKS, bk: 1 },
+      { k: 'priority', l: 'Priority to fix', t: 's', o: NEED, bk: 1 },
+      { k: 'comments', l: 'Comments / what you would change', t: 't', bk: 1, wide: 1 },
+      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+    { key: 'planned', label: 'Planned, unbuilt', fields: [
+      { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED, bk: 1 },
+      { k: 'comments', l: 'Comments', t: 't', bk: 1, wide: 1 },
+      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+    { key: 'ideas', label: 'Ideas', fields: [
+      { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED, bk: 1 },
+      { k: 'comments', l: 'Comments / how you do it today', t: 't', bk: 1, wide: 1 },
+      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+    { key: 'questions', label: 'Questions', fields: [
+      { k: 'answer', l: 'Answer', t: 't', bk: 1, wide: 1 },
+      { k: 'reasoning', l: 'Reasoning / source', t: 't', bk: 1, wide: 1 },
+      { k: 'decision', l: 'Decision (owner)', t: 't', wide: 1 } ] },
+    { key: 'additions', label: 'Their additions', add: 'A', fields: [
+      { k: 'area', l: 'Area', t: 'i', bk: 1 },
+      { k: 'frequency', l: 'How often?', t: 's', o: FREQ, bk: 1 },
+      { k: 'priority', l: 'Priority', t: 's', o: NEED, bk: 1 },
+      { k: 'issue', l: 'What is missing or wrong', t: 't', bk: 1, wide: 1 },
+      { k: 'example', l: 'Example / how you handle it today', t: 't', bk: 1, wide: 1 },
+      { k: 'response', l: 'Owner response', t: 't', wide: 1 } ] },
+    { key: 'log', label: 'Decision log', add: 'L', fields: [
+      { k: 'date', l: 'Date', t: 'i' }, { k: 'items', l: 'Item IDs', t: 'i' },
+      { k: 'who', l: 'Who decided', t: 'i' },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1 }, { k: 'reasoning', l: 'Reasoning', t: 't', wide: 1 },
+      { k: 'build', l: 'Build status', t: 's', o: BUILD }, { k: 'verified', l: 'Verified by bookkeeper?', t: 's', o: YESNO } ] }
+  ];
+  var ANSWER_KEYS = ['works', 'priority', 'answer', 'comments', 'issue', 'decision'];
+
+  var content = null, entries = {}, active = 'readme';
+  var filt = { q: '', area: '', open: false };
+  var timers = {};
+  var statusEl = document.getElementById('status');
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function tabDef(k) { return TABS.filter(function (t) { return t.key === k; })[0]; }
+  function setStatus(msg, err) { statusEl.textContent = msg; statusEl.className = err ? 'err' : ''; }
+  function isDone(id) { var d = entries[id] || {}; return ANSWER_KEYS.some(function (k) { return d[k]; }); }
+
+  function itemsFor(key) {
+    if (key === 'additions' || key === 'log') {
+      var pre = key === 'additions' ? 'A-' : 'L-';
+      return Object.keys(entries).filter(function (id) { return id.indexOf(pre) === 0; }).sort()
+        .map(function (id) { return { id: id }; });
+    }
+    return content[key] || [];
+  }
+  function titleOf(key, it) { return it.feature || it.item || it.idea || it.topic || ''; }
+  function whatOf(key, it) { return it.what || it.why || it.question || ''; }
+
+  function renderTabs() {
+    var h = '';
+    TABS.forEach(function (t) {
+      var n = '';
+      if (t.key !== 'readme') {
+        var its = itemsFor(t.key);
+        if (t.add) n = '<span class="count">' + its.length + '</span>';
+        else n = '<span class="count">' + its.filter(function (i) { return isDone(i.id); }).length + '/' + its.length + '</span>';
+      }
+      h += '<button type="button" data-tab="' + t.key + '" class="' + (t.key === active ? 'active' : '') + '">' + esc(t.label) + n + '</button>';
+    });
+    document.getElementById('tabs').innerHTML = h;
+  }
+
+  function fieldHtml(f, id, val) {
+    var cls = (f.bk ? 'bk' : 'own') + (f.wide ? ' wide' : '');
+    var dom = 'f_' + id + '_' + f.k;
+    var inner;
+    if (f.t === 's') {
+      inner = '<select id="' + dom + '" data-id="' + id + '" data-k="' + f.k + '"><option value=""></option>' +
+        f.o.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    } else if (f.t === 'i') {
+      inner = '<input id="' + dom + '" data-id="' + id + '" data-k="' + f.k + '" value="' + esc(val) + '" maxlength="4000">';
+    } else {
+      inner = '<textarea id="' + dom + '" data-id="' + id + '" data-k="' + f.k + '" maxlength="4000">' + esc(val) + '</textarea>';
+    }
+    return '<div class="' + cls + '"><label for="' + dom + '">' + esc(f.l) + '</label>' + inner + '</div>';
+  }
+
+  function cardHtml(def, it) {
+    var d = entries[it.id] || {};
+    var key = def.key, h = '<div class="card' + (isDone(it.id) && !def.add ? ' done' : '') + '" data-card="' + it.id + '"><div class="head">';
+    h += '<span class="id">' + esc(it.id.indexOf('-') > 0 ? (key === 'log' ? 'Log' : 'Added') : it.id) + '</span>';
+    if (it.area) h += '<span class="chip">' + esc(it.area) + '</span>';
+    if (it.topic) h += '<span class="chip">' + esc(it.topic) + '</span>';
+    var t = titleOf(key, it);
+    if (t) h += '<span class="title">' + esc(t) + '</span>';
+    if (def.add) h += '<button type="button" class="act del" data-del="' + it.id + '">Delete</button>';
+    h += '</div>';
+    var w = whatOf(key, it);
+    if (w) h += '<p class="what">' + esc(w) + '</p>';
+    var meta = [];
+    if (it.confidence) meta.push('Confidence: ' + it.confidence);
+    if (it.status) meta.push('Status: ' + it.status);
+    if (it.size) meta.push('Rough size: ' + it.size);
+    if (it.source) meta.push('Source: ' + it.source);
+    if (meta.length) h += '<p class="meta">' + esc(meta.join(' · ')) + '</p>';
+    h += '<div class="fields">' + def.fields.map(function (f) { return fieldHtml(f, it.id, d[f.k] || ''); }).join('') + '</div></div>';
+    return h;
+  }
+
+  function renderReadme() {
+    var h = '<div class="readme">';
+    content.readme.forEach(function (r) {
+      if (r.kind === 'title') h += '<h1>' + esc(r.text) + '</h1>';
+      else if (r.kind === 'h') h += '<h2>' + esc(r.text) + '</h2>';
+      else h += '<p>' + esc(r.text) + '</p>';
+    });
+    h += '<p>Answers save automatically. Everything is stored in the database, so it is still there next session.</p></div>';
+    return h;
+  }
+
+  function render() {
+    renderTabs();
+    var main = document.getElementById('main');
+    if (active === 'readme') { main.innerHTML = renderReadme(); return; }
+    var def = tabDef(active), its = itemsFor(active), h = '';
+    var areas = {};
+    its.forEach(function (i) { var a = i.area || i.topic; if (a) areas[a] = 1; });
+    h += '<div class="bar">';
+    if (def.add) {
+      h += '<button type="button" class="act" id="add">+ Add ' + (def.add === 'A' ? 'a gap' : 'a decision') + '</button>';
+    } else {
+      h += '<input type="search" id="q" placeholder="Search…" value="' + esc(filt.q) + '">';
+      h += '<select id="area"><option value="">All areas</option>' + Object.keys(areas).sort().map(function (a) { return '<option' + (a === filt.area ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select>';
+      h += '<label><input type="checkbox" id="open"' + (filt.open ? ' checked' : '') + '> Unanswered only</label>';
+    }
+    h += '</div><div id="list">' + listHtml(def, its) + '</div>';
+    main.innerHTML = h;
+  }
+
+  function listHtml(def, its) {
+    var q = filt.q.toLowerCase();
+    var shown = its.filter(function (it) {
+      if (def.add) return true;
+      if (filt.area && (it.area || it.topic) !== filt.area) return false;
+      if (filt.open && isDone(it.id)) return false;
+      if (q && JSON.stringify(it).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    if (!shown.length) return '<p class="empty">' + (def.add ? 'Nothing here yet.' : 'No items match.') + '</p>';
+    return shown.map(function (it) { return cardHtml(def, it); }).join('');
+  }
+
+  function collect(id) {
+    var out = {};
+    document.querySelectorAll('[data-id="' + id + '"]').forEach(function (el) { if (el.value) out[el.getAttribute('data-k')] = el.value; });
+    return out;
+  }
+
+  function save(id) {
+    var data = collect(id);
+    setStatus('Saving…');
+    fetch('/admin/api/accounting-review/' + encodeURIComponent(id), {
+      method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: data })
+    }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function () {
+        entries[id] = data;
+        setStatus('Saved ' + new Date().toLocaleTimeString());
+        var card = document.querySelector('[data-card="' + id + '"]');
+        if (card && !tabDef(active).add) card.classList.toggle('done', isDone(id));
+        renderTabs();
+      })
+      .catch(function (e) { setStatus('Not saved: ' + e.message, true); });
+  }
+
+  function schedule(id) {
+    setStatus('Unsaved changes…');
+    clearTimeout(timers[id]);
+    timers[id] = setTimeout(function () { save(id); }, 700);
+  }
+
+  document.getElementById('main').addEventListener('input', function (e) {
+    var id = e.target.getAttribute && e.target.getAttribute('data-id');
+    if (id) { schedule(id); return; }
+    if (e.target.id === 'q') { filt.q = e.target.value; document.getElementById('list').innerHTML = listHtml(tabDef(active), itemsFor(active)); }
+  });
+  document.getElementById('main').addEventListener('change', function (e) {
+    if (e.target.id === 'area') { filt.area = e.target.value; document.getElementById('list').innerHTML = listHtml(tabDef(active), itemsFor(active)); }
+    if (e.target.id === 'open') { filt.open = e.target.checked; document.getElementById('list').innerHTML = listHtml(tabDef(active), itemsFor(active)); }
+  });
+  document.getElementById('main').addEventListener('click', function (e) {
+    if (e.target.id === 'add') {
+      var def = tabDef(active), id = def.add + '-' + Date.now();
+      entries[id] = {};
+      fetch('/admin/api/accounting-review/' + id, { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: {} }) })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); render(); var f = document.querySelector('[data-id="' + id + '"]'); if (f) f.focus(); })
+        .catch(function (err) { delete entries[id]; setStatus('Not saved: ' + err.message, true); });
+    }
+    var del = e.target.getAttribute && e.target.getAttribute('data-del');
+    if (del && confirm('Delete this row?')) {
+      fetch('/admin/api/accounting-review/' + encodeURIComponent(del), { method: 'DELETE', credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); delete entries[del]; render(); })
+        .catch(function (err) { setStatus('Not deleted: ' + err.message, true); });
+    }
+  });
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var k = e.target.closest && e.target.closest('button[data-tab]');
+    if (k) { active = k.getAttribute('data-tab'); filt = { q: '', area: '', open: false }; render(); window.scrollTo(0, 0); }
+  });
+
+  document.getElementById('export').addEventListener('click', function () {
+    var rows = [['Tab', 'ID', 'Area/Topic', 'Item', 'Field', 'Value']];
+    TABS.forEach(function (def) {
+      if (!def.fields) return;
+      itemsFor(def.key).forEach(function (it) {
+        var d = entries[it.id] || {};
+        def.fields.forEach(function (f) {
+          if (d[f.k]) rows.push([def.label, it.id, it.area || it.topic || '', titleOf(def.key, it), f.l, d[f.k]]);
+        });
+      });
+    });
+    var csv = rows.map(function (r) { return r.map(function (c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'accounting-review-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (Object.keys(timers).some(function (id) { return statusEl.textContent.indexOf('Unsaved') === 0; })) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  fetch('/admin/api/accounting-review', { credentials: 'same-origin' })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (j) {
+      content = j.content;
+      j.entries.forEach(function (r) { entries[r.item_id] = r.data || {}; });
+      setStatus('Loaded');
+      render();
+    })
+    .catch(function (e) { setStatus('Could not load: ' + e.message, true); });
+})();
+</script>
+</body>
+</html>

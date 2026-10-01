@@ -2381,6 +2381,8 @@ ${table(['Referrer', 'Visitors'], v.top_referrers.map((r) => [r.referrer, r.visi
 
 // JSON form of the summary. ?exclude_me=1 leaves out the requester's own visits (works when this
 // is opened from the same browser and network used to visit the demo).
+require('./admin/accountingReview').registerAccountingReview(app, { pool, requireAdmin });
+
 app.get('/admin/demo-visits', requireAdmin, async (req, res) => {
   try {
     const key = await getDemoVisitKey();
@@ -3144,6 +3146,7 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 .admin-user-del { border-color:#fecaca !important; background:#fef2f2 !important; color:#991b1b !important; }
 </style></head>
 <body><header>Causal Admin</header><main>
+<p style="font-size:13px;margin:0 0 14px;"><a href="/admin/accounting-review">Accounting module review →</a> <span style="color:#6b7280;">(bookkeeper feedback: what is built, what is planned, ideas, questions)</span></p>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/organizational/cooperative/pod-management">Solid Pod Management →</a> <span style="color:#6b7280;">(platform-admin only; pod status/sync across every org)</span></p>
 <details open><summary>Demo visitors</summary>
 ${demoVisitsHtml}

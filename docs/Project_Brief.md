@@ -135,5 +135,4 @@ Overall, the roadmap is to complete the tool set, integrate expert feedback and 
 - **Platform instance record and founding organization** — A record naming each instance for the cooperative that launches it, and the founding organization responsible for its administration.
 - **Contracts module** — Contract tracking alongside Grants.
 - **Auditor access and finer roles** — A read-only auditor role and more granular permissions on financial work.
-- **Actuals source switch** — A screen to switch an organization's actuals between Xero and the internal ledger.
 - **Guided budget onboarding and migration** — A step-by-step setup wizard for importing an organization's existing budget data.

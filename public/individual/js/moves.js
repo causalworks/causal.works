@@ -1129,8 +1129,8 @@ const NOTIFY_BADGE_LABELS = { boycott: 'Boycott', contact: 'Contact', comment: '
 // Above the card list on the Comments tab only — same "individual-hint" intro-copy
 // pattern used elsewhere (e.g. money.js's bank-alternatives intro), not a new class.
 const MOVES_GIVE_TAB_INTRO =
-  'Donation asks from the organizations you follow. Giving is your choice — nothing here is a task to ' +
-  'complete. When you give, log it in Ledger → Giving so it counts toward your history.';
+  'Donation asks from the organizations you follow. When you give, log it in Ledger → Giving so it ' +
+  'counts toward your history.';
 
 const MOVES_COMMENTS_TAB_INTRO =
   'These are regulatory and permitting notices identified as high-leverage ' +

@@ -1,18 +1,12 @@
 'use strict';
 
 /**
- * Offline side-by-side evaluation of email -> action extraction across LLM providers/models.
- * Reads a sample file (JSON array of stored emails + the stored extraction), runs the live
- * extractAction() prompt once per config, and writes results next to the sample. Never touches
- * the database or the running server; the sample and results files hold real email text, so keep
- * them outside the repo.
+ * Offline evaluation harness: compares LLM providers/models on the email extraction prompt.
+ * Reads a local sample file, writes a local results file, and never touches the database or the
+ * running server. Keep the sample and results files outside the repo.
  *
  *   node scripts/llm-eval/email-extraction.js run    <sample.json> <results.json> [limit]
  *   node scripts/llm-eval/email-extraction.js report <results.json>
- *
- * Sample row: { id, raw, sender, reply_to, org_name, action_type, turnaround_category,
- *   secondary_turnarounds, e4a_parameters, decision_window_date, timing_confidence,
- *   rep_targets, material_stake, boundary_ids }
  */
 
 const fs = require('fs');
@@ -25,6 +19,31 @@ const CONFIGS = [
   { label: 'mistral-large', provider: 'mistral', model: 'mistral-large-2512' },
 ];
 const BASELINE = 'gemini-A';
+
+// Optional prompt experiment, applied in memory only (production prompt is untouched):
+//   VARIANT=rules  appends PARAMETER SELECTION RULES before the content block
+//   DEDUPE=1       drops sample rows whose email text repeats an earlier row
+//   ONLY=a,b       restricts to those config labels
+const PARAM_RULES = `PARAMETER SELECTION RULES (these override anything above that conflicts):
+- Choose e4a_parameters by the lever the ASK ITSELF pulls: the decision, rule or system the action tries to change (the root cause). Do not choose a parameter because of the harm or topic the campaign is about (its impact) if the ask does not change that lever.
+- If the ask is an event RSVP, webinar, screening, general-purpose donation or newsletter with no specific decision or policy target, return [] for e4a_parameters and [] for secondary_turnarounds. An empty array is a correct answer.
+- Pick only parameters the ask directly moves; one is typical. Never pad to reach a count.
+- Do not choose a parameter on a keyword match alone (for example "trade" does not imply Green tech transfer). Its meaning must fit the ask.
+
+`;
+const PARAM_RULES_2 = PARAM_RULES.replace(
+  /- If the ask is an event RSVP[^\n]*\n/,
+  `- If the ask is an event RSVP, webinar, screening or newsletter with no specific decision or policy target, return [] for e4a_parameters and [] for secondary_turnarounds. An empty array is a correct answer.
+- Donations: if the email names a specific campaign, lawsuit, bill or decision the gift supports, choose the parameter for the lever that campaign targets. If it only asks for general support of the organization's work, return [] for e4a_parameters and [] for secondary_turnarounds.
+`
+);
+if (process.env.VARIANT === 'rules' || process.env.VARIANT === 'rules2') {
+  const RULES = process.env.VARIANT === 'rules2' ? PARAM_RULES_2 : PARAM_RULES;
+  const client = require('../../server/ai/llmClient');
+  const real = client.generate;
+  client.generate = (task, input, opts) =>
+    real(task, typeof input === 'string' ? input.replace('Content to analyze:', RULES + 'Content to analyze:') : input, opts);
+}
 const FALLBACK_ASK = 'Manual review required'; // extractAction's swallowed-error marker
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -52,10 +71,11 @@ async function runOne(extractAction, cfg, row) {
 async function run(samplePath, outPath, limit) {
   const { extractAction } = require('../../server/ai/ai-service');
   let sample = JSON.parse(fs.readFileSync(samplePath, 'utf8'));
+  if (process.env.DEDUPE) { const seen = new Set(); sample = sample.filter((r) => !seen.has(r.raw) && seen.add(r.raw)); }
   if (limit) sample = sample.slice(0, Number(limit));
   const out = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf8')) : { sample, runs: {} };
   out.sample = sample;
-  for (const cfg of CONFIGS) {
+  for (const cfg of CONFIGS.filter((c) => !process.env.ONLY || process.env.ONLY.split(',').includes(c.label))) {
     out.runs[cfg.label] = out.runs[cfg.label] || { cfg, items: {} };
     for (const row of sample) {
       if (out.runs[cfg.label].items[row.id]) continue; // resumable

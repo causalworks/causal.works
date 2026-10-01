@@ -407,7 +407,13 @@
       setStatus(Object.keys(pending).length ? 'Unsaved changes…' : 'Saved ' + new Date().toLocaleTimeString());
       var card = document.querySelector('[data-card="' + id + '"]');
       var def = tabDef(active);
-      if (card && def && def.fixed) card.classList.toggle('done', isDone(id));
+      if (card && def && def.fixed) {
+        // Re-evaluate the "others" block (it unhides once you've answered) and the card colour.
+        card.querySelectorAll('.oth').forEach(function (el) { el.remove(); });
+        card.insertAdjacentHTML('beforeend', othersBlock(def, id));
+        card.classList.remove('done', 'differ');
+        if (isDone(id)) card.classList.add(differs(def, id) ? 'differ' : 'done');
+      }
       renderTabs();
     }).catch(function (e) { setStatus('Not saved: ' + e.message, true); });
   }

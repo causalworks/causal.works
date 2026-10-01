@@ -4,8 +4,8 @@
  * Shared LLM provider layer. Every AI call in the app goes through generate() with a task name,
  * so the provider/model can be switched per task from .env without touching call sites:
  *   LLM_PROVIDER_<TASK>=gemini   LLM_MODEL_<TASK>=gemini-2.5-flash
- * Defaults are Gemini 2.5 Flash for every task. Only the Gemini provider is implemented so far;
- * adding another means adding an entry to PROVIDERS with the same generate() shape.
+ * Defaults are Gemini 2.5 Flash for every task. Providers: gemini, mistral (text only so far; file
+ * inputs and search grounding are Gemini-only). Adding one means adding an entry to PROVIDERS.
  *
  * Tasks: email_extract, intervention_suggest, org_summary, receipt_ocr, bill_invoice_ocr,
  * grant_contract_ocr, bank_pressure.
@@ -15,7 +15,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const DEFAULT_PROVIDER = 'gemini';
-const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash' };
+const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash', mistral: 'mistral-small-latest' };
 
 function taskConfig(task) {
   const key = String(task).toUpperCase();
@@ -71,6 +71,31 @@ const PROVIDERS = {
       if (!r.ok) throw new Error(`Gemini HTTP ${r.status}`);
       const data = await r.json().catch(() => null);
       return data?.candidates?.[0]?.content?.parts?.map((p) => p?.text || '').join('\n').trim() || '';
+    },
+  },
+
+  mistral: {
+    isConfigured: () => !!String(process.env.MISTRAL_API_KEY || '').trim(),
+
+    async generate(model, input, { json, temperature, timeoutMs }) {
+      const parts = typeof input === 'string' ? [{ text: input }] : input;
+      if (parts.some((p) => !('text' in p))) {
+        throw new Error('Mistral provider does not support file inputs yet');
+      }
+      const r = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        signal: AbortSignal.timeout(timeoutMs || 60000),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${String(process.env.MISTRAL_API_KEY).trim()}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: parts.map((p) => p.text).join('\n\n') }],
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
+          ...(temperature != null ? { temperature } : {}),
+        }),
+      });
+      if (!r.ok) throw new Error(`Mistral HTTP ${r.status}`);
+      const data = await r.json();
+      return data?.choices?.[0]?.message?.content || '';
     },
   },
 };

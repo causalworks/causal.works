@@ -1193,7 +1193,7 @@ function renderMovesFeed(items, tab) {
     } else if (item.kind === 'volunteer') {
       card = item.source === 'opportunity' ? renderVolunteerCard(item) : renderActionUpdateCard(item.raw, 'volunteer', 'Volunteer');
     } else if (item.kind === 'give') {
-      card = renderActionUpdateCard(item.raw, 'notify', 'Donate');
+      card = renderActionUpdateCard(item.raw, 'notify', 'Donate', true); // Give cards: tag only, no timing badge
     } else if (item.kind === 'notify') {
       card = renderActionUpdateCard(item.raw, 'notify', NOTIFY_BADGE_LABELS[item.raw.action_type] || 'Update');
     } else if (item.kind === 'comments') {
@@ -1473,7 +1473,7 @@ function renderVestBankAlerts() {
 // verbatim instead of a separate plain-link version that was throwing that away.
 // Shared by the 'notify' (boycott/comment/contact), 'attend', and 'volunteer'
 // kinds — kind/badgeLabel just control which tab it sorts into and which badge shows.
-function renderActionUpdateCard(action, kind, badgeLabel) {
+function renderActionUpdateCard(action, kind, badgeLabel, hideTiming) {
   const domain = domainForActionLogo(action);
 
   // Same layout as Sign-kind cards (renderActionCard) across every Moves tab
@@ -1482,7 +1482,7 @@ function renderActionUpdateCard(action, kind, badgeLabel) {
   // moved down into the boundary-tags row far right, timing_display
   // ("Closes <date>"/"Active window") preferred over the generic day-count
   // badge in the header's right slot.
-  const rightHtml = movesPetitionRowRightHtml(action);
+  const rightHtml = hideTiming ? '' : movesPetitionRowRightHtml(action);
 
   // Attend-tab cards: an organizer "come to this event" ask isn't a petition —
   // the Sign-style expand panel (Copy address & open/Mark done/Not this

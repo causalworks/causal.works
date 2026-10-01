@@ -1,8 +1,9 @@
 'use strict';
 
-// Platform-admin page for the bookkeeper review of the Accounting module (migration 288).
-// Item text is static (server/data/accounting-review.json); only the reviewer's responses
-// are stored, one JSON object per item in accounting_review_entry.
+// Platform-admin page for the bookkeeper review of the Accounting module (migrations 288, 289).
+// Item text is static (server/data/accounting-review.json). Responses are stored one row per
+// (item, reviewer) in accounting_review_entry, so two people answer independently and can compare.
+// Fields in SHARED_FIELDS belong to the pair of them and live under reviewer = 'shared'.
 
 const fs = require('fs');
 const path = require('path');
@@ -10,19 +11,22 @@ const path = require('path');
 const CONTENT_PATH = path.join(__dirname, '..', 'data', 'accounting-review.json');
 const PAGE_PATH = path.join(__dirname, 'accounting-review.html');
 
+const SHARED = 'shared';
 const ITEM_ID_RE = /^(?:[BPIQ]\d{2}|[AL]-\d{10,16})$/;
-const FIELDS = new Set([
-  'works', 'comments', 'priority', 'decision', 'answer', 'reasoning',
-  'area', 'issue', 'example', 'frequency', 'response',
-  'date', 'items', 'who', 'build', 'verified'
+const MINE_FIELDS = new Set([
+  'works', 'priority', 'comments', 'answer', 'reasoning',
+  'area', 'issue', 'example', 'frequency'
+]);
+const SHARED_FIELDS = new Set([
+  'decision', 'response', 'date', 'items', 'who', 'why', 'build', 'verified'
 ]);
 const MAX_FIELD_LEN = 4000;
 
-function cleanData(body) {
-  const out = {};
+function cleanData(body, allowed) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  const out = {};
   for (const [k, v] of Object.entries(body)) {
-    if (!FIELDS.has(k)) return null;
+    if (!allowed.has(k)) return null;
     if (typeof v !== 'string' || v.length > MAX_FIELD_LEN) return null;
     if (v !== '') out[k] = v;
   }
@@ -30,6 +34,8 @@ function cleanData(body) {
 }
 
 function registerAccountingReview(app, { pool, requireAdmin }) {
+  const me = (req) => String(req.user.email).toLowerCase();
+
   app.get('/admin/accounting-review', requireAdmin, (req, res) => {
     res.type('html').send(fs.readFileSync(PAGE_PATH, 'utf8'));
   });
@@ -38,27 +44,31 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     try {
       const content = JSON.parse(fs.readFileSync(CONTENT_PATH, 'utf8'));
       const r = await pool.query(
-        'SELECT item_id, data, updated_by, updated_at FROM accounting_review_entry ORDER BY item_id');
-      return res.json({ content, entries: r.rows });
+        'SELECT item_id, reviewer, data, updated_at FROM accounting_review_entry ORDER BY item_id, reviewer');
+      return res.json({ content, me: me(req), entries: r.rows });
     } catch (e) {
       console.error('GET /admin/api/accounting-review:', e.message);
       return res.status(500).json({ error: 'Could not load the review' });
     }
   });
 
+  // body: { scope: 'mine' | 'shared', data: { field: text } }
   app.put('/admin/api/accounting-review/:itemId', requireAdmin, async (req, res) => {
     const { itemId } = req.params;
     if (!ITEM_ID_RE.test(itemId)) return res.status(400).json({ error: 'Bad item id' });
-    const data = cleanData(req.body && req.body.data);
+    const scope = req.body && req.body.scope;
+    if (scope !== 'mine' && scope !== 'shared') return res.status(400).json({ error: 'Bad scope' });
+    const data = cleanData(req.body.data, scope === 'mine' ? MINE_FIELDS : SHARED_FIELDS);
     if (!data) return res.status(400).json({ error: 'Bad data' });
+    const reviewer = scope === 'mine' ? me(req) : SHARED;
     try {
       const r = await pool.query(
-        `INSERT INTO accounting_review_entry (item_id, data, updated_by, updated_at)
-         VALUES ($1, $2::jsonb, $3, now())
-         ON CONFLICT (item_id) DO UPDATE
+        `INSERT INTO accounting_review_entry (item_id, reviewer, data, updated_by, updated_at)
+         VALUES ($1, $2, $3::jsonb, $4, now())
+         ON CONFLICT (item_id, reviewer) DO UPDATE
            SET data = EXCLUDED.data, updated_by = EXCLUDED.updated_by, updated_at = now()
          RETURNING updated_at`,
-        [itemId, JSON.stringify(data), req.user.email]);
+        [itemId, reviewer, JSON.stringify(data), me(req)]);
       return res.json({ ok: true, updated_at: r.rows[0].updated_at });
     } catch (e) {
       console.error('PUT /admin/api/accounting-review:', e.message);
@@ -66,13 +76,24 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     }
   });
 
+  // A reviewer can delete a gap they added (their row plus its shared row); anyone can delete
+  // a decision-log row. Fixed review items cannot be deleted.
   app.delete('/admin/api/accounting-review/:itemId', requireAdmin, async (req, res) => {
     const { itemId } = req.params;
-    if (!/^[AL]-/.test(itemId) || !ITEM_ID_RE.test(itemId)) {
+    if (!ITEM_ID_RE.test(itemId) || !/^[AL]-/.test(itemId)) {
       return res.status(400).json({ error: 'Only added rows can be deleted' });
     }
     try {
-      await pool.query('DELETE FROM accounting_review_entry WHERE item_id = $1', [itemId]);
+      if (itemId.startsWith('L-')) {
+        await pool.query('DELETE FROM accounting_review_entry WHERE item_id = $1', [itemId]);
+      } else {
+        const own = await pool.query(
+          'SELECT 1 FROM accounting_review_entry WHERE item_id = $1 AND reviewer = $2', [itemId, me(req)]);
+        if (!own.rows.length) return res.status(403).json({ error: 'You can only delete your own additions' });
+        await pool.query(
+          'DELETE FROM accounting_review_entry WHERE item_id = $1 AND reviewer IN ($2, $3)',
+          [itemId, me(req), SHARED]);
+      }
       return res.json({ ok: true });
     } catch (e) {
       console.error('DELETE /admin/api/accounting-review:', e.message);

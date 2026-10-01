@@ -22,13 +22,14 @@ const SHARED_FIELDS = new Set([
 ]);
 const MAX_FIELD_LEN = 4000;
 
+// Returns the fields to merge into the row; an empty string means "clear this field".
 function cleanData(body, allowed) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   const out = {};
   for (const [k, v] of Object.entries(body)) {
     if (!allowed.has(k)) return null;
     if (typeof v !== 'string' || v.length > MAX_FIELD_LEN) return null;
-    if (v !== '') out[k] = v;
+    out[k] = v;
   }
   return out;
 }
@@ -52,7 +53,8 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     }
   });
 
-  // body: { scope: 'mine' | 'shared', data: { field: text } }
+  // body: { scope: 'mine' | 'shared', data: { field: text } }. Only the fields sent are changed,
+  // so two people editing different fields of one shared row don't overwrite each other.
   app.put('/admin/api/accounting-review/:itemId', requireAdmin, async (req, res) => {
     const { itemId } = req.params;
     if (!ITEM_ID_RE.test(itemId)) return res.status(400).json({ error: 'Bad item id' });
@@ -61,15 +63,19 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     const data = cleanData(req.body.data, scope === 'mine' ? MINE_FIELDS : SHARED_FIELDS);
     if (!data) return res.status(400).json({ error: 'Bad data' });
     const reviewer = scope === 'mine' ? me(req) : SHARED;
+    const nonEmpty = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ''));
     try {
       const r = await pool.query(
         `INSERT INTO accounting_review_entry (item_id, reviewer, data, updated_by, updated_at)
          VALUES ($1, $2, $3::jsonb, $4, now())
          ON CONFLICT (item_id, reviewer) DO UPDATE
-           SET data = EXCLUDED.data, updated_by = EXCLUDED.updated_by, updated_at = now()
-         RETURNING updated_at`,
-        [itemId, reviewer, JSON.stringify(data), me(req)]);
-      return res.json({ ok: true, updated_at: r.rows[0].updated_at });
+           SET data = (SELECT COALESCE(jsonb_object_agg(key, value), '{}'::jsonb)
+                       FROM jsonb_each(accounting_review_entry.data || $5::jsonb)
+                       WHERE value <> '""'::jsonb),
+               updated_by = EXCLUDED.updated_by, updated_at = now()
+         RETURNING data, updated_at`,
+        [itemId, reviewer, JSON.stringify(nonEmpty), me(req), JSON.stringify(data)]);
+      return res.json({ ok: true, data: r.rows[0].data, updated_at: r.rows[0].updated_at });
     } catch (e) {
       console.error('PUT /admin/api/accounting-review:', e.message);
       return res.status(500).json({ error: 'Could not save' });

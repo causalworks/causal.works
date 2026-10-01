@@ -359,10 +359,30 @@
     main.innerHTML = h;
   }
 
-  function collect(id, scope) {
+  // Only the fields that changed since the last save are sent, so a save never overwrites
+  // fields someone else edited in the meantime.
+  function collect(id, scope, keys) {
     var out = {};
-    document.querySelectorAll('[data-id="' + id + '"][data-scope="' + scope + '"]').forEach(function (el) { if (el.value) out[el.getAttribute('data-k')] = el.value; });
+    document.querySelectorAll('[data-id="' + id + '"][data-scope="' + scope + '"]').forEach(function (el) {
+      var k = el.getAttribute('data-k');
+      if (keys[k]) out[k] = el.value;
+    });
     return out;
+  }
+
+  // Pull everyone's latest rows, keeping any row of mine that has unsaved edits.
+  function refreshEntries() {
+    return fetch('/admin/api/accounting-review', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) {
+        var fresh = {};
+        j.entries.forEach(function (r) { fresh[r.item_id] = fresh[r.item_id] || {}; fresh[r.item_id][r.reviewer] = r.data || {}; });
+        Object.keys(pending).forEach(function (key) {
+          var parts = key.split('|'), id = parts[0], who = parts[1] === 'mine' ? me : SHARED;
+          if (entries[id] && entries[id][who]) { fresh[id] = fresh[id] || {}; fresh[id][who] = entries[id][who]; }
+        });
+        entries = fresh;
+      }).catch(function () { /* keep what we have */ });
   }
 
   function api(method, id, body) {
@@ -373,12 +393,12 @@
   }
 
   function save(id, scope) {
-    var key = id + '|' + scope, data = collect(id, scope);
+    var key = id + '|' + scope, data = collect(id, scope, pending[key] || {});
     delete timers[key];
     setStatus('Saving…');
-    api('PUT', id, { scope: scope, data: data }).then(function () {
+    api('PUT', id, { scope: scope, data: data }).then(function (out) {
       entries[id] = entries[id] || {};
-      entries[id][scope === 'mine' ? me : SHARED] = data;
+      entries[id][scope === 'mine' ? me : SHARED] = out.data;
       delete pending[key];
       setStatus(Object.keys(pending).length ? 'Unsaved changes…' : 'Saved ' + new Date().toLocaleTimeString());
       var card = document.querySelector('[data-card="' + id + '"]');
@@ -388,9 +408,10 @@
     }).catch(function (e) { setStatus('Not saved: ' + e.message, true); });
   }
 
-  function schedule(id, scope) {
+  function schedule(id, scope, k) {
     var key = id + '|' + scope;
-    pending[key] = 1;
+    pending[key] = pending[key] || {};
+    pending[key][k] = true;
     setStatus('Unsaved changes…');
     clearTimeout(timers[key]);
     timers[key] = setTimeout(function () { save(id, scope); }, 700);
@@ -401,7 +422,7 @@
 
   mainEl.addEventListener('input', function (e) {
     var id = e.target.getAttribute && e.target.getAttribute('data-id');
-    if (id) { schedule(id, e.target.getAttribute('data-scope')); return; }
+    if (id) { schedule(id, e.target.getAttribute('data-scope'), e.target.getAttribute('data-k')); return; }
     if (e.target.id === 'q') { filt.q = e.target.value; refreshList(); }
   });
   mainEl.addEventListener('change', function (e) {
@@ -426,7 +447,12 @@
   });
   document.getElementById('tabs').addEventListener('click', function (e) {
     var k = e.target.closest && e.target.closest('button[data-tab]');
-    if (k) { active = k.getAttribute('data-tab'); filt = { q: '', area: '', open: false, cmp: 'any' }; render(); window.scrollTo(0, 0); }
+    if (k) {
+      active = k.getAttribute('data-tab'); filt = { q: '', area: '', open: false, cmp: 'any' };
+      render(); window.scrollTo(0, 0);
+      // Other people may have added answers since this page loaded.
+      if (active !== 'readme') refreshEntries().then(function () { if (!Object.keys(pending).length) render(); });
+    }
   });
   peekEl.addEventListener('change', function () {
     try { localStorage.setItem('acr_peek', peekEl.checked ? '1' : '0'); } catch (e) { /* storage blocked */ }

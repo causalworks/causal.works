@@ -381,7 +381,9 @@ async function ensureDemoReps(uid) {
 // DEMO_VISIT_TRACKING_UNTIL; rows older than 30 days are deleted (privacy policy: server logs
 // are kept up to 30 days). Drop demo_visit_log / demo_visit_key when the review period ends.
 const DEMO_VISIT_TRACKING_UNTIL = Date.parse('2026-10-14T00:00:00Z');
-const DEMO_VISIT_BOT_RX = /bot|crawl|spider|scan|curl|python|go-http|headless|monitor|preview|facebookexternal|slurp|wget|okhttp/i;
+// The last four alternatives catch scanners that fake very old browsers (e.g. 'Android 2.3.6',
+// 'Mozilla/4.0 (compatible; MSIE ...)') while sweeping for .env and PHP files; no real visitor uses them.
+const DEMO_VISIT_BOT_RX = /bot|crawl|spider|scan|curl|python|go-http|headless|monitor|preview|facebookexternal|slurp|wget|okhttp|android [1-4]\.|msie|mozilla\/4\.0|windows nt [3-5]\./i;
 let demoVisitKey = null;
 let lastDemoVisitPurge = 0;
 

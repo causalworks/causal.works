@@ -29,6 +29,7 @@ const INDIVIDUAL_STRINGS = {
     sign: 'Sign',
     attend: 'Attend',
     volunteer: 'Volunteer',
+    give: 'Give',
     vest: 'Assets',
     comments: 'Comments',
   },

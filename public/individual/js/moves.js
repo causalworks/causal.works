@@ -844,7 +844,7 @@ async function loadMovesFeed() {
   // under Sign's notify path, since sweeping them into a tab framed as
   // "this is an early, unfinished platform feature" would misrepresent real
   // org content.
-  const ACTION_TYPE_TO_KIND = { petition: 'sign', attend: 'attend', volunteer: 'volunteer' };
+  const ACTION_TYPE_TO_KIND = { petition: 'sign', attend: 'attend', volunteer: 'volunteer', donate: 'give' };
   const PERMITTING_PIPELINE_SOURCES = new Set(['federal_register', 'eip_oil_gas_watch']);
   movesFullActions.forEach((a) => {
     const isPermittingSourced = PERMITTING_PIPELINE_SOURCES.has(a.source);
@@ -894,7 +894,7 @@ function computeSignContextMap(actions, userReps) {
   return map;
 }
 
-const MOVES_TAB_KIND_ORDER = { attend: 0, sign: 1, volunteer: 2, notify: 3, comments: 4 };
+const MOVES_TAB_KIND_ORDER = { attend: 0, sign: 1, volunteer: 2, give: 3, notify: 4, comments: 5 };
 
 // Sort dated items first (soonest first, sign items tie-broken by timing_confidence/do_now),
 // then undated items after, grouped by kind order (attend → sign → volunteer → notify → comments).
@@ -983,6 +983,8 @@ function applyMovesTab(tab) {
     items = movesUnifiedItems.filter((i) => i.kind === 'sign' || i.kind === 'notify');
   } else if (tab === 'volunteer') {
     items = movesUnifiedItems.filter((i) => i.kind === 'volunteer');
+  } else if (tab === 'give') {
+    items = movesUnifiedItems.filter((i) => i.kind === 'give');
   } else if (tab === 'comments') {
     items = movesUnifiedItems.filter((i) => i.kind === 'comments');
   } else {
@@ -1120,6 +1122,10 @@ const NOTIFY_BADGE_LABELS = { boycott: 'Boycott', contact: 'Contact', comment: '
 
 // Above the card list on the Comments tab only — same "individual-hint" intro-copy
 // pattern used elsewhere (e.g. money.js's bank-alternatives intro), not a new class.
+const MOVES_GIVE_TAB_INTRO =
+  'Donation asks from the organizations you follow. Giving is your choice — nothing here is a task to ' +
+  'complete. When you give, log it in Ledger → Giving so it counts toward your history.';
+
 const MOVES_COMMENTS_TAB_INTRO =
   'These are regulatory and permitting notices identified as high-leverage ' +
   "decisions — new infrastructure projects, before they're locked in. This feed is early: " +
@@ -1153,6 +1159,14 @@ function renderMovesFeed(items, tab) {
     prependVolunteerSuggestButton(container);
   }
 
+  if (tab === 'give') {
+    const intro = document.createElement('div');
+    intro.className = 'individual-hint';
+    intro.style.cssText = 'margin-bottom:16px;';
+    intro.textContent = MOVES_GIVE_TAB_INTRO;
+    container.appendChild(intro);
+  }
+
   if (tab === 'comments') {
     const intro = document.createElement('div');
     intro.className = 'individual-hint';
@@ -1172,6 +1186,8 @@ function renderMovesFeed(items, tab) {
       card = item.source === 'event' ? renderAttendEventCard(item) : renderActionUpdateCard(item.raw, 'attend', 'Attend');
     } else if (item.kind === 'volunteer') {
       card = item.source === 'opportunity' ? renderVolunteerCard(item) : renderActionUpdateCard(item.raw, 'volunteer', 'Volunteer');
+    } else if (item.kind === 'give') {
+      card = renderActionUpdateCard(item.raw, 'notify', 'Donate');
     } else if (item.kind === 'notify') {
       card = renderActionUpdateCard(item.raw, 'notify', NOTIFY_BADGE_LABELS[item.raw.action_type] || 'Update');
     } else if (item.kind === 'comments') {
@@ -1219,6 +1235,7 @@ function movesFeedEmptyMessageForTab(tab) {
   if (tab === 'sign') return 'No open actions. Check back for new asks.';
   if (tab === 'volunteer') return 'No volunteer opportunities near you right now.';
   if (tab === 'comments') return 'No open comment periods right now. Check back for new notices.';
+  if (tab === 'give') return 'No donation asks from your organizations right now.';
   return 'No moves match this filter.';
 }
 

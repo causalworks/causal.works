@@ -151,8 +151,8 @@ function renderSettingsPanel() {
   html += '</div>';
   html += '<label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; font-weight:600; color:var(--text-primary); margin-top:16px; cursor:pointer;">';
   html += '<input type="checkbox" id="settings-keep-email-text" onchange="setKeepForwardedEmailText(this.checked)"' + (keepForwardedEmailText ? ' checked' : '') + ' style="margin-top:2px;">';
-  html += '<span>Keep a copy of the emails I forward</span></label>';
-  html += '<div class="individual-hint" style="margin-top:6px;">Off by default. When off, the email is read when it arrives and its full text is not saved. We still keep the sender, subject and a short preview so your Responses list works. Turn this on if you want us to keep the full text so extraction can be re-checked and fixed.</div>';
+  html += '<span>Keep a copy of emails sent to my Causal address</span></label>';
+  html += '<div class="individual-hint" style="margin-top:6px;">Off by default. When off, each email is read when it arrives and its full text is not saved. We still keep the sender, subject and a short preview so your Responses list works. Turn this on if you want us to keep the full text so extraction can be re-checked and fixed.</div>';
   html += '</div>';
 
   // Account card

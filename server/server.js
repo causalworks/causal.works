@@ -2069,11 +2069,18 @@ app.post('/inbound', async (req, res) => {
     const actionUserIdForDb =
       actionSource === 'user' && org_id != null ? null : user_id;
 
+    // Full email text is stored only if the forwarding user opted in, and never on org-wide shared rows.
+    let rawContentForDb = null;
+    if (actionUserIdForDb != null) {
+      const keepRes = await pool.query(`SELECT keep_forwarded_email_text FROM users WHERE id = $1`, [user_id]).catch(() => ({ rows: [] }));
+      if (keepRes.rows[0]?.keep_forwarded_email_text) rawContentForDb = contentToAnalyze.substring(0, 10000);
+    }
+
     if (existingActionId) {
       await pool.query(
         `UPDATE actions SET
            action_ask = $1, turnaround_category = $2, leverage_point = $3, strategy_text = $4,
-           source_url = $5, raw_content = $6, secondary_turnarounds = $7, e4a_parameters = $8,
+           source_url = $5, raw_content = COALESCE($6, actions.raw_content), secondary_turnarounds = $7, e4a_parameters = $8,
            action_type = $9, timing_confidence = $10, do_now = $11, timing_display = $12,
            feature_target = $13, decision_window_date = $14, rep_targets = $15,
            material_stake = $16,
@@ -2096,7 +2103,7 @@ app.post('/inbound', async (req, res) => {
           aiResult.leverage_point,
           aiResult.strategy_text,
           source_url,
-          contentToAnalyze.substring(0, 10000),
+          rawContentForDb,
           aiResult.secondary_turnarounds,
           aiResult.e4a_parameters,
           aiResult.action_type,
@@ -2132,7 +2139,7 @@ app.post('/inbound', async (req, res) => {
           aiResult.leverage_point,
           aiResult.strategy_text,
           source_url,
-          contentToAnalyze.substring(0, 10000),
+          rawContentForDb,
           fromAddress || null,
           replyToAddress || null,
           actionUserIdForDb,

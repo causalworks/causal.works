@@ -790,6 +790,7 @@ function registerUserRoutes(app, pool) {
       if (!userResult) userResult = { rows: [{}] };
 
       const orgsResult = await pool.query(`SELECT org_id FROM user_org_preferences WHERE user_id = $1`, [userId]);
+      const keepRes = await pool.query(`SELECT keep_forwarded_email_text FROM users WHERE id = $1`, [userId]).catch(() => ({ rows: [] }));
       const user = userResult.rows[0] || {};
       res.json({
         location_country: user.location_country || '',
@@ -803,6 +804,7 @@ function registerUserRoutes(app, pool) {
         user_type: user.user_type ?? req.user.user_type ?? 'individual_basic',
         primary_region: Array.isArray(user.primary_region) ? user.primary_region : [],
         org_ids: orgsResult.rows.map(r => r.org_id),
+        keep_forwarded_email_text: !!keepRes.rows[0]?.keep_forwarded_email_text,
       });
     } catch (e) {
       console.error('❌ Settings GET error:', e.message);
@@ -823,6 +825,20 @@ function registerUserRoutes(app, pool) {
         return res.json({ ok: true, bank: merged });
       } catch (e) {
         console.error('❌ PATCH /api/settings append_bank:', e.message);
+        return res.status(500).json({ error: 'Database error' });
+      }
+    }
+
+    if (req.body && req.body.keep_forwarded_email_text != null) {
+      try {
+        await pool.query('UPDATE users SET keep_forwarded_email_text = $1 WHERE id = $2', [!!req.body.keep_forwarded_email_text, userId]);
+        if (!req.body.keep_forwarded_email_text) {
+          // Turning it off also removes copies already stored for this user's own rows.
+          await pool.query(`UPDATE actions SET raw_content = NULL WHERE user_id = $1 AND source IN ('causal', 'user') AND raw_content IS NOT NULL`, [userId]);
+        }
+        return res.json({ ok: true, keep_forwarded_email_text: !!req.body.keep_forwarded_email_text });
+      } catch (e) {
+        console.error('❌ PATCH /api/settings keep_forwarded_email_text:', e.message);
         return res.status(500).json({ error: 'Database error' });
       }
     }

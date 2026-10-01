@@ -11,6 +11,7 @@ let userCity = '';
 let selectedOrgs = new Set();
 let allOrgs = [];
 let digestFrequency = 'off';
+let keepForwardedEmailText = false;
 let forwardingAddress = '';
 let settingsAutoSaveTimer = null;
 let primaryRegions = new Set();
@@ -51,6 +52,7 @@ async function openSettings() {
     userCity = String(settings.location_city || me.location_city || '').trim() || '';
     selectedOrgs = new Set((settings.org_ids || []).map(String));
     digestFrequency = settings.digest_frequency || 'off';
+    keepForwardedEmailText = !!settings.keep_forwarded_email_text;
     primaryRegions = new Set((settings.primary_region || []).map(String));
     forwardingAddress = me.causal_address || me.forwarding_address || '';
     allOrgs = orgs || [];
@@ -147,6 +149,10 @@ function renderSettingsPanel() {
     html += '<button type="button" onclick="setDigestFrequency(\'' + freq + '\')" class="app-btn app-btn-outline" ' + active + ' style="flex:1; font-size:13px;">' + label + '</button>';
   });
   html += '</div>';
+  html += '<label style="display:flex; gap:8px; align-items:flex-start; font-size:13px; font-weight:600; color:var(--text-primary); margin-top:16px; cursor:pointer;">';
+  html += '<input type="checkbox" id="settings-keep-email-text" onchange="setKeepForwardedEmailText(this.checked)"' + (keepForwardedEmailText ? ' checked' : '') + ' style="margin-top:2px;">';
+  html += '<span>Keep a copy of the emails I forward</span></label>';
+  html += '<div class="individual-hint" style="margin-top:6px;">Off by default. When off, the email is read when it arrives and its full text is not saved. We still keep the sender, subject and a short preview so your Responses list works. Turn this on if you want us to keep the full text so extraction can be re-checked and fixed.</div>';
   html += '</div>';
 
   // Account card
@@ -262,6 +268,26 @@ function setDigestFrequency(freq) {
   digestFrequency = freq;
   scheduleAutoSave();
   renderSettingsPanel();
+}
+
+// ─── KEEP FORWARDED EMAIL TEXT ───
+async function setKeepForwardedEmailText(on) {
+  const previous = keepForwardedEmailText;
+  keepForwardedEmailText = !!on;
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keep_forwarded_email_text: keepForwardedEmailText }),
+    });
+    if (!res.ok) throw new Error('save failed');
+  } catch (e) {
+    keepForwardedEmailText = previous;
+    const box = document.getElementById('settings-keep-email-text');
+    if (box) box.checked = previous;
+    alert('Could not save this setting. Please try again.');
+  }
 }
 
 // ─── COPY ADDRESS ───
@@ -488,6 +514,7 @@ window.toggleOrg = toggleOrg;
 window.onCountryChange = onCountryChange;
 window.onZipChange = onZipChange;
 window.setDigestFrequency = setDigestFrequency;
+window.setKeepForwardedEmailText = setKeepForwardedEmailText;
 window.copyAddress = copyAddress;
 window.scheduleAutoSave = scheduleAutoSave;
 window.saveSettingsNow = saveSettingsNow;

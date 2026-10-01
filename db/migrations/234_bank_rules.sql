@@ -7,7 +7,7 @@
 --
 -- v1 scope: single-coding action (no splits), first-match-wins by priority, substring/
 -- range conditions only (no regex, no OR logic). See
--- .claude/plans/2026-09-14-bank-rules-spec.md for full reasoning.
+-- .claude/plans/archive/2026-09-14-bank-rules-spec.md for full reasoning.
 
 CREATE TABLE public.org_bank_rules (
     id integer NOT NULL,

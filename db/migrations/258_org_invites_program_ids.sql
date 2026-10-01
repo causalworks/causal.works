@@ -3,7 +3,7 @@
 -- Real usage feedback (2026-09-19, immediately after the invite RLS fix in migration 257):
 -- Invite only offered Admin/Finance while Change Role also offered Program, forcing every
 -- program-scoped person through an extra invite-then-promote step -- flagged as a real UX gap,
--- not a hypothetical one (see .claude/plans/2026-09-19-inviteaccept-rls-fix.md and modern-SaaS
+-- not a hypothetical one (see .claude/plans/archive/2026-09-19-inviteaccept-rls-fix.md and modern-SaaS
 -- precedent already researched there: Linear/Vercel assign a scoped role at invite time).
 --
 -- org_invites predates the invitee having an org_users row, so there's nowhere to attach an

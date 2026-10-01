@@ -1,5 +1,5 @@
 -- 253: RLS bootstrapping fix for the Plaid webhook handler (see
--- .claude/plans/2026-09-17-rls-audit-serverjs-raw-pool.md).
+-- .claude/plans/archive/2026-09-17-rls-audit-serverjs-raw-pool.md).
 --
 -- handlePlaidWebhook (server/organizational/routes/plaid.js) has no user session on this
 -- path -- Plaid signs the webhook instead -- so nothing ever calls enterOrgContext() before

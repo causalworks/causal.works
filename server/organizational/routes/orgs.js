@@ -554,7 +554,7 @@ function registerOrganizationalOrgRoutes(app, pool) {
     // Opt-in: populates the new org with representative sample content (documents,
     // access groups/permissions, a grant, personnel) instead of leaving it empty --
     // for invited people trying the platform, not a real org building from scratch.
-    // See .claude/plans/2026-09-28-seeded-sample-org-creation.md.
+    // See .claude/plans/archive/2026-09-28-seeded-sample-org-creation.md.
     const seedSampleData = body.seed_sample_data === true;
 
     const client = await pool.connect();
@@ -747,7 +747,7 @@ function registerOrganizationalOrgRoutes(app, pool) {
       // /members/:id both filter on org_users.id (and org_program_grants.org_user_id FKs to
       // it), so sending users.id back to the client here was a real bug: the two id spaces
       // aren't the same, and mismatches silently no-op'd role changes and member removal (see
-      // .claude/plans/2026-09-19-inviteaccept-rls-fix.md's follow-up note for how this surfaced).
+      // .claude/plans/archive/2026-09-19-inviteaccept-rls-fix.md's follow-up note for how this surfaced).
       const r = await pool.query(
         `SELECT m.id, u.email, m.role, m.created_at,
                 COALESCE(

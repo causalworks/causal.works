@@ -2,7 +2,7 @@
 -- staff/board reimbursement, deliberately NOT built on org_bills -- submitter identity,
 -- 1099-exemption under IRS Pub. 463, and self-approval risk on payments to insiders all
 -- differ in kind from an arm's-length vendor bill. See
--- .claude/plans/2026-09-14-expense-claims-spec.md for the full reasoning, including the
+-- .claude/plans/archive/2026-09-14-expense-claims-spec.md for the full reasoning, including the
 -- addendum covering receipt OCR prefill and the configurable pre-approval/post-payout
 -- approval timing.
 

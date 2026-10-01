@@ -1,7 +1,7 @@
 -- 237: Board-designated funds -- Accounting build-order item #7, resolved as "track a running
 -- balance via a ledger tag," mirroring how donor-restricted grants already work
 -- (org_grants + donor_restriction_class tag on org_ledger_lines, balance = sum of tagged lines).
--- See .claude/plans/2026-09-14-board-designated-funds-and-expense-claims-edit.md.
+-- See .claude/plans/archive/2026-09-14-board-designated-funds-and-expense-claims-edit.md.
 --
 -- org_board_designations is the named-fund identity (like org_grants); board_designation_id on
 -- org_ledger_lines is the activity tag (like grant_id). A designation's balance is just

@@ -258,7 +258,7 @@
   // via server/organizational/routes/fixedAssets.js's schedule-d endpoint -- replaces the old
   // balance-sheet-snapshot guess (hardcoded 1400-1499 account-code range + a name-string check
   // for "depreciation"), which had no register behind it at all. See
-  // .claude/plans/2026-09-14-fixed-assets-depreciation-spec.md.
+  // .claude/plans/archive/2026-09-14-fixed-assets-depreciation-spec.md.
   function renderScheduleD(data) {
     if (!scheduleDEl) return;
     if (!data || !data.assets || !data.assets.length) {

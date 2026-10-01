@@ -1,5 +1,5 @@
 -- 257: RLS bootstrap functions for inviteAccept.js -- fixes the invite-acceptance flow being
--- completely non-functional (see .claude/plans/2026-09-16-rls-audit-membership-inviteaccept.md).
+-- completely non-functional (see .claude/plans/archive/2026-09-16-rls-audit-membership-inviteaccept.md).
 --
 -- org_invites carries FORCE RLS (migration 137), isolated on org_id via app.current_org_id.
 -- All four endpoints in inviteAccept.js need to look up an invite (by raw token, by id, or by

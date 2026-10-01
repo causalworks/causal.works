@@ -8,7 +8,7 @@
 -- lodging and any single expense >= $75 -- nothing below that needs a receipt under federal law.
 -- But state law varies, so this migration does NOT default to the federal $75 figure -- the
 -- threshold is admin-configurable, defaulting to $0 (preserves today's strict behavior until an
--- admin explicitly loosens it). See .claude/plans/2026-09-14-board-designated-funds-and-expense-claims-edit.md, Part C.
+-- admin explicitly loosens it). See .claude/plans/archive/2026-09-14-board-designated-funds-and-expense-claims-edit.md, Part C.
 
 ALTER TABLE org_settings
   ADD COLUMN expense_claim_receipt_required_threshold_cents integer NOT NULL DEFAULT 0;

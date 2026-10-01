@@ -793,12 +793,13 @@ async function loadMovesFeed() {
     '<div class="individual-card individual-skeleton" style="height:64px; margin-bottom:12px;"></div>'
   ).join('');
 
-  const [actionsRes, localRes, volunteerRes, repsRes, pledgeRemindersRes] = await Promise.all([
+  const [actionsRes, localRes, volunteerRes, repsRes, pledgeRemindersRes, giveRes] = await Promise.all([
     fetch('/api/actions', { credentials: 'same-origin' }).catch(() => null),
     fetch('/api/local/feed', { credentials: 'same-origin' }).catch(() => null),
     fetch('/api/volunteer/opportunities', { credentials: 'same-origin' }).catch(() => null),
     fetch('/api/reps', { credentials: 'same-origin' }).catch(() => null),
     fetch('/api/user/pledge-reminders', { credentials: 'same-origin' }).catch(() => null),
+    fetch('/api/give/actions', { credentials: 'same-origin' }).catch(() => null),
   ]);
 
   const actions = actionsRes && actionsRes.ok ? await actionsRes.json().catch(() => []) : [];
@@ -844,7 +845,7 @@ async function loadMovesFeed() {
   // under Sign's notify path, since sweeping them into a tab framed as
   // "this is an early, unfinished platform feature" would misrepresent real
   // org content.
-  const ACTION_TYPE_TO_KIND = { petition: 'sign', attend: 'attend', volunteer: 'volunteer', donate: 'give' };
+  const ACTION_TYPE_TO_KIND = { petition: 'sign', attend: 'attend', volunteer: 'volunteer' };
   const PERMITTING_PIPELINE_SOURCES = new Set(['federal_register', 'eip_oil_gas_watch']);
   movesFullActions.forEach((a) => {
     const isPermittingSourced = PERMITTING_PIPELINE_SOURCES.has(a.source);
@@ -856,6 +857,11 @@ async function loadMovesFeed() {
       deadline: a.decision_window_date ? new Date(a.decision_window_date) : null,
       raw: a,
     });
+  });
+  // Donation asks are served by /api/give/actions (feature_target 'purse'), not /api/actions.
+  const giveActions = giveRes && giveRes.ok ? await giveRes.json().catch(() => []) : [];
+  (Array.isArray(giveActions) ? giveActions : []).forEach((a) => {
+    movesUnifiedItems.push({ id: 'give-act-' + a.id, kind: 'give', source: 'action', deadline: null, raw: a });
   });
   events.forEach((ev, i) => movesUnifiedItems.push(buildAttendEventItem(ev, i)));
   opportunities.forEach((opp, i) => {

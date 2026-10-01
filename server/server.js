@@ -3150,7 +3150,7 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 .admin-coop-del { border-color:#fecaca !important; background:#fef2f2 !important; color:#991b1b !important; }
 .admin-user-del { border-color:#fecaca !important; background:#fef2f2 !important; color:#991b1b !important; }
 </style></head>
-<body><header>Causal Admin</header><main>
+<body><header style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><span>Causal Admin</span><span style="font-size:13px;font-weight:400;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">${escapeHtml(String(req.user.email || ''))}<a href="/individual/" style="color:#fff;">Open the app</a><button type="button" style="color:#111827;" onclick="fetch('/auth/logout',{method:'POST',credentials:'same-origin'}).catch(function(){}).then(function(){location.href='/login';})">Sign out</button></span></header><main>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/admin/accounting-review">Accounting module review →</a> <span style="color:#6b7280;">(what is built, what is planned, ideas, questions)</span></p>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/organizational/cooperative/pod-management">Solid Pod Management →</a> <span style="color:#6b7280;">(platform-admin only; pod status/sync across every org)</span></p>
 <details open><summary>Demo visitors</summary>

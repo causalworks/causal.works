@@ -63,6 +63,18 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     const data = cleanData(req.body.data, scope === 'mine' ? MINE_FIELDS : SHARED_FIELDS);
     if (!data) return res.status(400).json({ error: 'Bad data' });
     const reviewer = scope === 'mine' ? me(req) : SHARED;
+    // Reasoning only goes with an answer: clearing the answer clears it, and it can't be set without one.
+    if (scope === 'mine' && /^Q/.test(itemId)) {
+      if (data.answer === '') data.reasoning = '';
+      if (data.reasoning && data.answer === undefined) {
+        const cur = await pool.query(
+          'SELECT data->>\'answer\' AS answer FROM accounting_review_entry WHERE item_id = $1 AND reviewer = $2',
+          [itemId, reviewer]);
+        if (!cur.rows.length || !cur.rows[0].answer) {
+          return res.status(400).json({ error: 'Add an answer before the reasoning' });
+        }
+      }
+    }
     const nonEmpty = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== ''));
     try {
       const r = await pool.query(

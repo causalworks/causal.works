@@ -195,7 +195,7 @@
     document.getElementById('tabs').innerHTML = h;
   }
 
-  function fieldHtml(f, id, val) {
+  function fieldHtml(f, id, val, off) {
     var cls = (f.sh ? 'sh' : 'mine') + (f.wide ? ' wide' : '');
     var dom = 'f_' + id + '_' + f.k;
     var attrs = ' id="' + dom + '" data-id="' + id + '" data-k="' + f.k + '" data-scope="' + (f.sh ? 'shared' : 'mine') + '"';
@@ -206,7 +206,7 @@
     } else if (f.t === 'i') {
       inner = '<input' + attrs + ' value="' + esc(val) + '" maxlength="4000">';
     } else {
-      inner = '<textarea' + attrs + ' maxlength="4000">' + esc(val) + '</textarea>';
+      inner = '<textarea' + attrs + ' maxlength="4000"' + (off ? ' disabled placeholder="Write your answer first"' : '') + '>' + esc(val) + '</textarea>';
     }
     return '<div class="' + cls + '"><label for="' + dom + '">' + esc(f.l) + '</label>' + inner + '</div>';
   }
@@ -256,7 +256,7 @@
     if (it.size) meta.push('Rough size: ' + it.size);
     if (it.source) meta.push('Source: ' + it.source);
     if (meta.length) h += '<p class="meta">' + esc(meta.join(' · ')) + '</p>';
-    h += '<div class="fields">' + def.fields.map(function (f) { return fieldHtml(f, it.id, (f.sh ? sd : d)[f.k] || ''); }).join('') + '</div>';
+    h += '<div class="fields">' + def.fields.map(function (f) { return fieldHtml(f, it.id, (f.sh ? sd : d)[f.k] || '', f.k === 'reasoning' && !d.answer); }).join('') + '</div>';
     if (def.fixed) h += othersBlock(def, it.id);
     return h + '</div>';
   }
@@ -422,7 +422,20 @@
 
   mainEl.addEventListener('input', function (e) {
     var id = e.target.getAttribute && e.target.getAttribute('data-id');
-    if (id) { schedule(id, e.target.getAttribute('data-scope'), e.target.getAttribute('data-k')); return; }
+    if (id) {
+      var k = e.target.getAttribute('data-k'), scope = e.target.getAttribute('data-scope');
+      schedule(id, scope, k);
+      if (k === 'answer') {
+        // Reasoning only goes with an answer.
+        var why = document.getElementById('f_' + id + '_reasoning');
+        if (why) {
+          why.disabled = !e.target.value;
+          why.placeholder = e.target.value ? '' : 'Write your answer first';
+          if (!e.target.value && why.value) { why.value = ''; schedule(id, scope, 'reasoning'); }
+        }
+      }
+      return;
+    }
     if (e.target.id === 'q') { filt.q = e.target.value; refreshList(); }
   });
   mainEl.addEventListener('change', function (e) {

@@ -1,6 +1,6 @@
 'use strict';
 
-const { requireAuth, CAUSAL_DOMAIN } = require('../../auth');
+const { requireAuth, CAUSAL_DOMAIN, persistentSessionEmails } = require('../../auth');
 const { matchReps, resolveRepsCountry, repsTabHint } = require('../../rep/rep-matcher');
 const {
   normalizeLocalPart,
@@ -86,6 +86,7 @@ function registerUserRoutes(app, pool) {
       onboarding_complete: (req.user.onboarding_step || 'bank') === 'complete',
       has_completed_first_action,
       visited_financial: !!req.user.visited_financial_at,
+      no_idle_logout: persistentSessionEmails().includes(String(req.user.email || '').toLowerCase()),
     });
   });
 

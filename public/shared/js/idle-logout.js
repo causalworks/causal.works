@@ -12,6 +12,7 @@
   const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'];
 
   let timer = null;
+  let exempt = false;
 
   function doLogout() {
     fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' })
@@ -22,6 +23,7 @@
   }
 
   function resetTimer() {
+    if (exempt) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(doLogout, IDLE_LOGOUT_MS);
   }
@@ -38,4 +40,15 @@
   });
 
   resetTimer();
+
+  // Accounts listed in PERSISTENT_SESSION_EMAILS are exempt from this timer.
+  fetch('/api/me', { credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (me) {
+      if (!me || !me.no_idle_logout) return;
+      exempt = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+    })
+    .catch(function () {});
 })();

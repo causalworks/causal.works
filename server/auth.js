@@ -53,8 +53,8 @@ const SESSION_COOKIE_MAX_AGE_DAYS = 30;
 // Opt-in "stay signed in" for named accounts (PERSISTENT_SESSION_EMAILS, comma-separated, in .env;
 // empty/unset = nobody). For these accounts the server-side idle window is 30 days instead of
 // 30 minutes, so e.g. the /admin page doesn't ask for a login every time. Nothing else changes:
-// other accounts keep the normal window, the browser's unattended-logout timer on the org and
-// Agency pages (public/shared/js/idle-logout.js) is untouched, and the session still ends at the
+// other accounts keep the normal window, the browser's unattended-logout timer (public/shared/js/idle-logout.js)
+// is also skipped, via /api/me's no_idle_logout flag. The session still ends at the
 // cookie's 30-day ceiling or on logout. Intended for a trusted personal device only.
 const PERSISTENT_SESSION_MINUTES = 30 * 24 * 60;
 
@@ -756,4 +756,5 @@ module.exports = {
   CAUSAL_DOMAIN,
   SESSION_IDLE_TIMEOUT_MINUTES,
   SESSION_UNATTENDED_TIMEOUT_MINUTES,
+  persistentSessionEmails,
 };

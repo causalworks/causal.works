@@ -349,6 +349,7 @@
     var def = tabDef(active), its = itemsFor(active), h = '';
     var areas = {};
     its.forEach(function (i) { var a = i.area || i.topic; if (a) areas[a] = 1; });
+    if (def.hint) h += '<p style="font-size:17px;font-weight:700;margin:0 0 10px">' + esc(def.hint) + '</p>';
     h += '<div class="bar">';
     if (def.add) {
       var locked = def.add === 'L' && !canDecide;
@@ -359,9 +360,7 @@
       h += '<select id="area"><option value="">All areas</option>' + Object.keys(areas).sort().map(function (a) { return '<option' + (a === filt.area ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select>';
       h += '<label><input type="checkbox" id="open"' + (filt.open ? ' checked' : '') + '> Unanswered only</label>';
     }
-    h += '</div>';
-    if (def.hint) h += '<p class="note">' + esc(def.hint) + '</p>';
-    h += '<div id="list">' + listHtml(def, its) + '</div>';
+    h += '</div><div id="list">' + listHtml(def, its) + '</div>';
     main.innerHTML = h;
   }
 

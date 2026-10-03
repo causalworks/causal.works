@@ -92,24 +92,24 @@
   // t: s = select, t = textarea, i = input. sh = shared by both reviewers; otherwise it's per person.
   var TABS = [
     { key: 'readme', label: 'Start here' },
-    { key: 'built', label: 'Built', fixed: 1, fields: [
+    { key: 'built', label: 'Built', hint: 'Built or partially built so far.', fixed: 1, fields: [
       { k: 'works', l: 'Does it work?', t: 's', o: WORKS },
       { k: 'priority', l: 'Priority to fix', t: 's', o: NEED },
       { k: 'comments', l: 'Comments / what you would change', t: 't', wide: 1 },
       { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
-    { key: 'planned', label: 'Planned, unbuilt', fixed: 1, fields: [
+    { key: 'planned', label: 'Planned, unbuilt', hint: 'Planned and unbuilt.', fixed: 1, fields: [
       { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED },
       { k: 'comments', l: 'Comments', t: 't', wide: 1 },
       { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
-    { key: 'ideas', label: 'Ideas', fixed: 1, fields: [
+    { key: 'ideas', label: 'Ideas', hint: 'Other ideas not planned yet.', fixed: 1, fields: [
       { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED },
       { k: 'comments', l: 'Comments / how you do it today', t: 't', wide: 1 },
       { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
-    { key: 'questions', label: 'Questions', fixed: 1, fields: [
+    { key: 'questions', label: 'Questions', hint: 'Accounting and process questions.', fixed: 1, fields: [
       { k: 'answer', l: 'Answer', t: 't', wide: 1 },
       { k: 'reasoning', l: 'Reasoning / source', t: 't', wide: 1 },
       { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
-    { key: 'additions', label: 'Your additions', add: 'A', fields: [
+    { key: 'additions', label: 'Your additions', hint: 'Add any suggestions and note missing elements.', add: 'A', fields: [
       { k: 'area', l: 'Area', t: 'i' },
       { k: 'frequency', l: 'How often?', t: 's', o: FREQ },
       { k: 'priority', l: 'Priority', t: 's', o: NEED },
@@ -359,7 +359,9 @@
       h += '<select id="area"><option value="">All areas</option>' + Object.keys(areas).sort().map(function (a) { return '<option' + (a === filt.area ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select>';
       h += '<label><input type="checkbox" id="open"' + (filt.open ? ' checked' : '') + '> Unanswered only</label>';
     }
-    h += '</div><div id="list">' + listHtml(def, its) + '</div>';
+    h += '</div>';
+    if (def.hint) h += '<p class="note">' + esc(def.hint) + '</p>';
+    h += '<div id="list">' + listHtml(def, its) + '</div>';
     main.innerHTML = h;
   }
 

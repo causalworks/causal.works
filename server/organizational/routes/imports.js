@@ -19,6 +19,7 @@ const {
 } = require('../lib/importValidators');
 const { calculatePersonnelProjections } = require('../lib/personnelCalculator');
 const { recalcPersonnelBudget } = require('../lib/personnelRecalc');
+const { requireImportedActuals } = require('../lib/requireImportedActuals');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -933,6 +934,7 @@ function registerOrganizationalImportRoutes(app, pool) {
   app.post(
     '/api/organizational/orgs/:slug/import/actuals',
     ...npAdmin,
+    requireImportedActuals(pool),
     upload.single('file'),
     makeHandler('actuals', (rows) => validateActualsRows(rows), async (client, orgId, v) => {
       const accMap = await loadAccountCodeMap(client, orgId);

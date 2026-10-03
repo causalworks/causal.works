@@ -15,7 +15,7 @@ function registerFinancialStatementRoutes(app, pool) {
       'SELECT actuals_source FROM org_settings WHERE org_id = $1',
       [orgId]
     );
-    return r.rows[0] ? r.rows[0].actuals_source : 'xero';
+    return r.rows[0] ? r.rows[0].actuals_source : 'ledger';
   }
 
   function fmtCsv(value) {
@@ -500,7 +500,7 @@ function registerFinancialStatementRoutes(app, pool) {
          WHERE t.org_id = $1 AND t.status = 'posted'
            AND a.type = 'asset' AND a.is_posting = true
            AND a.is_cash_account = false
-           AND a.standard_category NOT IN ('fixed_asset', 'accumulated_depreciation')
+           AND COALESCE(a.standard_category, '') NOT IN ('fixed_asset', 'accumulated_depreciation') -- NULL category (unset) must not drop the account
          GROUP BY a.code, a.name
          HAVING SUM(CASE WHEN t.fiscal_year = $2 THEN l.debit_cents - l.credit_cents ELSE 0 END) <> 0
          ORDER BY a.code`,

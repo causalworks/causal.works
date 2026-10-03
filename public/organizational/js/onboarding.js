@@ -317,7 +317,7 @@
     const previewSteps = WIZARD_STEPS.slice(0, -1);
     panelEl.innerHTML =
       '<h2 class="organizational-wizard-heading">Welcome to Cooperative</h2>' +
-      '<p class="organizational-hint" style="font-size:0.9375rem;line-height:1.6;">Let\'s set up your nonprofit workspace in just a few steps. We\'ll help you configure your chart of accounts, connect your accounting software, and import your budget data.</p>' +
+      '<p class="organizational-hint" style="font-size:0.9375rem;line-height:1.6;">Let\'s set up your nonprofit workspace in just a few steps. We\'ll help you set up your chart of accounts and programs, and bring in your budget data. Your books live in Causal\'s Accounting module; if you already keep them in Xero, you can connect it later in Settings.</p>' +
       '<div class="organizational-onb-steps-preview">' +
       previewSteps
         .map(function (s, i) {
@@ -552,8 +552,8 @@
       '<h2 class="organizational-wizard-heading">Chart of accounts</h2>' +
       '<p class="organizational-hint">Set up your chart of accounts during onboarding. You can update it later in Settings > Chart of accounts.</p>' +
       presetBlock +
-      '<button type="button" class="organizational-btn" id="onb-xero-direct">Connect Xero and import chart</button>' +
-      '<button type="button" class="organizational-btn organizational-btn-outline" id="onb-quick-start">Quick Start: Use nonprofit template</button>' +
+      '<button type="button" class="organizational-btn" id="onb-quick-start">Quick Start: Use nonprofit template <span class="organizational-label-soft">(recommended)</span></button>' +
+      '<button type="button" class="organizational-btn organizational-btn-outline" id="onb-xero-direct">Already use Xero? Connect it and import your chart</button>' +
       '<details class="organizational-onb-details">' +
       '<summary class="organizational-onb-details-summary">Other ways to build your chart</summary>' +
       '<p class="organizational-hint" style="margin-top:10px;">Spreadsheet upload, QuickBooks export, or manual entry.</p>' +

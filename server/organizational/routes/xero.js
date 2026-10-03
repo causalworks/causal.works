@@ -10,6 +10,7 @@ const { getValidAccessToken, clearXeroConnection } = require('../xero/org-tokens
 const { importProfitAndLossActualsForOrg, parseISODateBoundary } = require('../xero/import-pl-actuals');
 const { importBalanceSheetForOrg } = require('../xero/import-balance-sheet');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
+const { requireImportedActuals } = require('../lib/requireImportedActuals');
 
 const XERO_GUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -285,7 +286,7 @@ function registerOrganizationalXeroRoutes(app, pool) {
     }
   });
 
-  app.post('/api/organizational/orgs/:slug/xero/import-actuals', ...npAdmin, async (req, res) => {
+  app.post('/api/organizational/orgs/:slug/xero/import-actuals', ...npAdmin, requireImportedActuals(pool), async (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const userId = req.user.user_id ?? req.user.id;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -378,7 +379,7 @@ function registerOrganizationalXeroRoutes(app, pool) {
     }
   });
 
-  app.post('/api/organizational/orgs/:slug/xero/reimport-actuals', ...npAdmin, async (req, res) => {
+  app.post('/api/organizational/orgs/:slug/xero/reimport-actuals', ...npAdmin, requireImportedActuals(pool), async (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const userId = req.user.user_id ?? req.user.id;
     const body = req.body && typeof req.body === 'object' ? req.body : {};

@@ -593,6 +593,77 @@
       .join('');
   }
 
+  // ── Where your books live (actuals source) ──
+  let booksSourceCurrent = null;
+  let booksSourceState = null;
+
+  function booksSourceChoice() {
+    const el = document.querySelector('input[name="organizational-books-source"]:checked');
+    return el ? el.value : null;
+  }
+
+  function renderBooksSourceWarning() {
+    const warnEl = document.getElementById('organizational-books-source-warn');
+    const saveEl = document.getElementById('organizational-books-source-save');
+    const choice = booksSourceChoice();
+    if (!warnEl || !saveEl || !booksSourceState) return;
+    const changed = !!choice && choice !== booksSourceCurrent;
+    saveEl.disabled = !currentIsOrgAdmin || !changed;
+    let msg = '';
+    if (changed && choice === 'ledger') {
+      const n = booksSourceState.switch_to_ledger_replaces_imported_rows;
+      msg = n > 0
+        ? 'Switching to Causal replaces ' + n + ' imported actuals rows, month by month, for every month that has ledger transactions. This cannot be undone by switching back.'
+        : 'Switching to Causal: actuals will be built from your ledger from now on. No imported actuals are replaced.';
+    } else if (changed && choice === 'xero') {
+      const n = booksSourceState.switch_to_xero_removes_ledger_rows;
+      msg = 'Switching to Xero or another tool removes the ' + n + ' actuals rows built from your ledger. Your ledger transactions stay; imported actuals are used instead. The financial statements stop being available.';
+    }
+    warnEl.textContent = msg;
+    warnEl.hidden = !msg;
+  }
+
+  async function loadBooksSource(slug) {
+    const card = document.getElementById('organizational-books-source-card');
+    if (!card) return;
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/actuals-source', { method: 'GET' });
+    if (!out || !out.res.ok) { card.hidden = true; return; }
+    booksSourceState = out.data;
+    booksSourceCurrent = out.data.actuals_source;
+    const ledgerEl = document.getElementById('organizational-books-source-ledger');
+    const xeroEl = document.getElementById('organizational-books-source-xero');
+    if (ledgerEl) { ledgerEl.checked = booksSourceCurrent === 'ledger'; ledgerEl.disabled = !currentIsOrgAdmin; }
+    if (xeroEl) { xeroEl.checked = booksSourceCurrent === 'xero'; xeroEl.disabled = !currentIsOrgAdmin; }
+    renderBooksSourceWarning();
+  }
+
+  function wireBooksSource() {
+    const saveEl = document.getElementById('organizational-books-source-save');
+    if (!saveEl) return;
+    document.querySelectorAll('input[name="organizational-books-source"]').forEach(function (el) {
+      el.addEventListener('change', renderBooksSourceWarning);
+    });
+    saveEl.addEventListener('click', async function () {
+      const choice = booksSourceChoice();
+      const warnEl = document.getElementById('organizational-books-source-warn');
+      const errEl = document.getElementById('organizational-books-source-error');
+      if (!currentSlug || !choice || choice === booksSourceCurrent) return;
+      if (!window.confirm((warnEl && warnEl.textContent ? warnEl.textContent + '\n\n' : '') + 'Switch now?')) return;
+      saveEl.disabled = true;
+      if (errEl) errEl.hidden = true;
+      const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/actuals-source', {
+        method: 'PUT',
+        body: JSON.stringify({ actuals_source: choice }),
+      });
+      if (!out || !out.res.ok) {
+        if (errEl) { errEl.textContent = (out && out.data && out.data.error) || 'Could not change the data source.'; errEl.hidden = false; }
+        renderBooksSourceWarning();
+        return;
+      }
+      await loadBooksSource(currentSlug);
+    });
+  }
+
   async function load() {
     console.log('load() called');
     const { slug, tab } = parseSettingsPath();
@@ -662,6 +733,7 @@
     if (orgWebsite) orgWebsite.value = profile.website || '';
 
     applyPermissionGating(org);
+    await loadBooksSource(slug);
 
     // Fiscal sponsorship fields
     if (fiscalSponsorshipMode) {
@@ -716,6 +788,7 @@
     wireFiscalSponsorship();
     wireMembership();
     wireSessionTimeout();
+    wireBooksSource();
     wireOrgCharacteristics();
     wireOrgUsersManagement();
     wireRoleModal();

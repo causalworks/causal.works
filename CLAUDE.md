@@ -327,4 +327,4 @@ This file (`CLAUDE.md`) contains only stable behavior instructions — not proje
 
 Current test org: `demo-company` slug (Demo Company), accessible at `/organizational/o/demo-company/`. The org's `PATCH` rename endpoint regenerates the slug from the display name, so renaming it again changes this URL too — verify against the DB rather than trusting this line, and update it here if it drifts.
 - Use this workspace to test Coop UI changes
-- Xero integration (if configured): Xero Demo Company data source resets every 28 days — re-seed from `Xero_Demo_Setup.md` each cycle.
+- The demo org's books live in Causal's own ledger (`org_settings.actuals_source = 'ledger'`, the default for all new orgs as of 2026-10-03): its ledger was seeded by migration 290, 2025 actuals are imported history. Xero is an optional integration an org can choose (Settings > Where your books live); the demo does not use it and no Xero Demo Company re-seed is needed.

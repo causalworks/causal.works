@@ -46,7 +46,8 @@
           </nav>
 
           <div id="organizational-settings-panel-integrations" class="organizational-settings-panel" data-settings-panel="integrations" hidden>
-            <h2 class="organizational-subheading" style="margin-top:0;">Integrations — Xero</h2>
+            <h2 class="organizational-subheading" style="margin-top:0;">Optional integration — Xero</h2>
+            <p class="organizational-hint" style="margin-top:0;">Only needed if you keep your books in Xero (see Organization &gt; Where your books live).</p>
             <section class="organizational-card">
               <p id="organizational-xero-status-line" class="organizational-hint" style="margin-bottom: 10px;"></p>
               <p id="organizational-xero-sync-freshness" class="organizational-data-freshness" hidden></p>
@@ -85,7 +86,25 @@
           </div>
 
           <div id="organizational-settings-panel-organization" class="organizational-settings-panel" data-settings-panel="organization">
-            <h2 class="organizational-subheading" style="margin-top:0;">Org basics</h2>
+            <h2 class="organizational-subheading" style="margin-top:0;">Where your books live</h2>
+            <section class="organizational-card" id="organizational-books-source-card">
+              <p class="organizational-hint" style="margin-top:0;">This decides where your actuals (budget vs. actual, financial statements) come from.</p>
+              <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">
+                <input type="radio" name="organizational-books-source" value="ledger" id="organizational-books-source-ledger" style="width:auto;margin-top:4px;">
+                <span><strong>In Causal</strong> (recommended)<br><span class="organizational-hint">You record transactions in Accounting. Actuals and the four financial statements are built from your ledger.</span></span>
+              </label>
+              <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">
+                <input type="radio" name="organizational-books-source" value="xero" id="organizational-books-source-xero" style="width:auto;margin-top:4px;">
+                <span><strong>In Xero or another tool</strong><br><span class="organizational-hint">You keep your books elsewhere and import actuals from Xero or a spreadsheet. The financial statements are not available in this mode.</span></span>
+              </label>
+              <p class="organizational-hint" id="organizational-books-source-warn" hidden></p>
+              <p class="organizational-error" id="organizational-books-source-error" hidden></p>
+              <div class="organizational-panel-actions">
+                <button type="button" class="organizational-btn" id="organizational-books-source-save" disabled>Save</button>
+              </div>
+            </section>
+
+            <h2 class="organizational-subheading">Org basics</h2>
             <section class="organizational-card">
               <label for="organizational-org-display-name">Display name</label>
               <input id="organizational-org-display-name" type="text" maxlength="200" autocomplete="organization">

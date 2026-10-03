@@ -70,6 +70,7 @@ const app = express();
 // enterWith()-based design that leaked context between concurrent requests.
 app.use(requestContextMiddleware);
 app.use(cookieParser());
+app.use(probeWatch);
 // Postmark inbound payloads can be large (HTML bodies, headers). Increase limits.
 // verify: stashes the exact raw request bytes on req.rawBody alongside the parsed body --
 // passive observer, doesn't change parsing for any existing route. Needed by the Plaid webhook
@@ -384,6 +385,34 @@ const DEMO_VISIT_TRACKING_UNTIL = Date.parse('2026-10-14T00:00:00Z');
 // The last four alternatives catch scanners that fake very old browsers (e.g. 'Android 2.3.6',
 // 'Mozilla/4.0 (compatible; MSIE ...)') while sweeping for .env and PHP files; no real visitor uses them.
 const DEMO_VISIT_BOT_RX = /bot|crawl|spider|scan|curl|python|go-http|headless|monitor|preview|facebookexternal|slurp|wget|okhttp|android [1-4]\.|msie|mozilla\/4\.0|windows nt [3-5]\./i;
+
+// Scanners sweep for .env / .git / PHP files and sometimes land on /demo. The browser-string filter
+// misses them (fake mobile browsers), so any address that requests an obvious probe path is treated
+// as a bot for 24h: its demo visits are flagged going forward, and visits already logged with the
+// same address+browser are flagged too. In-memory only; scanners re-announce themselves constantly.
+const PROBE_PATH_RX = /\.env(\.|\/|$)|\/\.git(\/|$)|\.php$|wp-(admin|login|content|includes|json)|xmlrpc|phpunit|phpinfo|eval-stdin|cgi-bin|actuator|\/\.(aws|ssh|svn|hg)|crossdomain\.xml|\/(database|credentials|configuration)\.(config|xml|ini|json|ya?ml)|\/vendor\/|\/laravel\//i;
+const probeAddresses = new Map(); // address -> time it last requested a probe path
+const probeHashes = new Set();
+
+function isRecentProbeAddress(ip) {
+  const t = probeAddresses.get(ip);
+  return !!t && Date.now() - t < 86400000;
+}
+
+function probeWatch(req, res, next) {
+  if (Date.now() <= DEMO_VISIT_TRACKING_UNTIL && PROBE_PATH_RX.test(req.path)) {
+    probeAddresses.set(clientIp(req), Date.now());
+    if (probeAddresses.size > 5000) probeAddresses.clear();
+    (async () => {
+      const hash = demoVisitorHash(req, await getDemoVisitKey());
+      if (probeHashes.has(hash)) return;
+      if (probeHashes.size > 5000) probeHashes.clear();
+      probeHashes.add(hash);
+      await pool.query(`UPDATE demo_visit_log SET is_bot = true WHERE visitor_hash = $1 AND is_bot = false`, [hash]);
+    })().catch((err) => console.warn('⚠️ probe flagging failed:', err.message));
+  }
+  next();
+}
 let demoVisitKey = null;
 let lastDemoVisitPurge = 0;
 
@@ -436,7 +465,7 @@ function logDemoVisit(req, entry) {
     try { if (req.headers.referer) referrerHost = new URL(req.headers.referer).host.slice(0, 100); } catch (_) {}
     await pool.query(
       `INSERT INTO demo_visit_log (entry, visitor_hash, referrer_host, is_bot) VALUES ($1, $2, $3, $4)`,
-      [entry, demoVisitorHash(req, key), referrerHost, DEMO_VISIT_BOT_RX.test(String(req.headers['user-agent'] || ''))]
+      [entry, demoVisitorHash(req, key), referrerHost, DEMO_VISIT_BOT_RX.test(String(req.headers['user-agent'] || '')) || isRecentProbeAddress(clientIp(req))]
     );
     if (Date.now() - lastDemoVisitPurge > 3600000) {
       lastDemoVisitPurge = Date.now();

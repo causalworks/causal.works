@@ -864,6 +864,14 @@
     await loadInvoices();
     await loadInvoiceCreditNotes();
     await loadInvoiceSchedules();
+    // Deep link from the Dashboard's recent-activity feed: ?open_invoice=<id> opens that invoice's panel.
+    const openInvoice = Number(new URLSearchParams(window.location.search).get('open_invoice'));
+    if (Number.isInteger(openInvoice) && openInvoice > 0) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('open_invoice');
+      window.history.replaceState(null, '', u.pathname + u.search);
+      await openInvoicePanel(openInvoice);
+    }
   }
 
   window.OrganizationalAccounting.sales = { init: initSales };

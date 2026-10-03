@@ -79,6 +79,12 @@ function registerOrganizationalLedgerRoutes(app, pool) {
       const params = [orgId];
       let p = 2;
 
+      const transactionId = req.query.transaction_id != null ? Number.parseInt(String(req.query.transaction_id), 10) : null;
+      if (Number.isInteger(transactionId) && transactionId > 0) {
+        conds.push(`t.id = $${p}`);
+        params.push(transactionId);
+        p += 1;
+      }
       if (Number.isInteger(grantId) && grantId > 0) {
         conds.push(`l.grant_id = $${p}`);
         params.push(grantId);

@@ -83,7 +83,29 @@ function registerAccountingDashboardRoutes(app, pool) {
         }
       }
 
+      // This fiscal year's income and expenses from posted ledger entries (statistical accounts
+      // excluded -- they are counts like "clients served", not dollars).
+      const fyNow = fiscalYearForDate(new Date(), fyEndMonth);
+      const { startDate: fyStart, endDate: fyEnd } = fyDateRange(fyNow, fyEndMonth);
+      const ytdR = await pool.query(
+        `SELECT acc.type::text AS type, COALESCE(SUM(l.credit_cents - l.debit_cents), 0)::bigint AS net_credit_cents
+         FROM org_ledger_lines l
+         JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         JOIN org_accounts acc ON acc.id = l.account_id
+         WHERE t.org_id = $1 AND t.status = 'posted' AND acc.type IN ('income', 'expense')
+           AND acc.is_statistical IS NOT TRUE AND t.transaction_date BETWEEN $2 AND $3
+         GROUP BY acc.type`,
+        [orgId, fyStart, fyEnd]
+      );
+      let incomeCents = 0n, expenseCents = 0n;
+      for (const row of ytdR.rows) {
+        if (row.type === 'income') incomeCents = BigInt(row.net_credit_cents);
+        else expenseCents = -BigInt(row.net_credit_cents);
+      }
+
       return res.json({
+        year_to_date: { fiscal_year: fyNow, start_date: fyStart, end_date: fyEnd,
+                        income_cents: String(incomeCents), expense_cents: String(expenseCents) },
         restricted_cash: restrictedCash,
         unconfirmed_bank_lines_count: unconfirmedR.rows[0].n,
         pending_federal_approvals: pendingFederalApprovals,
@@ -101,24 +123,24 @@ function registerAccountingDashboardRoutes(app, pool) {
     const base = '/organizational/o/' + encodeURIComponent(req.params.slug);
     try {
       const r = await pool.query(
-        `(SELECT 'transaction' AS type, t.transaction_date AS date, t.memo AS title,
+        `(SELECT 'transaction' AS type, t.transaction_date AS date, t.memo AS title, t.id AS record_id,
                  COALESCE((SELECT SUM(l.debit_cents) FROM org_ledger_lines l WHERE l.transaction_id = t.id), 0)::bigint AS amount_cents,
                  $2 || '/transactions' AS href
           FROM org_ledger_transactions t WHERE t.org_id = $1 AND t.status = 'posted')
          UNION ALL
-         (SELECT 'bill', b.bill_date, c.display_name,
+         (SELECT 'bill', b.bill_date, c.display_name, b.id,
                  COALESCE((SELECT SUM(bl.amount_cents) FROM org_bill_lines bl WHERE bl.bill_id = b.id), 0)::bigint,
                  $2 || '/purchases'
           FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
           WHERE b.org_id = $1 AND b.status != 'draft')
          UNION ALL
-         (SELECT 'invoice', i.invoice_date, c.display_name,
+         (SELECT 'invoice', i.invoice_date, c.display_name, i.id,
                  COALESCE((SELECT SUM(ROUND(il.quantity * il.unit_amount_cents)) FROM org_invoice_lines il WHERE il.invoice_id = i.id), 0)::bigint,
                  $2 || '/sales'
           FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
           WHERE i.org_id = $1 AND i.status != 'draft')
          UNION ALL
-         (SELECT 'bank_line', bsl.statement_date, bsl.description_raw,
+         (SELECT 'bank_line', bsl.statement_date, bsl.description_raw, bsl.id,
                  bsl.amount_cents,
                  $2 || '/bank-reconciliation'
           FROM org_bank_statement_lines bsl WHERE bsl.org_id = $1 AND bsl.status = 'confirmed')
@@ -129,6 +151,7 @@ function registerAccountingDashboardRoutes(app, pool) {
       const items = r.rows.map((row) => ({
         type: row.type,
         date: row.date,
+        id: row.record_id,
         title: row.title || '(no memo)',
         amount_cents: String(row.amount_cents),
         href: row.href,

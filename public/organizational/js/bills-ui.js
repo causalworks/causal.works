@@ -998,6 +998,14 @@
     await loadBills();
     await loadBillCreditNotes();
     await loadBillSchedules();
+    // Deep link from the Dashboard's recent-activity feed: ?open_bill=<id> opens that bill's panel.
+    const openBill = Number(new URLSearchParams(window.location.search).get('open_bill'));
+    if (Number.isInteger(openBill) && openBill > 0) {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('open_bill');
+      window.history.replaceState(null, '', u.pathname + u.search);
+      await openBillPanel(openBill);
+    }
   }
 
   window.OrganizationalAccounting.purchases = { init: initPurchases };

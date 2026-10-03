@@ -104,8 +104,31 @@
   }
 
   // ── List ──
+  // Set by a Dashboard "Open" link (?txn=<id>): show only that transaction until the user clears it.
+  let focusTxnId = null;
+
+  function syncFocusNote() {
+    let note = document.getElementById('organizational-ledger-focus-note');
+    if (!focusTxnId) { if (note) note.remove(); return; }
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'organizational-ledger-focus-note';
+      note.style.cssText = 'padding:8px 16px;font-size:0.8125rem;border-bottom:1px solid var(--border);';
+      const bar = document.getElementById('organizational-ledger-filter-bar');
+      if (bar && bar.parentNode) bar.parentNode.insertBefore(note, bar.nextSibling);
+    }
+    note.innerHTML = 'Showing transaction #' + esc(String(focusTxnId)) + ' only. <a href="#" id="organizational-ledger-focus-clear">Show all transactions</a>';
+    document.getElementById('organizational-ledger-focus-clear').addEventListener('click', function (e) {
+      e.preventDefault();
+      focusTxnId = null;
+      loadTransactions();
+    });
+  }
+
   async function loadTransactions() {
     const params = new URLSearchParams();
+    if (focusTxnId) params.set('transaction_id', String(focusTxnId));
+    syncFocusNote();
     if (filterFrom && filterFrom.value) params.set('date_from', filterFrom.value);
     if (filterTo && filterTo.value) params.set('date_to', filterTo.value);
     if (filterStatus && filterStatus.value) params.set('status', filterStatus.value);
@@ -348,6 +371,13 @@
   async function initTransactions(slug) {
     currentSlug = slug;
     wireOnce();
+    const txnParam = Number(new URLSearchParams(window.location.search).get('txn'));
+    if (Number.isInteger(txnParam) && txnParam > 0) {
+      focusTxnId = txnParam;
+      const u = new URL(window.location.href);
+      u.searchParams.delete('txn');
+      window.history.replaceState(null, '', u.pathname + u.search);
+    }
     await Promise.all([loadAccounts(slug), loadPrograms(slug), loadGrants(slug), loadBoardDesignations(slug)]);
     await loadTransactions();
   }

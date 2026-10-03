@@ -24,7 +24,10 @@
     return typeof window.formatMoneyCents === 'function' ? window.formatMoneyCents(cents) : '$' + (Number(cents || 0) / 100).toFixed(2);
   }
 
-  function renderCashTiles(summary) {
+  const BUCKET_LABELS = { current: 'Current', '1_30': '1-30', '31_60': '31-60', '61_90': '61-90', '90_plus': '90+' };
+  const BUCKET_ORDER = ['current', '1_30', '31_60', '61_90', '90_plus'];
+
+  function renderCashTiles(summary, ar, ap) {
     if (!cashTilesEl) return;
     const rc = (summary && summary.restricted_cash) || {};
     const unconfirmed = Number(summary && summary.unconfirmed_bank_lines_count) || 0;
@@ -41,14 +44,29 @@
       ? '<a href="' + escapeHtml(base + '/bank-reconciliation') + '">' + unconfirmed + ' item' + (unconfirmed === 1 ? '' : 's') + ' to reconcile</a>'
       : 'All bank lines reconciled';
 
+    // Open amounts come from the aging reports already loaded for the bar charts below.
+    function openTotal(t) { return BUCKET_ORDER.reduce(function (s, k) { return s + Number((t && t[k]) || 0); }, 0); }
+    function overdueTotal(t) { return openTotal(t) - Number((t && t.current) || 0); }
+    function owedContext(t, none) {
+      const o = overdueTotal(t);
+      return openTotal(t) === 0 ? none : (o > 0 ? escapeHtml(money(o)) + ' overdue' : 'None overdue');
+    }
+
+    const ytd = summary && summary.year_to_date;
+    const net = ytd ? Number(ytd.income_cents) - Number(ytd.expense_cents) : 0;
+    const ytdContext = ytd
+      ? escapeHtml(money(ytd.income_cents)) + ' income, ' + escapeHtml(money(ytd.expense_cents)) + ' expenses'
+      : '';
+
     cashTilesEl.innerHTML =
       tile('Unrestricted cash', rc.unrestricted_cents, reconcileLine) +
-      tile('Temporarily restricted', rc.temporarily_restricted_cents, '') +
-      tile('Permanently restricted', rc.permanently_restricted_cents, '');
+      tile('Temporarily restricted', rc.temporarily_restricted_cents, 'Cash held for donor-restricted purposes') +
+      tile('Permanently restricted', rc.permanently_restricted_cents, '') +
+      tile('Owed to you', openTotal(ar), owedContext(ar, 'No open invoices')) +
+      tile('Bills to pay', openTotal(ap), owedContext(ap, 'No open bills')) +
+      tile(ytd ? 'FY' + ytd.fiscal_year + ' surplus / (deficit)' : 'Surplus / (deficit)', net, ytdContext);
   }
 
-  const BUCKET_LABELS = { current: 'Current', '1_30': '1-30', '31_60': '31-60', '61_90': '61-90', '90_plus': '90+' };
-  const BUCKET_ORDER = ['current', '1_30', '31_60', '61_90', '90_plus'];
 
   function renderBars(el, totals) {
     if (!el) return;
@@ -107,6 +125,16 @@
     }).join('');
   }
 
+  // Link to the record itself: the Purchases/Sales pages open that bill or invoice's panel, and
+  // Transactions shows just that transaction. Bank lines go to Bank Reconciliation.
+  function recordHref(it) {
+    const base = it.href.replace(/\/[^/]+$/, '');
+    if (it.type === 'bill' && it.id) return base + '/purchases?open_bill=' + encodeURIComponent(it.id);
+    if (it.type === 'invoice' && it.id) return base + '/sales?open_invoice=' + encodeURIComponent(it.id);
+    if (it.type === 'transaction' && it.id) return base + '/transactions?txn=' + encodeURIComponent(it.id);
+    return it.href;
+  }
+
   function renderActivity(items) {
     if (!activityListEl || !activityEmptyEl) return;
     if (!Array.isArray(items) || items.length === 0) {
@@ -117,10 +145,10 @@
     activityEmptyEl.hidden = true;
     activityListEl.innerHTML = '<table class="organizational-table" aria-label="Recent activity"><tbody>' +
       items.map(function (it) {
-        return '<tr><td>' + escapeHtml(it.date) + '</td>' +
+        return '<tr><td>' + escapeHtml(String(it.date || '').slice(0, 10)) + '</td>' +
           '<td>' + escapeHtml(it.title) + '</td>' +
           '<td style="text-align:right;">' + escapeHtml(money(it.amount_cents)) + '</td>' +
-          '<td><a href="' + escapeHtml(it.href) + '">Open</a></td></tr>';
+          '<td><a href="' + escapeHtml(recordHref(it)) + '">Open</a></td></tr>';
       }).join('') +
     '</tbody></table>';
   }
@@ -137,14 +165,16 @@
     const summary = summaryOut && summaryOut.res && summaryOut.res.ok ? summaryOut.data : {
       restricted_cash: {}, unconfirmed_bank_lines_count: 0, pending_federal_approvals: [], fy_unlocked: null,
     };
-    renderCashTiles(summary);
+    const arTotals = arOut && arOut.res && arOut.res.ok ? arOut.data.totals : null;
+    const apTotals = apOut && apOut.res && apOut.res.ok ? apOut.data.totals : null;
+    renderCashTiles(summary, arTotals, apTotals);
     renderAttention(summary);
 
     const activity = activityOut && activityOut.res && activityOut.res.ok && Array.isArray(activityOut.data.items) ? activityOut.data.items : [];
     renderActivity(activity);
 
-    renderBars(apBarsEl, apOut && apOut.res && apOut.res.ok ? apOut.data.totals : null);
-    renderBars(arBarsEl, arOut && arOut.res && arOut.res.ok ? arOut.data.totals : null);
+    renderBars(apBarsEl, apTotals);
+    renderBars(arBarsEl, arTotals);
   }
 
   window.OrganizationalAccounting.dashboard = { init: init };

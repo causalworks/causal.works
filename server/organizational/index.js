@@ -32,6 +32,7 @@ const { registerOrganizationalDonorRoutes } = require('./routes/donors');
 const { registerOrganizationalDocumentRoutes } = require('./routes/documents');
 const { registerFiscalYearLockRoutes } = require('./routes/fiscal-year-locks');
 const { registerActualsSourceRoutes } = require('./routes/actualsSource');
+const { registerLedgerReportRoutes } = require('./routes/ledgerReports');
 const { registerOrganizationalDataPodRoutes } = require('./routes/dataPod');
 const { registerPodManagementRoutes } = require('./routes/podManagement');
 const { registerPodPermissionRoutes } = require('./routes/podPermissions');
@@ -97,6 +98,7 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerOrganizationalDocumentRoutes(app, pool);
   registerFiscalYearLockRoutes(app, pool);
   registerActualsSourceRoutes(app, pool);
+  registerLedgerReportRoutes(app, pool);
   registerOrganizationalDataPodRoutes(app, pool);
   registerPodManagementRoutes(app, pool);
   registerPodPermissionRoutes(app, pool);

@@ -117,6 +117,30 @@
 
             </div>
 
+            <div class="organizational-section-title" style="margin-top:32px;">Ledger reports</div>
+            <p class="organizational-hint" style="margin-bottom:16px;">Straight from the posted ledger — the proof behind the dashboard and the statements. Available for every workspace.</p>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('trial-balance')">
+                <div class="organizational-report-card-icon">⚖️</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Trial Balance</div>
+                  <div class="organizational-report-card-desc">Every account's debit or credit balance as of a date. Total debits must equal total credits. Export to CSV.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('general-ledger')">
+                <div class="organizational-report-card-icon">📒</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">General Ledger</div>
+                  <div class="organizational-report-card-desc">Every posted line by account with an opening balance, running balance and closing balance. Filter by dates or one account. Export to CSV.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
             <div class="organizational-section-title" style="margin-top:32px;">GAAP financial statements</div>
             <p class="organizational-hint" style="margin-bottom:16px;">Live-computed from the posted ledger. Available for workspaces using the internal ledger as the actuals source.</p>
             <div class="organizational-report-grid">
@@ -606,6 +630,63 @@
                   </tbody>
                 </table>
               </div>
+            </section>
+          </div>
+
+
+          <div id="report-detail-trial-balance" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Trial Balance</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Posted ledger entries only. Asset, liability and equity accounts are cumulative; income and expense accounts cover the fiscal year selected above through the "as of" date. Prior years' results appear as one computed line because the books are not closed at year end.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-tb-asof" class="organizational-hint" style="margin:0;">As of</label>
+                <input type="date" id="organizational-tb-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <button class="organizational-btn organizational-btn-outline" onclick="loadTrialBalance()">Run</button>
+                <span class="organizational-hint" id="organizational-tb-meta"></span>
+                <a id="organizational-tb-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Trial Balance">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Account</th>
+                      <th>Type</th>
+                      <th style="text-align:right;">Debit</th>
+                      <th style="text-align:right;">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-tb-tbody">
+                    <tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-general-ledger" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">General Ledger</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Posted lines by account. Balances are in each account's natural direction (debit for assets and expenses, credit for the rest). Income and expense balances start at zero each fiscal year. Click a transaction number to open it.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-gl-from" class="organizational-hint" style="margin:0;">From</label>
+                <input type="date" id="organizational-gl-from" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <label for="organizational-gl-to" class="organizational-hint" style="margin:0;">To</label>
+                <input type="date" id="organizational-gl-to" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <select id="organizational-gl-account" class="organizational-input" style="width:240px;font-size:0.8125rem;padding:4px 6px;" aria-label="Account">
+                  <option value="">All accounts</option>
+                </select>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadGeneralLedger()">Run</button>
+                <span class="organizational-hint" id="organizational-gl-meta"></span>
+                <a id="organizational-gl-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div id="organizational-gl-body" style="padding:0;"></div>
             </section>
           </div>
 

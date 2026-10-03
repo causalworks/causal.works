@@ -272,6 +272,27 @@
    "feature": "Data import",
    "what": "CSV import for accounts, budget lines etc. Import-preview exists as a process, not as a tab.",
    "confidence": "Verify"
+  },
+  {
+   "id": "B40",
+   "area": "Reports",
+   "feature": "Trial Balance",
+   "what": "Every account's debit or credit balance as of a date; total debits must equal total credits and the page says whether they do. Asset, liability and equity accounts are cumulative, income and expense accounts cover the fiscal year, and prior years' results show as one computed line because the books are not closed at year end. CSV export. Works for every workspace.",
+   "confidence": "Checked 2026-10-03"
+  },
+  {
+   "id": "B41",
+   "area": "Reports",
+   "feature": "General Ledger",
+   "what": "Every posted line by account with opening, running and closing balance, filterable by dates or one account; click a transaction number to open it. Closing balances match the trial balance. CSV export.",
+   "confidence": "Checked 2026-10-03"
+  },
+  {
+   "id": "B42",
+   "area": "Settings",
+   "feature": "Where your books live",
+   "what": "Admin setting: books in Causal's own ledger (default) or in Xero / another tool. Shows how many imported actuals rows a switch replaces. Xero stays an optional integration.",
+   "confidence": "Checked 2026-10-03"
   }
  ],
  "planned": [

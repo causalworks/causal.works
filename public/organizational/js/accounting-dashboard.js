@@ -27,6 +27,16 @@
   const BUCKET_LABELS = { current: 'Current', '1_30': '1-30', '31_60': '31-60', '61_90': '61-90', '90_plus': '90+' };
   const BUCKET_ORDER = ['current', '1_30', '31_60', '61_90', '90_plus'];
 
+  // Where each number can be checked: the same ledger, shown as proof reports.
+  function renderProof() {
+    const el = document.getElementById('organizational-accounting-dash-proof');
+    if (!el) return;
+    const base = window.OrganizationalAccounting.getSlug ? '/organizational/o/' + encodeURIComponent(window.OrganizationalAccounting.getSlug()) : '';
+    function link(report, label) { return '<a href="' + escapeHtml(base + '/reports?report=' + report) + '">' + label + '</a>'; }
+    el.innerHTML = 'Check these numbers: ' + link('trial-balance', 'Trial balance') + ' · ' + link('general-ledger', 'General ledger') + ' · ' +
+      link('financial-position', 'Financial position') + ' · ' + link('statement-of-activities', 'Statement of activities') + ' · ' + link('cash-flows', 'Cash flows');
+  }
+
   function renderCashTiles(summary, ar, ap) {
     if (!cashTilesEl) return;
     const rc = (summary && summary.restricted_cash) || {};
@@ -168,6 +178,7 @@
     const arTotals = arOut && arOut.res && arOut.res.ok ? arOut.data.totals : null;
     const apTotals = apOut && apOut.res && apOut.res.ok ? apOut.data.totals : null;
     renderCashTiles(summary, arTotals, apTotals);
+    renderProof();
     renderAttention(summary);
 
     const activity = activityOut && activityOut.res && activityOut.res.ok && Array.isArray(activityOut.data.items) ? activityOut.data.items : [];

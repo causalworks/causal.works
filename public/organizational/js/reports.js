@@ -16,6 +16,7 @@
     'report-detail-reconciliation',
     'report-detail-financial-position', 'report-detail-statement-of-activities',
     'report-detail-stmt-functional-expenses', 'report-detail-cash-flows',
+    'report-detail-trial-balance', 'report-detail-general-ledger',
   ];
 
   let currentSlug = '';
@@ -43,6 +44,8 @@
     if (name === 'statement-of-activities') loadStatementOfActivities();
     if (name === 'stmt-functional-expenses') loadStmtFunctionalExpenses();
     if (name === 'cash-flows') loadCashFlows();
+    if (name === 'trial-balance') loadTrialBalance();
+    if (name === 'general-ledger') loadGeneralLedger();
   }
 
   function showReportsIndex() {
@@ -229,6 +232,11 @@
         if (document.getElementById('report-detail-statement-of-activities') && !document.getElementById('report-detail-statement-of-activities').hidden) loadStatementOfActivities();
         if (document.getElementById('report-detail-stmt-functional-expenses') && !document.getElementById('report-detail-stmt-functional-expenses').hidden) loadStmtFunctionalExpenses();
         if (document.getElementById('report-detail-cash-flows') && !document.getElementById('report-detail-cash-flows').hidden) loadCashFlows();
+        if (document.getElementById('report-detail-trial-balance') && !document.getElementById('report-detail-trial-balance').hidden) {
+          const asOf = document.getElementById('organizational-tb-asof');
+          if (asOf) asOf.value = '';
+          loadTrialBalance();
+        }
       };
       reportsFy.addEventListener('change', onFyChange);
       reportsFy.addEventListener('input', onFyChange);
@@ -243,7 +251,10 @@
     await loadGrants(slug);
     if (loadingEl) loadingEl.hidden = true;
     if (dashEl) dashEl.hidden = false;
-    // Detail panels load lazily when opened
+    // Detail panels load lazily when opened. A link such as /reports?report=trial-balance opens one directly
+    // (the Accounting dashboard uses this to point at the report that proves its numbers).
+    const wantReport = new URLSearchParams(window.location.search).get('report');
+    if (wantReport && DETAIL_PANELS.indexOf('report-detail-' + wantReport) >= 0) showReport(wantReport);
   }
 
   // ── 990 Part IX ────────────────────────────────────────────────────────
@@ -1714,6 +1725,120 @@
     if (meta) meta.textContent = lines.length + ' expense accounts · FY' + fy;
   }
 
+
+  // ── Trial Balance and General Ledger (ledger-sourced, work for every org) ──
+  function money2(cents) {
+    var n = Number(cents) / 100;
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function dollarCell(cents, zeroDash) {
+    if (zeroDash && Number(cents) === 0) return '';
+    return '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + escapeHtml(money2(cents)) + '</td>';
+  }
+
+  async function loadTrialBalance() {
+    var tbody = document.getElementById('organizational-tb-tbody');
+    var meta = document.getElementById('organizational-tb-meta');
+    var csvLink = document.getElementById('organizational-tb-csv');
+    var asOfEl = document.getElementById('organizational-tb-asof');
+    if (!tbody || !currentSlug) return;
+    tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>';
+    var fy = fiscalYearForReports();
+    var q = '?fiscal_year=' + fy + (asOfEl && asOfEl.value ? '&as_of=' + encodeURIComponent(asOfEl.value) : '');
+    var base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/reports/trial-balance' + q;
+    if (csvLink) csvLink.href = base + '&format=csv';
+    var out = await apiJson(base, { method: 'GET' });
+    if (!out || !out.res.ok) {
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">Could not load the trial balance.</td></tr>';
+      return;
+    }
+    var d = out.data;
+    if (asOfEl && !asOfEl.value) asOfEl.value = d.as_of;
+    if (!d.lines.length && !d.prior_year_result) {
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">No posted ledger activity through ' + escapeHtml(d.as_of) + '.</td></tr>';
+      if (meta) meta.textContent = '';
+      return;
+    }
+    var html = d.lines.map(function (l) {
+      return '<tr><td style="color:var(--text-secondary);">' + escapeHtml(l.code) + '</td><td>' + escapeHtml(l.name) + '</td>' +
+        '<td style="color:var(--text-secondary);">' + escapeHtml(l.type) + '</td>' + (Number(l.debit_cents) ? dollarCell(l.debit_cents) : '<td></td>') +
+        (Number(l.credit_cents) ? dollarCell(l.credit_cents) : '<td></td>') + '</tr>';
+    }).join('');
+    if (d.prior_year_result) {
+      var p = d.prior_year_result;
+      html += '<tr><td></td><td colspan="2" style="font-style:italic;">' + escapeHtml(p.name) + '</td>' +
+        (Number(p.debit_cents) ? dollarCell(p.debit_cents) : '<td></td>') + (Number(p.credit_cents) ? dollarCell(p.credit_cents) : '<td></td>') + '</tr>';
+    }
+    html += '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="3">Total</td>' + dollarCell(d.totals.debit_cents) + dollarCell(d.totals.credit_cents) + '</tr>';
+    tbody.innerHTML = html;
+    if (meta) meta.textContent = (d.in_balance ? '✓ In balance' : '✗ OUT OF BALANCE by $' + money2(Math.abs(Number(d.totals.debit_cents) - Number(d.totals.credit_cents)))) + ' · as of ' + d.as_of + ' · FY' + d.fiscal_year;
+  }
+
+  var glAccountsLoaded = false;
+  async function loadGeneralLedgerAccounts() {
+    if (glAccountsLoaded || !currentSlug) return;
+    var sel = document.getElementById('organizational-gl-account');
+    if (!sel) return;
+    var out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/accounts', { method: 'GET' });
+    var list = out && out.res.ok && Array.isArray(out.data.accounts) ? out.data.accounts : (out && out.res.ok && Array.isArray(out.data) ? out.data : []);
+    list.filter(function (a) { return a.is_posting && !a.is_statistical; }).forEach(function (a) {
+      var o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.code + ' — ' + a.name;
+      sel.appendChild(o);
+    });
+    glAccountsLoaded = true;
+  }
+
+  async function loadGeneralLedger() {
+    var body = document.getElementById('organizational-gl-body');
+    var meta = document.getElementById('organizational-gl-meta');
+    var csvLink = document.getElementById('organizational-gl-csv');
+    if (!body || !currentSlug) return;
+    await loadGeneralLedgerAccounts();
+    var from = document.getElementById('organizational-gl-from');
+    var to = document.getElementById('organizational-gl-to');
+    var acct = document.getElementById('organizational-gl-account');
+    var params = [];
+    if (from && from.value) params.push('from=' + encodeURIComponent(from.value));
+    if (to && to.value) params.push('to=' + encodeURIComponent(to.value));
+    if (acct && acct.value) params.push('account_id=' + encodeURIComponent(acct.value));
+    var base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/reports/general-ledger' + (params.length ? '?' + params.join('&') : '');
+    if (csvLink) csvLink.href = base + (params.length ? '&' : '?') + 'format=csv';
+    body.innerHTML = '<p class="organizational-empty" style="padding:16px 20px;">Loading…</p>';
+    var out = await apiJson(base, { method: 'GET' });
+    if (!out || !out.res.ok) {
+      body.innerHTML = '<p class="organizational-empty" style="padding:16px 20px;">Could not load the general ledger.</p>';
+      return;
+    }
+    var d = out.data;
+    if (from && !from.value) from.value = d.from;
+    if (to && !to.value) to.value = d.to;
+    if (!d.accounts.length) {
+      body.innerHTML = '<p class="organizational-empty" style="padding:16px 20px;">No posted activity in this range.</p>';
+      if (meta) meta.textContent = '';
+      return;
+    }
+    var slugBase = '/organizational/o/' + encodeURIComponent(currentSlug);
+    body.innerHTML = d.accounts.map(function (a) {
+      var rows = '<tr style="background:var(--surface-hover);font-weight:600;"><td colspan="7">Opening balance</td>' + dollarCell(a.opening_cents) + '</tr>';
+      rows += a.lines.map(function (l) {
+        return '<tr><td style="white-space:nowrap;">' + escapeHtml(l.date) + '</td>' +
+          '<td><a href="' + slugBase + '/transactions?txn=' + encodeURIComponent(l.transaction_id) + '">#' + escapeHtml(l.transaction_id) + '</a></td>' +
+          '<td>' + escapeHtml(l.payee || '') + (l.payee && (l.line_memo || l.memo) ? ' — ' : '') + escapeHtml(l.line_memo || l.memo || '') + '</td>' +
+          '<td>' + escapeHtml(l.program || '') + '</td><td>' + escapeHtml(l.grant || '') + '</td>' +
+          (Number(l.debit_cents) ? dollarCell(l.debit_cents) : '<td></td>') + (Number(l.credit_cents) ? dollarCell(l.credit_cents) : '<td></td>') +
+          dollarCell(l.balance_cents) + '</tr>';
+      }).join('');
+      rows += '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="5">Closing balance</td>' + dollarCell(a.total_debit_cents) + dollarCell(a.total_credit_cents) + dollarCell(a.closing_cents) + '</tr>';
+      return '<div style="padding:12px 16px 4px;font-weight:600;">' + escapeHtml(a.code) + ' — ' + escapeHtml(a.name) +
+        ' <span class="organizational-hint" style="font-weight:400;">(' + escapeHtml(a.natural_side) + ' account)</span></div>' +
+        '<div class="organizational-table-wrap"><table class="organizational-table" aria-label="' + escapeHtml(a.name) + '"><thead><tr><th>Date</th><th>Txn</th><th>Payee / memo</th><th>Program</th><th>Grant</th>' +
+        '<th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }).join('');
+    if (meta) meta.textContent = d.accounts.length + ' account' + (d.accounts.length === 1 ? '' : 's') + ' · ' + d.line_count + ' lines' + (d.truncated ? ' · stopped at ' + d.line_cap + ' lines, narrow the dates or pick one account' : '');
+  }
+
   // Statement of Cash Flows
   async function loadCashFlows() {
     var tbody = document.getElementById('organizational-scf-tbody');
@@ -1822,6 +1947,8 @@
   window.loadStatementOfActivities = loadStatementOfActivities;
   window.loadStmtFunctionalExpenses = loadStmtFunctionalExpenses;
   window.loadCashFlows = loadCashFlows;
+  window.loadTrialBalance = loadTrialBalance;
+  window.loadGeneralLedger = loadGeneralLedger;
 
   load().catch(function(e) {
     if (loadingEl) loadingEl.hidden = true;

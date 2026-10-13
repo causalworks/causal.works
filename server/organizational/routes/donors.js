@@ -122,6 +122,7 @@ function rowToGift(row) {
     discounted_present_value_cents: row.discounted_present_value_cents != null ? Number(row.discounted_present_value_cents) : null,
     receivable_account_id: row.receivable_account_id != null ? Number(row.receivable_account_id) : null,
     review_status: row.review_status || null,
+    gift_source: row.source || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -998,10 +999,14 @@ function registerOrganizationalDonorRoutes(app, pool) {
     try {
       const u = await pool.query(
         `UPDATE org_gifts SET review_status = 'dismissed', reviewed_by = $1, reviewed_at = NOW(), review_note = $2
-          WHERE id = $3 AND org_id = $4 AND source = 'accounting' AND review_status = 'to_confirm' RETURNING id`, [userId, note, giftId, orgId]);
-      if (!u.rows.length) return res.status(404).json({ error: 'No gift waiting to be confirmed with that id' });
+          WHERE id = $3 AND org_id = $4 AND source = 'accounting' AND review_status IN ('to_confirm', 'confirmed') RETURNING id, ledger_transaction_id`, [userId, note, giftId, orgId]);
+      if (!u.rows.length) return res.status(404).json({ error: 'No gift from Accounting with that id' });
+      if (u.rows[0].ledger_transaction_id) {
+        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: u.rows[0].ledger_transaction_id,
+          fields: [{ fieldName: 'Donor review', oldValue: null, newValue: 'Marked not a gift' }], metadata: { ...reqMeta(req), reason: note } }).catch(() => {});
+      }
       logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
-        fields: [{ fieldName: 'Review', oldValue: 'to_confirm', newValue: 'dismissed' }], metadata: { ...reqMeta(req), reason: note } }).catch(() => {});
+        fields: [{ fieldName: 'Review', oldValue: 'confirmed or to confirm', newValue: 'dismissed' }], metadata: { ...reqMeta(req), reason: note } }).catch(() => {});
       return res.json({ id: giftId, review_status: 'dismissed' });
     } catch (e) {
       console.error('POST gifts/:id/dismiss:', e.message);

@@ -1,6 +1,7 @@
 'use strict';
 
 const { receivableItems } = require('../lib/receivablesPayables');
+const { cashByRestriction } = require('../lib/cashByRestriction');
 const { requireAuth } = require('../../auth');
 const { waitingForAnAsset } = require('../lib/fixedAssetWaiting');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
@@ -21,23 +22,7 @@ function registerAccountingDashboardRoutes(app, pool) {
   app.get('/api/organizational/orgs/:slug/accounting/dashboard-summary', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
     const orgId = req.orgId;
     try {
-      const cashR = await pool.query(
-        `SELECT l.donor_restriction_class::text AS donor_restriction_class,
-                COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts acc ON acc.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND acc.is_cash_account IS TRUE
-         GROUP BY l.donor_restriction_class`,
-        [orgId]
-      );
-      const restrictedCash = { unrestricted_cents: '0', temporarily_restricted_cents: '0', permanently_restricted_cents: '0' };
-      for (const row of cashR.rows) {
-        const cents = String(row.cents);
-        if (row.donor_restriction_class === 'temporarily_restricted') restrictedCash.temporarily_restricted_cents = cents;
-        else if (row.donor_restriction_class === 'permanently_restricted') restrictedCash.permanently_restricted_cents = cents;
-        else restrictedCash.unrestricted_cents = cents;
-      }
+      const restrictedCash = await cashByRestriction(pool, orgId);
 
       const unconfirmedR = await pool.query(
         `SELECT COUNT(*)::int AS n FROM org_bank_statement_lines

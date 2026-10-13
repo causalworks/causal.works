@@ -805,7 +805,7 @@
               <div style="margin-left:auto;display:flex;gap:4px;align-items:center;">
                 ${receiptLink}
                 <button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-edit-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">Edit</button>
-                <button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-delete-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">✕</button>
+                ${g.gift_source === 'accounting' ? `<button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-notgift-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">Not a gift</button>` : g.posting_status === 'posted' ? '' : `<button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-delete-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">✕</button>`}
               </div>
             </div>
             <div class="organizational-gift-edit-form" id="gift-edit-${g.id}" hidden style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);"></div>
@@ -943,6 +943,19 @@
         </div>
       </div>
     `;
+
+    section.querySelectorAll('.organizational-notgift-gift').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const reason = window.prompt('Why is this not a gift? (a refund, a transfer, a reimbursement). Accounting will see this note on the entry.');
+        if (!reason || reason.trim().length < 3) return;
+        try {
+          await apiFetch(`/gifts/${Number(btn.dataset.id)}/dismiss`, { method: 'POST', body: JSON.stringify({ reason: reason.trim() }) });
+          await loadGiftHistory(constituentId);
+        } catch (err) {
+          showPanelError(err.message);
+        }
+      });
+    });
 
     section.querySelectorAll('.organizational-delete-gift').forEach(btn => {
       btn.addEventListener('click', async () => {

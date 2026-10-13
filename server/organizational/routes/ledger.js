@@ -568,7 +568,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         return res.status(400).json({ error: 'Say why the date is changing.' });
       }
       const linesR = await pool.query(
-        `SELECT id, account_id, program_id, grant_id, donor_restriction_class::text AS restriction, line_memo, source_line_type, source_line_id
+        `SELECT id, account_id, program_id, grant_id, donor_restriction_class::text AS restriction, line_memo, source_line_type, source_line_id, debit_cents, credit_cents
            FROM org_ledger_lines WHERE transaction_id = $1 ORDER BY id`, [id]);
       const oldLines = new Map(linesR.rows.map((l) => [l.id, l]));
 
@@ -656,9 +656,30 @@ function registerOrganizationalLedgerRoutes(app, pool) {
             }
           }
         }
+        let debit = Number(old.debit_cents);
+        let credit = Number(old.credit_cents);
+        if (raw.debit_cents !== undefined || raw.credit_cents !== undefined) {
+          debit = raw.debit_cents !== undefined ? Number(raw.debit_cents) : debit;
+          credit = raw.credit_cents !== undefined ? Number(raw.credit_cents) : credit;
+          if (!Number.isInteger(debit) || !Number.isInteger(credit) || debit < 0 || credit < 0 || (debit > 0 && credit > 0) || (debit === 0 && credit === 0)) {
+            return res.status(400).json({ error: 'Each line needs one positive amount, in cents.' });
+          }
+          if (debit !== Number(old.debit_cents) || credit !== Number(old.credit_cents)) {
+            if (elig.limited || old.source_line_type) return res.status(409).json({ error: 'Amounts on this entry are set by the record it came from. Change them there.', code: 'limited_edit' });
+            if (elig.reconciled) return res.status(409).json({ error: 'This entry is matched to a bank line, so its amounts stay as they are. Unreconcile it first.', code: 'reconciled_amount' });
+          }
+        }
         let restriction = old.restriction;
         if (raw.donor_restriction_class !== undefined && raw.donor_restriction_class !== '') restriction = raw.donor_restriction_class;
-        lineEdits.push({ lineId, old, accountId, programId, grantId, lineMemo, restriction, grantChanged: grantId !== old.grant_id, restrictionGiven: raw.donor_restriction_class !== undefined && raw.donor_restriction_class !== '' });
+        lineEdits.push({ lineId, old, debit, credit, accountId, programId, grantId, lineMemo, restriction, grantChanged: grantId !== old.grant_id, restrictionGiven: raw.donor_restriction_class !== undefined && raw.donor_restriction_class !== '' });
+      }
+
+      if (lineEdits.some((e) => e.debit !== Number(e.old.debit_cents) || e.credit !== Number(e.old.credit_cents))) {
+        const amt = new Map(linesR.rows.map((l) => [l.id, [Number(l.debit_cents), Number(l.credit_cents)]]));
+        lineEdits.forEach((e) => amt.set(e.lineId, [e.debit, e.credit]));
+        let d = 0; let c = 0;
+        amt.forEach((v) => { d += v[0]; c += v[1]; });
+        if (d !== c) return res.status(400).json({ error: 'Debits and credits must be equal after the change.' });
       }
 
       const finalGrantIds = new Set(linesR.rows.map((l) => (lineEdits.find((e) => e.lineId === l.id) || { grantId: l.grant_id }).grantId).filter((g) => g != null));
@@ -698,6 +719,8 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         if (e.grantId !== e.old.grant_id) fields.push({ fieldName: n + 'grant', oldValue: lab(gR2, e.old.grant_id), newValue: lab(gR2, e.grantId) });
         if ((e.restriction || null) !== (e.old.restriction || null)) fields.push({ fieldName: n + 'restriction', oldValue: e.old.restriction || '(none)', newValue: e.restriction || '(none)' });
         addField(n + 'memo', e.old.line_memo, e.lineMemo);
+        if (e.debit !== Number(e.old.debit_cents)) fields.push({ fieldName: n + 'debit', oldValue: (Number(e.old.debit_cents) / 100).toFixed(2), newValue: (e.debit / 100).toFixed(2) });
+        if (e.credit !== Number(e.old.credit_cents)) fields.push({ fieldName: n + 'credit', oldValue: (Number(e.old.credit_cents) / 100).toFixed(2), newValue: (e.credit / 100).toFixed(2) });
       }
       if (!fields.length) return res.status(400).json({ error: 'Nothing was changed.' });
 
@@ -712,9 +735,10 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         );
         for (const e of lineEdits) {
           await client.query(
-            `UPDATE org_ledger_lines SET account_id = $1, program_id = $2, grant_id = $3, donor_restriction_class = $4::org_restriction_class, line_memo = $5
+            `UPDATE org_ledger_lines SET account_id = $1, program_id = $2, grant_id = $3, donor_restriction_class = $4::org_restriction_class, line_memo = $5,
+                    debit_cents = $8, credit_cents = $9
               WHERE id = $6 AND transaction_id = $7`,
-            [e.accountId, e.programId, e.grantId, e.restriction || null, e.lineMemo, e.lineId, id]
+            [e.accountId, e.programId, e.grantId, e.restriction || null, e.lineMemo, e.lineId, id, e.debit, e.credit]
           );
           const changed = e.accountId !== e.old.account_id || e.programId !== e.old.program_id || e.grantId !== e.old.grant_id || e.lineMemo !== e.old.line_memo;
           if (changed && e.old.source_line_type === 'org_bill_lines') {

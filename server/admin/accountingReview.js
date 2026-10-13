@@ -9,6 +9,7 @@ const MODULES = {
   budget: { file: 'budget-review.json', prefix: 'U' },
   sponsorship: { file: 'sponsorship-review.json', prefix: 'S' },
   membership: { file: 'membership-review.json', prefix: 'M' },
+  platform: { file: 'platform-review.json', prefix: 'X' },
 };
 const DATA_DIR = path.join(__dirname, '..', '..', 'docs', 'private', 'reviews');
 const moduleOf = (req) => (MODULES[String(req.query.module || 'accounting')] ? String(req.query.module || 'accounting') : null);

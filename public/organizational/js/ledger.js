@@ -374,6 +374,7 @@
     const locked = new Set(ed.locked_account_ids || []);
     const limited = !!ed.limited;
     const memoOnly = !!ed.memo_only;
+    const canEditAmounts = !memoOnly && !limited && !ed.reconciled;
     const lineRows = memoOnly ? '' : data.lines.map((l, i) => {
       const fixedLine = limited && !l.limited_editable;
       const bankSide = (ed.reconciled && locked.has(l.account_id)) || fixedLine;
@@ -384,6 +385,7 @@
         + '<select class="organizational-select ledger-edit-account"' + (bankSide ? ' disabled' : '') + ' aria-label="Account">' + accountOptions(l.account_id, limited && !fixedLine ? l.account_type : null) + '</select>'
         + '<select class="organizational-select ledger-edit-program"' + (fixedLine ? ' disabled' : '') + ' aria-label="Program">' + programOptions(l.program_id) + '</select>'
         + '<select class="organizational-select ledger-edit-grant"' + (fixedLine ? ' disabled' : '') + ' aria-label="Grant">' + grantOptions(l.grant_id) + '</select>'
+        + (canEditAmounts ? '<label class="organizational-label" style="flex:1 1 100%;">' + (Number(l.debit_cents) > 0 ? 'Debit' : 'Credit') + ' amount<input type="number" step="0.01" min="0.01" class="organizational-input ledger-edit-amount" data-side="' + (Number(l.debit_cents) > 0 ? 'debit' : 'credit') + '" value="' + (Number(Number(l.debit_cents) > 0 ? l.debit_cents : l.credit_cents) / 100).toFixed(2) + '"></label>' : '')
         + '<input type="text" class="organizational-input ledger-edit-linememo" maxlength="300" placeholder="Line description (optional)" value="' + esc(l.memo || '') + '" style="flex:1 1 100%;">'
         + '</div></div>';
     }).join('');
@@ -392,7 +394,7 @@
       + (memoOnly ? 'This entry is voided, so its numbers are fixed. You can still correct its memo and reference. ' : '')
       + (memoOnly ? '' : limited ? 'This entry was created by ' + esc(ed.source_label || 'another part of Accounting') + '. You can correct the account, program and grant on its income and expense lines, and every description, its memo and its reference. The date, amounts and contact are changed there; the source record keeps its own account. '
         : (ed.reconciled ? 'This entry is matched to a bank line, so its date and the bank-side account stay as they are. Unreconcile it first to change those. ' : ''))
-      + (memoOnly ? '' : 'Amounts do not change here; void the entry and enter the corrected one for that.') + '</p>'
+      + (memoOnly || canEditAmounts ? '' : 'Amounts do not change here; void the entry and enter the corrected one for that.') + '</p>'
       + '<div class="organizational-panel-field-row">'
       + (memoOnly ? '' : '<label class="organizational-label" style="flex:1">Date<input type="date" id="ledger-edit-date" class="organizational-input" value="' + esc(t.date) + '"' + (ed.reconciled || limited ? ' disabled' : '') + '></label>')
       + '<label class="organizational-label" style="flex:1">Reference #<input type="text" id="ledger-edit-ref" class="organizational-input" maxlength="100" value="' + esc(t.reference || '') + '"></label>'
@@ -407,6 +409,10 @@
       + '<button type="button" class="organizational-btn organizational-btn-primary ledger-edit-save" data-id="' + t.id + '">Save changes</button> '
       + '<button type="button" class="organizational-btn organizational-btn-outline ledger-edit-cancel" data-id="' + t.id + '">Cancel</button></div>';
     if (window.OrganizationalSelectSearch) window.OrganizationalSelectSearch.enhanceIn(panelBody, 'select.ledger-edit-account, select.ledger-edit-program, select.ledger-edit-grant');
+    const amountInputs = panelBody.querySelectorAll('.ledger-edit-amount');
+    if (amountInputs.length === 2) {
+      amountInputs.forEach((el, i) => el.addEventListener('input', () => { amountInputs[1 - i].value = el.value; }));
+    }
     const field = document.getElementById('ledger-edit-contact-field');
     if (field && window.OrganizationalContactPicker) {
       window.OrganizationalContactPicker.mount(field, {
@@ -427,8 +433,11 @@
         if (row.querySelector('.ledger-edit-program').disabled) {
           return { id: Number(row.getAttribute('data-line')), line_memo: row.querySelector('.ledger-edit-linememo').value };
         }
+        const amtEl = row.querySelector('.ledger-edit-amount');
+        const cents = amtEl ? Math.round(Number(amtEl.value) * 100) : null;
         return {
           id: Number(row.getAttribute('data-line')),
+          ...(amtEl ? (amtEl.getAttribute('data-side') === 'debit' ? { debit_cents: cents } : { credit_cents: cents }) : {}),
           account_id: acct && !acct.disabled ? Number(acct.value) : undefined,
           program_id: Number(row.querySelector('.ledger-edit-program').value),
           grant_id: row.querySelector('.ledger-edit-grant').value || null,

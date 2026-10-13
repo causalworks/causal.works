@@ -122,7 +122,7 @@ function rowToGift(row) {
     discounted_present_value_cents: row.discounted_present_value_cents != null ? Number(row.discounted_present_value_cents) : null,
     receivable_account_id: row.receivable_account_id != null ? Number(row.receivable_account_id) : null,
     review_status: row.review_status || null,
-    gift_source: row.source || null,
+    gift_source: row.gift_origin || row.source || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -641,7 +641,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
       if (!constituentCheck.rows.length) return res.status(404).json({ error: 'Constituent not found' });
 
       const r = await pool.query(
-        `SELECT *, 'gift' AS source
+        `SELECT *, source AS gift_origin
          FROM org_gifts
          WHERE constituent_id = $1 AND org_id = $2
          ORDER BY received_at DESC`,

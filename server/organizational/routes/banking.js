@@ -1,5 +1,7 @@
 'use strict';
 
+const { recordPledgeInstallmentReceipt } = require('../lib/pledgeReceipt');
+const { findExpectedGifts } = require('../lib/giftMatch');
 const { scoreCandidate } = require('../lib/bankMatchScore');
 const crypto = require('crypto');
 const multer = require('multer');
@@ -677,7 +679,7 @@ function registerBankingRoutes(app, pool) {
 
       const candidates = {
         bills: [], invoices: [], outstanding_bill_payments: [], outstanding_invoice_payments: [], outstanding_transfers: [], existing_entries: [],
-        grant_gifts: [], grant_gifts_excluded_no_account: [],
+        grant_gifts: [], grant_gifts_excluded_no_account: [], pledge_installments: [],
         membership_dues: [], membership_dues_excluded_no_account: [],
         sponsored_project_disbursements: [], sponsored_project_disbursements_excluded_no_account: [],
       };
@@ -829,6 +831,10 @@ function registerBankingRoutes(app, pool) {
         candidates.membership_dues_excluded_no_account = duesR.rows
           .filter((r) => r.revenue_account_id == null)
           .map((r) => ({ id: r.id, member_name: `${r.first_name} ${r.last_name}`.trim(), tier_id: r.tier_id, tier_name: r.tier_name, amount_cents: String(r.amount_cents) }));
+
+        const expected = await findExpectedGifts(pool, { orgId, amountCents, date: String(line.statement_date).slice(0, 10), text: `${line.payee_raw || ''} ${line.description_raw || ''}` });
+        candidates.pledge_installments = expected.filter((e) => e.kind === 'pledge_installment')
+          .map((e) => ({ id: e.id, gift_id: e.gift_id, donor_name: e.donor_name, due_date: e.date, amount_cents: String(e.amount_cents) }));
       }
 
       {
@@ -849,6 +855,7 @@ function registerBankingRoutes(app, pool) {
         rank(candidates.existing_entries, (c) => ({ names: [c.payee, c.memo], cents: c.amount_cents, date: c.transaction_date }), false);
         rank(candidates.grant_gifts, (c) => ({ names: [c.constituent_name, c.funder, c.grant_name], cents: c.amount_cents, date: c.received_at }), true);
         rank(candidates.membership_dues, (c) => ({ names: [c.member_name], cents: c.amount_cents, date: c.payment_date }), true);
+        rank(candidates.pledge_installments, (c) => ({ names: [c.donor_name], cents: c.amount_cents, date: c.due_date }), true);
         rank(candidates.sponsored_project_disbursements, (c) => ({ names: [c.project_name], cents: c.amount_cents, date: c.disbursement_date }), true);
         (candidates.outstanding_transfers || []).forEach((c) => { c.match_score = 100; c.match_suggest = true; c.match_reasons = ['pairs with the other account']; });
       }
@@ -861,7 +868,7 @@ function registerBankingRoutes(app, pool) {
   });
 
   async function matchStatementLine(orgId, userId, lineId, { matchType, targetId }) {
-    const MATCH_TYPES = ['bill', 'invoice', 'outstanding_bill_payment', 'outstanding_invoice_payment', 'outstanding_transfer', 'ledger_entry', 'grant_gift', 'membership_dues', 'sponsored_project_disbursement'];
+    const MATCH_TYPES = ['bill', 'invoice', 'outstanding_bill_payment', 'outstanding_invoice_payment', 'outstanding_transfer', 'ledger_entry', 'grant_gift', 'membership_dues', 'sponsored_project_disbursement', 'pledge_installment'];
     if (!MATCH_TYPES.includes(matchType)) {
       return { httpStatus: 400, body: { error: `match_type must be one of: ${MATCH_TYPES.join(', ')}` } };
     }
@@ -876,7 +883,7 @@ function registerBankingRoutes(app, pool) {
     if ((matchType === 'bill' || matchType === 'outstanding_bill_payment' || matchType === 'sponsored_project_disbursement') && line.credit_debit_indicator !== 'debit') {
       return { httpStatus: 422, body: { error: 'A bill/disbursement payment match requires a debit (money-out) line', code: 'wrong_direction' } };
     }
-    if ((matchType === 'invoice' || matchType === 'outstanding_invoice_payment' || matchType === 'grant_gift' || matchType === 'membership_dues') && line.credit_debit_indicator !== 'credit') {
+    if ((matchType === 'invoice' || matchType === 'outstanding_invoice_payment' || matchType === 'grant_gift' || matchType === 'membership_dues' || matchType === 'pledge_installment') && line.credit_debit_indicator !== 'credit') {
       return { httpStatus: 422, body: { error: 'A grant/invoice/dues payment match requires a credit (money-in) line', code: 'wrong_direction' } };
     }
 
@@ -930,6 +937,14 @@ function registerBankingRoutes(app, pool) {
       const result = await recordGrantGiftPayment(pool, {
         orgId, userId, giftId: targetId, bankAccountId: line.bank_account_id,
         paymentDate: String(line.statement_date).slice(0, 10), amountCents: Number(line.amount_cents),
+        reference: line.payee_raw || line.description_raw || null,
+      });
+      if (result.httpStatus >= 400) return result;
+      ledgerTransactionId = result.body.ledger_transaction_id;
+    } else if (matchType === 'pledge_installment') {
+      const result = await recordPledgeInstallmentReceipt(pool, {
+        orgId, userId, installmentId: targetId, bankAccountId: line.bank_account_id,
+        date: String(line.statement_date).slice(0, 10), amountCents: Number(line.amount_cents),
         reference: line.payee_raw || line.description_raw || null,
       });
       if (result.httpStatus >= 400) return result;

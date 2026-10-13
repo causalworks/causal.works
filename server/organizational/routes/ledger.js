@@ -1,6 +1,7 @@
 'use strict';
 
 const { findExpectedGifts, loadExpected } = require('../lib/giftMatch');
+const { pledgeReceiptLines, markInstallmentCollected } = require('../lib/pledgeReceipt');
 const { suggestGiftForTransaction, voidGiftsForTransaction, syncGiftAfterRecode } = require('../lib/giftIntake');
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
@@ -481,12 +482,9 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         const bank = Number.parseInt(String(body.bank_account_id), 10);
         const okBank = await pool.query('SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND is_cash_account = true AND is_posting = true', [bank, req.orgId]);
         if (!okBank.rows.length) return res.status(400).json({ error: 'Pick the bank account the money went into.' });
-        if (!applied.program_id) return res.status(400).json({ error: 'This pledge has no program, so its receipt cannot be posted. Add the program to the pledge first.' });
-        const amt = Number(applied.amount_cents);
-        lines = [
-          { account_id: bank, program_id: applied.program_id, debit_cents: amt, credit_cents: 0 },
-          { account_id: applied.receivable_account_id, program_id: applied.program_id, debit_cents: 0, credit_cents: amt },
-        ];
+        const receipt = pledgeReceiptLines(applied, bank);
+        if (receipt.error) return res.status(400).json({ error: receipt.error });
+        lines = receipt.lines;
       } else {
         const built = await buildSimpleEntryLines(req.orgId, entryType, body);
         if (built.error) return res.status(400).json({ error: built.error });
@@ -532,10 +530,8 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     if (result.httpStatus < 400 && applied && result.body && result.body.id) {
       try {
         if (applied.kind === 'pledge_installment') {
-          const u = await pool.query(
-            `UPDATE org_gift_pledge_installments SET status = 'collected', ledger_transaction_id = $1, collected_at = $2::date
-              WHERE id = $3 AND org_id = $4 AND status = 'expected'`, [result.body.id, String(body.transaction_date), applied.id, req.orgId]);
-          if (!u.rowCount) console.error('apply installment: it was no longer expected after posting', applied.id);
+          const collected = await markInstallmentCollected(pool, { orgId: req.orgId, installmentId: applied.id, ledgerTransactionId: result.body.id, date: body.transaction_date });
+          if (!collected) console.error('apply installment: it was no longer expected after posting', applied.id);
         } else {
           await pool.query(
             `UPDATE org_gifts SET ledger_transaction_id = $1, posting_status = 'posted'

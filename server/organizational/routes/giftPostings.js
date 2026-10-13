@@ -1,6 +1,7 @@
 'use strict';
 
 const { logAudit } = require('../lib/auditLog');
+const { isFiscalYearLocked } = require('../lib/ledgerPosting');
 
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
@@ -171,21 +172,71 @@ function registerGiftPostingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/not-a-gift', ...writeAuth, async (req, res) => {
     const giftId = Number.parseInt(String(req.params.giftId), 10);
     if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
-    const accept = !(req.body && req.body.keep);
+    const body = req.body || {};
+    const accept = !body.keep;
+    const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
+    const client = await pool.connect();
     try {
-      const u = accept
-        ? await pool.query(`UPDATE org_gifts SET review_status = 'dismissed', reviewed_by = $1, reviewed_at = NOW()
-                             WHERE id = $2 AND org_id = $3 AND not_gift_flagged_at IS NOT NULL AND review_status <> 'dismissed' RETURNING id`, [userId, giftId, req.orgId])
-        : await pool.query(`UPDATE org_gifts SET not_gift_flagged_at = NULL, not_gift_flagged_by = NULL, not_gift_note = NULL
-                             WHERE id = $1 AND org_id = $2 AND not_gift_flagged_at IS NOT NULL RETURNING id`, [giftId, req.orgId]);
-      if (!u.rows.length) return res.status(404).json({ error: 'No flagged gift with that id' });
-      await logAudit(pool, { orgId: req.orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
-        fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: accept ? 'accepted, removed from Funding' : 'kept as a gift' }] });
-      return res.json({ id: giftId, accepted: accept });
+      await client.query('BEGIN');
+      const gR = await client.query(
+        `SELECT id, ledger_transaction_id, not_gift_note FROM org_gifts
+          WHERE id = $1 AND org_id = $2 AND not_gift_flagged_at IS NOT NULL AND review_status <> 'dismissed' FOR UPDATE`, [giftId, orgId]);
+      const g = gR.rows[0];
+      if (!g) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No flagged gift with that id' }); }
+      if (!accept) {
+        await client.query('UPDATE org_gifts SET not_gift_flagged_at = NULL, not_gift_flagged_by = NULL, not_gift_note = NULL WHERE id = $1', [giftId]);
+        await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+          fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: 'kept as a gift' }] });
+        await client.query('COMMIT');
+        return res.json({ id: giftId, accepted: false });
+      }
+      let recoded = null;
+      if (g.ledger_transaction_id) {
+        const tR = await client.query('SELECT id, fiscal_year, status FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [g.ledger_transaction_id, orgId]);
+        const t = tR.rows[0];
+        if (t && t.status === 'posted') {
+          let accountId = Number.parseInt(String(body.account_id), 10);
+          let programId = body.program_id != null && body.program_id !== '' ? Number.parseInt(String(body.program_id), 10) : null;
+          if (body.uncoded) {
+            const uR = await client.query('SELECT id FROM org_accounts WHERE org_id = $1 AND is_system_unallocated_receipts_account LIMIT 1', [orgId]);
+            if (!uR.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This workspace has no holding account for uncoded receipts. Choose an account.' }); }
+            accountId = uR.rows[0].id;
+          }
+          if (!(accountId > 0)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose the account this money belongs in, or leave it uncoded for later.' }); }
+          if (!body.uncoded && !(programId > 0)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a program, or leave it uncoded for later.' }); }
+          if (await isFiscalYearLocked(client, orgId, t.fiscal_year)) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: 'Fiscal year ' + t.fiscal_year + ' is closed, so the entry cannot be recoded. Reopen the year, or void the entry and enter the corrected one, then accept.' });
+          }
+          const aR = await client.query('SELECT id, code, name, is_posting, is_cash_account FROM org_accounts WHERE org_id = $1 AND id = $2', [orgId, accountId]);
+          if (!aR.rows.length || !aR.rows[0].is_posting || aR.rows[0].is_cash_account) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a posting account that is not a bank account.' }); }
+          const lR = await client.query(
+            `SELECT l.id, l.account_id, l.program_id, a.code || ' ' || a.name AS label
+               FROM org_ledger_lines l JOIN org_accounts a ON a.id = l.account_id
+              WHERE l.transaction_id = $1 AND l.credit_cents > 0 AND (l.source_line_type = 'org_gifts' AND l.source_line_id = $2 OR a.type = 'income')`, [t.id, giftId]);
+          if (lR.rows.length !== 1) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This entry has more than one income line. Recode it in Transactions, then accept.' }); }
+          const line = lR.rows[0];
+          const fields = [{ fieldName: 'Donor review', oldValue: null, newValue: 'Accepted as not a gift' }];
+          if (line.account_id !== accountId) fields.push({ fieldName: 'Income line account', oldValue: line.label, newValue: aR.rows[0].code + ' ' + aR.rows[0].name });
+          if (!body.uncoded && programId && programId !== line.program_id) fields.push({ fieldName: 'Income line program', oldValue: String(line.program_id), newValue: String(programId) });
+          await client.query('UPDATE org_ledger_lines SET account_id = $1, program_id = COALESCE($2, program_id) WHERE id = $3', [accountId, body.uncoded ? null : programId, line.id]);
+          await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: t.id, fields,
+            metadata: { reason: 'Not a gift: ' + (g.not_gift_note || '') + (body.uncoded ? ' (left uncoded for later)' : '') } });
+          recoded = t.id;
+        }
+      }
+      await client.query(`UPDATE org_gifts SET review_status = 'dismissed', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`, [userId, giftId]);
+      await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+        fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: 'accepted, removed from Funding' }] });
+      await client.query('COMMIT');
+      return res.json({ id: giftId, accepted: true, recoded_transaction_id: recoded });
     } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
       console.error('POST /gift-postings/:giftId/not-a-gift:', e.message);
       return res.status(500).json({ error: 'Could not resolve the flag' });
+    } finally {
+      client.release();
     }
   });
 

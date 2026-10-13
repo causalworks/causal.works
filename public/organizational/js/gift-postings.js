@@ -121,7 +121,10 @@
       const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + id + '/not-a-gift', { method: 'POST', body: JSON.stringify({ keep }) });
       if (r && r.res.ok) await loadPending();
     };
-    tbody.querySelectorAll('.gp-flag-accept').forEach((b) => b.addEventListener('click', () => resolveFlag(b.dataset.id, false)));
+    tbody.querySelectorAll('.gp-flag-accept').forEach((b) => b.addEventListener('click', () => {
+      const f = rows.find((x) => String(x.id) === b.dataset.id);
+      if (f && f.flag && f.flag.ledger_transaction_id) openFlagPanel(f); else resolveFlag(b.dataset.id, false);
+    }));
     tbody.querySelectorAll('.gp-flag-keep').forEach((b) => b.addEventListener('click', () => resolveFlag(b.dataset.id, true)));
     tbody.querySelectorAll('.organizational-giftpostings-review-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -131,6 +134,31 @@
         else openPostPanel(gift);
       });
     });
+  }
+
+  function openFlagPanel(f) {
+    postPanel.innerHTML =
+      '<div class="organizational-panel-section-head">Not a gift: where does this money belong?</div>' +
+      '<p class="organizational-hint">' + fmtUsd(f.amount_cents) + ' from ' + esc(f.constituent_name || 'an unnamed contact') + '. Funding says: ' + esc(f.flag.note || '') + '</p>' +
+      '<div class="organizational-panel-field-row">' +
+      '<label class="organizational-label" style="flex:1">Account<select id="gp-flag-account" class="organizational-select"><option value="">— select —</option>' + acctOpts(() => true) + '</select></label>' +
+      '<label class="organizational-label" style="flex:1">Program<select id="gp-flag-program" class="organizational-select">' + programOpts('') + '</select></label></div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">' +
+      '<button type="button" class="organizational-btn organizational-btn-primary" id="gp-flag-recode">Recode and remove from Funding</button>' +
+      '<button type="button" class="organizational-btn organizational-btn-outline" id="gp-flag-uncoded">Leave uncoded for now</button>' +
+      '<button type="button" class="organizational-btn organizational-btn-outline" id="gp-flag-cancel">Cancel</button><span id="gp-flag-status" style="font-size:0.8125rem;color:var(--text-secondary);"></span></div>';
+    postPanel.hidden = false;
+    const statusEl = document.getElementById('gp-flag-status');
+    const send = async (payload) => {
+      statusEl.textContent = 'Saving…';
+      const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + f.id + '/not-a-gift', { method: 'POST', body: JSON.stringify(payload) });
+      if (!out || !out.res.ok) { statusEl.textContent = (out && out.data && out.data.error) || 'Could not save'; return; }
+      postPanel.hidden = true;
+      await loadPending();
+    };
+    document.getElementById('gp-flag-cancel').addEventListener('click', () => { postPanel.hidden = true; });
+    document.getElementById('gp-flag-recode').addEventListener('click', () => send({ account_id: Number(document.getElementById('gp-flag-account').value) || null, program_id: Number(document.getElementById('gp-flag-program').value) || null }));
+    document.getElementById('gp-flag-uncoded').addEventListener('click', () => send({ uncoded: true }));
   }
 
   function openDisbursementPanel(d) {

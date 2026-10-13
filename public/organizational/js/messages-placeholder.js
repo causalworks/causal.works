@@ -88,7 +88,15 @@
     drawer.setAttribute('aria-label', 'Messages (placeholder)');
     drawer.innerHTML = sampleHtml();
 
-    var slot = document.querySelector('[data-messages-slot]');
+    var slot = document.querySelector('[data-messages-slot]') || document.getElementById('organizational-module-quicklinks');
+    if (!slot) {
+      var title = document.getElementById('organizational-org-title');
+      if (title && title.parentNode) {
+        slot = document.createElement('div');
+        slot.style.cssText = 'float:right;order:2;margin-left:auto;display:flex;gap:14px;align-items:center;padding-top:8px;';
+        title.parentNode.insertBefore(slot, title);
+      }
+    }
     if (slot) {
       tab.style.cssText = 'position:static;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;';
       slot.appendChild(tab);

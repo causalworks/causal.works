@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "note": "Hand-curated Corporate tab content. Expand with LDA and bank APIs later.",
+    "last_updated": "2026-03-30"
+  },
+  "thesis": "Corporations that shape outcomes you care about — especially those already tied to your money in Assets (bank, brokerage). More automated links (lobbying, AGMs) will layer in as we wire data.",
+  "cards": [
+    {
+      "id": "jpmc-agm-2026",
+      "entity": "JPMorgan Chase",
+      "badge": "Shareholder meeting",
+      "title": "Annual shareholder meeting (typical spring window)",
+      "summary": "Large banks face recurring votes on climate and human rights. If Chase is your institution, the AGM is a documented channel for pressure — proxy voting, questions, and coalition filings.",
+      "timing_note": "Most years: April–May (confirm in the official proxy when posted).",
+      "source_url": "https://www.jpmorganchase.com/ir/annual-meeting",
+      "match_banks_substr": ["chase", "jpmorgan", "jp morgan", "j.p. morgan"]
+    }
+  ]
+}

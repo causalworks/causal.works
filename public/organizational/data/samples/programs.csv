@@ -1,0 +1,10 @@
+code,name,type,parent_code,fiscal_year_start,fiscal_year_end,program_manager,description,active
+P01,Youth Arts Program,program,,,,,Core youth arts programming,true
+P01-A1,Summer Workshop,activity,P01,,,A. Rivera,Summer intensive workshops for youth,true
+P01-A2,After-school Program,activity,P01,,,A. Rivera,Year-round after-school activities,true
+P02,Community Outreach,program,,,,,Community education and public engagement,true
+P02-A1,Public Events,activity,P02,,,J. Chen,Community festivals and public events,true
+P02-A2,Community Partnerships,activity,P02,,,J. Chen,Collaborations with community organizations,true
+P03,Artist Residency,program,,,,,Professional artist residencies,true
+P04,General & Administrative,program,,,,,Management and general operations,true
+P05,Fundraising,program,,,,,Fundraising activities and donor relations,true

@@ -1,0 +1,10 @@
+{
+  "name": "pod-demo-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone scripts for the Solid pod infrastructure demo - not part of the main app.",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "pg": "^8.11.0"
+  }
+}

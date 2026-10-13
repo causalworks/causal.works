@@ -1,0 +1,30 @@
+.deb
+node_modules
+data/cache/
+public/old/
+# Local scratch, logs, one-off script output
+tmp/
+tmp_pm2_logs.txt
+*.log
+# Local env with secrets — never commit
+.env
+.env.local
+.env.save
+# IDE / local tooling
+skills-lock.json
+.claude/
+.graphify/
+.gitattributes
+.venv/
+# Local download/inspect artifacts (e.g. Bundestag Stammdaten zip)
+tmp/stammdaten-inspect/
+# EU rep API caches (fetched at runtime; large / volatile)
+server/rep/data/eu-meps.json
+server/rep/data/eu-ep-committee-chairs.json
+# Org document uploads — private per-org files, never committed
+/uploads/
+# Private docs: anything in docs/private/ stays out of the public repo (move files in or out to change)
+docs/private/
+
+# Claude Code instructions: kept on disk, not published
+CLAUDE.md

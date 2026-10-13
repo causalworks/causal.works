@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="structure">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-structure-error" class="organizational-error" hidden></p>
+        <nav aria-label="Breadcrumb" style="font-size:0.8125rem;margin:2px 0 4px;"><a id="structure-crumb-settings" href="#" style="color:var(--organizational-accent);">Settings</a> <span style="color:var(--text-muted);">›</span></nav>
+        <h1 class="organizational-org-dashboard-title" style="margin-top:0;">Financial structure</h1>
+        <p class="organizational-hint" style="margin:0 0 4px;">The chart of accounts, programs and projects that every module shares. Changing them changes them everywhere.</p>
+
+        <nav class="organizational-subnav" style="margin-top:12px;border-bottom:1px solid var(--border-subtle);padding-bottom:4px;margin-bottom:0;">
+          <button type="button" class="organizational-nav-link organizational-tab-trigger active" data-tab="accounts">Chart of accounts</button>
+          <button type="button" class="organizational-nav-link organizational-tab-trigger" data-tab="programs">Programs &amp; activities</button>
+          <button type="button" class="organizational-nav-link organizational-tab-trigger" data-tab="projects">Projects</button>
+          <button type="button" class="organizational-nav-link organizational-tab-trigger" data-tab="display">Display</button>
+        </nav>
+
+        <div id="structure-pane-display" class="organizational-tab-panel" hidden>
+          <section class="organizational-card" style="margin-top:16px;padding:16px 20px;">
+            <label style="display:flex;gap:8px;align-items:flex-start;margin:0;">
+              <input type="checkbox" id="structure-number-colors" style="width:auto;margin-top:4px;" disabled>
+              <span><strong>Show positive amounts in green and negative amounts in red</strong><br><span class="organizational-hint">Off by default: amounts keep the color of their column and negative amounts show in brackets, like (1,234.00). This applies to everyone in this workspace.</span></span>
+            </label>
+            <p class="organizational-error" id="structure-number-colors-error" hidden></p>
+          </section>
+        </div>
+
+        <div id="structure-pane-accounts" class="organizational-tab-panel">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 10px;">
+            <button type="button" class="organizational-btn organizational-btn-primary" id="structure-account-add" hidden>+ Add account</button>
+            <a class="organizational-btn organizational-btn-outline" id="structure-accounts-export" href="#" download="chart-of-accounts.csv" style="font-size:0.8125rem;">Export CSV</a>
+            <input type="search" id="structure-accounts-q" class="organizational-input" placeholder="Search code, name or description" aria-label="Search accounts" style="max-width:280px;margin-left:auto;">
+          </div>
+          <div id="structure-accounts-types" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
+          <section class="organizational-card" id="structure-account-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+          <section class="organizational-card organizational-card-flush">
+            <div class="organizational-table-wrap">
+              <table class="organizational-table" aria-label="Chart of accounts">
+                <thead><tr><th style="width:90px;">Code</th><th>Name</th><th>Type</th><th>Managed by</th><th style="text-align:right;">Fiscal year to date</th><th></th></tr></thead>
+                <tbody id="structure-accounts-body"><tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div id="structure-pane-programs" class="organizational-tab-panel" hidden>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 10px;">
+            <button type="button" class="organizational-btn organizational-btn-primary" id="structure-program-add" hidden>+ Add program</button>
+            <button type="button" class="organizational-btn organizational-btn-outline" id="structure-activity-add" hidden>+ Add activity</button>
+            <label style="margin-left:auto;font-size:0.8125rem;display:flex;gap:6px;align-items:center;"><input type="checkbox" id="structure-programs-inactive" style="width:auto;"> Show archived</label>
+          </div>
+          <p class="organizational-hint" style="margin:0 0 10px;">A program groups spending and income for reporting (the functional expense columns on the 990 come from these). An activity is a part of one program.</p>
+          <section class="organizational-card" id="structure-program-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+          <section class="organizational-card organizational-card-flush">
+            <div class="organizational-table-wrap">
+              <table class="organizational-table" aria-label="Programs and activities">
+                <thead><tr><th style="width:110px;">Code</th><th>Name</th><th>Kind</th><th>Description</th><th>Status</th><th></th></tr></thead>
+                <tbody id="structure-programs-body"><tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <div id="structure-pane-projects" class="organizational-tab-panel" hidden>
+          <p class="organizational-hint" style="margin:16px 0 10px;">Sponsored projects. A <strong>managed project</strong> runs through your books as a project of your sponsorship program. A <strong>grant to an independent recipient</strong> keeps its own books and reports to you. Open Sponsorship to add or change a project.</p>
+          <section class="organizational-card organizational-card-flush">
+            <div class="organizational-table-wrap">
+              <table class="organizational-table" aria-label="Projects">
+                <thead><tr><th>Project</th><th>Type</th><th>Program</th><th>Status</th></tr></thead>
+                <tbody id="structure-projects-body"><tr class="organizational-table-empty"><td colspan="4">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+          <p style="margin:12px 0;"><a id="structure-projects-link" href="#" class="organizational-btn organizational-btn-outline">Open Sponsorship</a></p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/select-search.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/structure.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

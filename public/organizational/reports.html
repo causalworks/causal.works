@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Reports — causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+<script>if (/[?&]embed=1(&|$)/.test(location.search)) document.documentElement.className += ' organizational-embed';</script>
+</head>
+<body class="organizational-app" data-organizational-active="reports">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+
+          <div id="organizational-reports-fy-row" style="display:flex; align-items:center; gap:10px; margin-bottom:24px;">
+            <label class="organizational-hint" for="organizational-reports-fy">Fiscal year</label>
+            <input type="number" id="organizational-reports-fy" class="organizational-input" min="2000" max="2200" step="1" style="width:100px;" aria-label="Fiscal year for reports">
+          </div>
+
+          <div id="reports-index">
+            <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Reports</h1>
+
+            <div class="organizational-section-title">Financial views</div>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('budget')">
+                <div class="organizational-report-card-icon">📊</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Budget views</div>
+                  <div class="organizational-report-card-desc">Annual and monthly views with budget, actuals, and forecast. Filter by fiscal year, program, and column set.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">Standard reports</div>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('board')">
+                <div class="organizational-report-card-icon">📋</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Board report</div>
+                  <div class="organizational-report-card-desc">Full financial summary for board review — budget vs. actuals, grant pipeline, and program snapshot.</div>
+                </div>
+                <div class="organizational-report-card-action">PDF ↓</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('990')">
+                <div class="organizational-report-card-icon">📊</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">990 Part IX — Functional expenses</div>
+                  <div class="organizational-report-card-desc">Expense breakdown across program services, management &amp; general, and fundraising per FASB ASU 2016-14.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('balance-sheet')">
+                <div class="organizational-report-card-icon">🧾</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Balance sheet</div>
+                  <div class="organizational-report-card-desc">Assets, liabilities, and net assets (with restriction breakdown) as of the latest snapshot.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('reconciliation')">
+                <div class="organizational-report-card-icon">✅</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Reconciliation &amp; close</div>
+                  <div class="organizational-report-card-desc">Tie-out checks for the selected fiscal year, plus lock/reopen — freeze a year's financial data, reversibly, once you're ready to close it.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="goToCashForecast()">
+                <div class="organizational-report-card-icon">💵</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Cash forecast</div>
+                  <div class="organizational-report-card-desc">Rolling 12-month cash position — actual where posted, forecast from budget where not, same account rows as the budget grid.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('activity')">
+                <div class="organizational-report-card-icon">🗂</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Activity log</div>
+                  <div class="organizational-report-card-desc">Audit trail of all budget, schedule, and grant changes with field-level before/after history.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">Ledger reports</div>
+            <p class="organizational-hint" style="margin-bottom:16px;">Straight from the posted ledger — the proof behind the dashboard and the statements. Available for every workspace.</p>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('trial-balance')">
+                <div class="organizational-report-card-icon">⚖️</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Trial Balance</div>
+                  <div class="organizational-report-card-desc">Every account's debit or credit balance as of a date. Total debits must equal total credits. Export to CSV.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('receivables-schedule')">
+                <div class="organizational-report-card-icon">📥</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Receivables Schedule</div>
+                  <div class="organizational-report-card-desc">What is owed to the organization: open invoices and booked pledge installments, by contact, aged, checked against the ledger balance. Click a row to open the entry.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('payables-schedule')">
+                <div class="organizational-report-card-icon">📤</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Payables Schedule</div>
+                  <div class="organizational-report-card-desc">What the organization owes: approved bills and approved expense claims, aged, checked against the ledger balance. Click a row to open the entry.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('account-transactions')">
+                <div class="organizational-report-card-icon">🔎</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Account Transactions</div>
+                  <div class="organizational-report-card-desc">The entries behind one account's total for a period, with contact, description and related account. Click a row to open the entry. Report amounts open here.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('general-ledger')">
+                <div class="organizational-report-card-icon">📒</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">General Ledger</div>
+                  <div class="organizational-report-card-desc">Every posted line by account with an opening balance, running balance and closing balance. Filter by dates or one account. Export to CSV.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">GAAP financial statements</div>
+            <p class="organizational-hint" style="margin-bottom:16px;">Live-computed from the posted ledger. Available for workspaces using the internal ledger as the actuals source.</p>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('financial-position')">
+                <div class="organizational-report-card-icon">🏦</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Statement of Financial Position</div>
+                  <div class="organizational-report-card-desc">Assets, liabilities, and net assets (without / with donor restrictions) as of fiscal year-end. ASC 958-205 format.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('statement-of-activities')">
+                <div class="organizational-report-card-icon">📈</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Statement of Activities</div>
+                  <div class="organizational-report-card-desc">Revenue and expenses by net asset class — without and with donor restrictions — plus change in net assets for the fiscal year.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('stmt-functional-expenses')">
+                <div class="organizational-report-card-icon">📋</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Statement of Functional Expenses</div>
+                  <div class="organizational-report-card-desc">Expenses by natural category (rows) × functional category (program services / management &amp; general / fundraising). Uses your 990 allocations.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+              <div class="organizational-report-card" onclick="showReport('cash-flows')">
+                <div class="organizational-report-card-icon">💧</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Statement of Cash Flows</div>
+                  <div class="organizational-report-card-desc">Indirect-method reconciliation from change in net assets to net change in cash — operating, investing, and financing activities.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">Taxes</div>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('1099')">
+                <div class="organizational-report-card-icon">🧾</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">1099 Report</div>
+                  <div class="organizational-report-card-desc">What each 1099-eligible vendor was paid in a calendar year, whether it reaches the reporting amount, and which vendors are missing a W-9 or tax ID. Export to CSV.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">Giving</div>
+            <div class="organizational-report-grid">
+
+              <div class="organizational-report-card" onclick="showReport('giving-summary')">
+                <div class="organizational-report-card-icon">🤝</div>
+                <div class="organizational-report-card-body">
+                  <div class="organizational-report-card-title">Giving summary</div>
+                  <div class="organizational-report-card-desc">Total gifts by type, average gift size, and top donors by lifetime giving. Filter by fiscal year and campaign.</div>
+                </div>
+                <div class="organizational-report-card-action">View →</div>
+              </div>
+
+            </div>
+
+            <div class="organizational-section-title" style="margin-top:32px;">Grant reports</div>
+            <p class="organizational-hint" style="margin-bottom:16px;">Per-grant financial summaries for funders and internal review. PDFs are generated fresh on download.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Grant reports">
+                  <thead>
+                    <tr>
+                      <th>Grant</th>
+                      <th>Funder</th>
+                      <th>Status</th>
+                      <th>Report</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-grant-reports-tbody">
+                    <tr class="organizational-table-empty"><td colspan="4">Loading grants…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-board" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Board report</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Full financial summary for board review. Generated fresh each time you download.</p>
+            <section class="organizational-card">
+              <a class="organizational-btn" id="organizational-report-board" href="#" download>Download board report (PDF)</a>
+            </section>
+          </div>
+
+          <div id="report-detail-990" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">990 Part IX — Functional expenses</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">
+              Expense breakdown across program services, management &amp; general, and fundraising.
+              Set allocations per account in <a id="organizational-990-settings-link" href="#" class="organizational-nav-link" style="color:var(--organizational-accent);font-weight:600;">Settings › 990 Expense</a>.
+            </p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-990-report-meta"></span>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadPartIX()">Refresh</button>
+                <a id="organizational-990-report-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="990 Part IX">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Account</th>
+                      <th>Total</th>
+                      <th>Program Services</th>
+                      <th>Mgmt &amp; General</th>
+                      <th>Fundraising</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-990-report-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-balance-sheet" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Balance sheet</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Assets, liabilities, and net assets as of the selected snapshot date — imported via CSV (Settings) or synced from Xero.</p>
+            <div id="organizational-bs-ledger-notice" class="organizational-card" style="padding:12px 16px; margin-bottom:16px; display:none;">
+              <span class="organizational-hint">This org's actuals now come from the internal ledger — see the live </span><a href="#" onclick="showReport('financial-position'); return false;">Statement of Financial Position</a><span class="organizational-hint"> instead, which reflects real-time ledger activity rather than this dated snapshot.</span>
+            </div>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-bs-report-meta"></span>
+                <select id="organizational-bs-as-of-select" class="organizational-input" style="width:140px;" aria-label="As-of date" onchange="loadBalanceSheet(this.value)"></select>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadBalanceSheet()">Refresh</button>
+                <a id="organizational-bs-report-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Balance sheet">
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Code</th>
+                      <th>Balance</th>
+                      <th>Restriction</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-bs-report-tbody">
+                    <tr class="organizational-table-empty"><td colspan="4">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-reconciliation" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Reconciliation &amp; close</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">
+              Tie-out checks for the fiscal year selected above. These are advisory, not a gate — you can lock a year even if a check is off, e.g. while an audit or tax filing is still in progress. Some categories aren't checked yet (budget-line-vs-source drift, unmapped actuals) — not implied as passing.
+            </p>
+            <section class="organizational-card" style="margin-bottom:20px;">
+              <div id="organizational-recon-checks"></div>
+            </section>
+            <section class="organizational-card">
+              <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <span id="organizational-recon-lock-status" class="organizational-hint" style="flex:1 1 auto;"></span>
+                <button id="organizational-recon-lock-btn" class="organizational-btn" onclick="lockCurrentFiscalYear()" hidden>Lock fiscal year</button>
+                <button id="organizational-recon-reopen-btn" class="organizational-btn organizational-btn-outline" onclick="reopenCurrentFiscalYear()" hidden>Reopen fiscal year</button>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-activity" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Activity log</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Who changed what and when, across budget, grants, gifts, bills, invoices and the ledger. Filter by date, person or record type, then export.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-audit-meta">Loading…</span>
+                <input type="date" id="organizational-audit-from" class="organizational-input" style="width:150px;" aria-label="From date">
+                <input type="date" id="organizational-audit-to" class="organizational-input" style="width:150px;" aria-label="To date">
+                <select id="organizational-audit-user-filter" class="organizational-input" style="width:180px;" aria-label="Filter by user">
+                  <option value="">All users</option>
+                </select>
+                <select id="organizational-audit-table-filter" class="organizational-input" style="width:180px;" aria-label="Filter by table">
+                  <option value="">All tables</option>
+                  <option value="org_budget_lines">Budget lines</option>
+                  <option value="org_schedule_items">Schedule items</option>
+                  <option value="org_schedules">Schedules</option>
+                  <option value="org_budget_scenarios">Scenarios</option>
+                  <option value="org_budget_scenario_lines">Scenario lines</option>
+                  <option value="org_programs">Programs &amp; activities</option>
+                  <option value="org_grant_allocations">Grant allocations</option>
+                  <option value="org_personnel">Personnel</option>
+                  <option value="org_allocation_schedules">Indirect cost schedules</option>
+                  <option value="org_bills">Bills</option>
+                  <option value="org_invoices">Invoices</option>
+                  <option value="org_ledger_transactions">Ledger transactions</option>
+                  <option value="org_ledger_lines">Ledger lines</option>
+                  <option value="org_expense_claims">Expense claims</option>
+                  <option value="org_gifts">Gifts</option>
+                  <option value="org_documents">Documents</option>
+                  <option value="org_fiscal_year_locks">Fiscal year locks</option>
+                  <option value="org_sponsored_project_disbursements">Sponsored project disbursements</option>
+                </select>
+                <select id="organizational-audit-action-filter" class="organizational-input" style="width:130px;" aria-label="Filter by action">
+                  <option value="">All actions</option>
+                  <option value="create">Create</option>
+                  <option value="update">Update</option>
+                  <option value="delete">Delete</option>
+                </select>
+                <input type="search" id="organizational-audit-search" class="organizational-input" style="width:180px;" placeholder="Search" aria-label="Search the activity log">
+                <button class="organizational-btn organizational-btn-outline" onclick="refreshAuditLog()" style="margin-left:auto;">Refresh</button>
+                <button class="organizational-btn organizational-btn-outline" id="organizational-audit-export">Export</button>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Activity log">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Who</th>
+                      <th>What</th>
+                      <th>Field</th>
+                      <th>Before</th>
+                      <th>After</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-audit-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="organizational-audit-pagination" style="padding:12px 16px; display:flex; gap:8px; align-items:center;"></div>
+            </section>
+          </div>
+
+          <div id="report-detail-budget" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Budget views</h1>
+            </div>
+            <section class="organizational-card organizational-card-flush organizational-br-report-card">
+              <div class="organizational-br-sticky-header">
+                <div style="padding:10px 16px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border); flex-wrap:wrap;">
+                  <div class="organizational-seg-toggle" id="organizational-br-mode-toggle">
+                    <button class="organizational-seg-btn active" data-br-mode="summary">Summary</button>
+                    <button class="organizational-seg-btn" data-br-mode="monthly">Monthly detail</button>
+                  </div>
+                  <select id="organizational-br-program" class="organizational-input" style="width:148px;" aria-label="Filter by program">
+                    <option value="">All programs</option>
+                  </select>
+                  <span class="organizational-hint" id="organizational-br-meta" style="margin-left:auto;font-size:0.8rem;"></span>
+                </div>
+                <div style="padding:8px 16px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border); background:var(--surface-page);">
+                  <button class="organizational-btn organizational-btn-outline" id="organizational-br-zeros-btn" onclick="budgetReportToggle('showZeroRows')">Zero rows</button>
+                  <button class="organizational-btn organizational-btn-outline" id="organizational-br-cents-btn" onclick="budgetReportToggle('showCents')">Cents</button>
+                  <button class="organizational-btn organizational-btn-outline" id="organizational-br-codes-btn" onclick="budgetReportToggle('showAccountCodes')">Acct #s</button>
+                  <button class="organizational-btn organizational-btn-outline" onclick="exportBudgetReportCsv()" style="margin-left:auto;">Export CSV</button>
+                  <button class="organizational-btn organizational-btn-outline" disabled title="Coming soon" style="opacity:0.5;cursor:not-allowed;">Export PDF</button>
+                </div>
+                <div class="organizational-br-top-scroll-row">
+                  <div class="organizational-br-top-scroll" id="organizational-br-top-scroll">
+                    <div id="organizational-br-top-scroll-inner"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="organizational-bv-grid">
+                <table class="organizational-table" aria-label="Budget report">
+                  <thead id="organizational-br-thead"><tr><th>Account</th><th style="text-align:right;">Amount</th></tr></thead>
+                  <tbody id="organizational-br-tbody">
+                    <tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-giving-summary" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Giving summary</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:16px;">Total gifts and top donors. Filter by fiscal year (shared picker above) and campaign/appeal.</p>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px;">
+              <label class="organizational-hint" for="organizational-giving-campaign-filter">Campaign</label>
+              <select id="organizational-giving-campaign-filter" class="organizational-input" style="width:200px;">
+                <option value="">All campaigns</option>
+              </select>
+              <button class="organizational-btn organizational-btn-outline" onclick="loadGivingSummary()">Refresh</button>
+            </div>
+            <div id="organizational-giving-summary-stats" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">Received</div>
+                <div class="organizational-stat-value" id="gs-received">—</div>
+                <div class="organizational-hint" style="margin:2px 0 0;">Gifts, grants and dues, not promises</div>
+              </div>
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">New pledges</div>
+                <div class="organizational-stat-value" id="gs-pledged">—</div>
+                <div class="organizational-hint" style="margin:2px 0 0;">Promised, at face value</div>
+              </div>
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">Combined</div>
+                <div class="organizational-stat-value" id="gs-total-raised">—</div>
+                <div class="organizational-hint" style="margin:2px 0 0;">Received plus new pledges</div>
+              </div>
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">Gifts received</div>
+                <div class="organizational-stat-value" id="gs-total-gifts">—</div>
+              </div>
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">Avg. gift received</div>
+                <div class="organizational-stat-value" id="gs-avg-gift">—</div>
+              </div>
+              <div class="organizational-card" style="flex:1;padding:16px 20px;min-width:140px;">
+                <div class="organizational-stat-label">Donors</div>
+                <div class="organizational-stat-value" id="gs-total-donors">—</div>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+              <section class="organizational-card organizational-card-flush">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:var(--text-sm);">By gift type</div>
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table">
+                    <thead><tr><th>Type</th><th style="text-align:right;">Total</th></tr></thead>
+                    <tbody id="gs-by-type-tbody"><tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="organizational-card organizational-card-flush">
+                <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:var(--text-sm);">Top donors</div>
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table">
+                    <thead><tr><th>Donor</th><th style="text-align:right;">Total</th></tr></thead>
+                    <tbody id="gs-top-donors-tbody"><tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div id="report-detail-financial-position" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Statement of Financial Position</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Assets, liabilities, and net assets as of fiscal year-end. Live-computed from the posted ledger. Net assets are presented as "Without donor restrictions" and "With donor restrictions" per ASC 958-205.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-sfp-meta"></span>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadFinancialPosition()">Refresh</button>
+                <a id="organizational-sfp-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Statement of Financial Position">
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Code</th>
+                      <th style="text-align:right;">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-sfp-tbody">
+                    <tr class="organizational-table-empty"><td colspan="3">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="organizational-sfp-footnote" style="padding:12px 16px; font-size:var(--text-sm); color:var(--text-secondary); border-top:1px solid var(--border);"></div>
+            </section>
+          </div>
+
+          <div id="report-detail-statement-of-activities" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Statement of Activities</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Revenue and expenses for the fiscal year, split by net asset class. Ending net assets reconcile with the Statement of Financial Position.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-soa-meta"></span>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadStatementOfActivities()">Refresh</button>
+                <a id="organizational-soa-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Statement of Activities">
+                  <thead>
+                    <tr>
+                      <th>Account</th>
+                      <th>Code</th>
+                      <th style="text-align:right;">Without Donor Restrictions</th>
+                      <th style="text-align:right;">With Donor Restrictions</th>
+                      <th style="text-align:right;">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-soa-tbody">
+                    <tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-stmt-functional-expenses" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Statement of Functional Expenses</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">
+              Expenses by natural category × functional category. Allocations are set in
+              <a id="organizational-sfe-settings-link" href="#" class="organizational-nav-link" style="color:var(--organizational-accent);font-weight:600;">Settings › 990 Expense</a>.
+              Total must equal Statement of Activities total expenses.
+            </p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-sfe-meta"></span>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadStmtFunctionalExpenses()">Refresh</button>
+                <a id="organizational-sfe-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Statement of Functional Expenses">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Account</th>
+                      <th style="text-align:right;">Total</th>
+                      <th style="text-align:right;">Program Services</th>
+                      <th style="text-align:right;">Mgmt &amp; General</th>
+                      <th style="text-align:right;">Fundraising</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-sfe-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-cash-flows" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Statement of Cash Flows</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Indirect method — reconciles from change in net assets to net change in cash and cash equivalents.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-scf-meta"></span>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadCashFlows()">Refresh</button>
+                <a id="organizational-scf-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Statement of Cash Flows">
+                  <thead>
+                    <tr>
+                      <th>Item</th>
+                      <th style="text-align:right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-scf-tbody">
+                    <tr class="organizational-table-empty"><td colspan="2">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-1099" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">1099 Report</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Payments on bills to vendors marked 1099 eligible, by calendar year of payment, counting only lines whose account or line is marked reportable. Tracking and export only; we do not file with the IRS. <a href="#" id="organizational-1099-rules-link">1099 rules</a></p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-1099-year" class="organizational-hint" style="margin:0;">Year paid</label>
+                <select id="organizational-1099-year" class="organizational-input" style="width:100px;font-size:0.8125rem;padding:4px 7px;" onchange="load1099Report()"></select>
+                <label class="organizational-hint" style="margin:0;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="organizational-1099-over" onchange="render1099Report()"> Only over the amount</label>
+                <label class="organizational-hint" style="margin:0;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="organizational-1099-missing" onchange="render1099Report()"> Only missing a W-9 or tax ID</label>
+                <span class="organizational-hint" id="organizational-1099-meta"></span>
+                <a id="organizational-1099-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="1099 Report">
+                  <thead>
+                    <tr>
+                      <th>Vendor</th>
+                      <th style="text-align:right;">Paid (reportable)</th>
+                      <th>Reaches the amount</th>
+                      <th>W-9</th>
+                      <th>Tax ID</th>
+                      <th>Entity type</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-1099-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-trial-balance" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Trial Balance</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Posted ledger entries only. Asset, liability and equity accounts are cumulative; income and expense accounts cover the fiscal year selected above through the "as of" date. Prior years' results appear as one computed line because the books are not closed at year end.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-tb-asof" class="organizational-hint" style="margin:0;">As of</label>
+                <input type="date" id="organizational-tb-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <button class="organizational-btn organizational-btn-outline" onclick="loadTrialBalance()">Run</button>
+                <span class="organizational-hint" id="organizational-tb-meta"></span>
+                <a id="organizational-tb-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Trial Balance">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Account</th>
+                      <th>Type</th>
+                      <th style="text-align:right;">Debit</th>
+                      <th style="text-align:right;">Credit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-tb-tbody">
+                    <tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div id="report-detail-account-transactions" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;" id="organizational-at-title">Account Transactions</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Posted entries for one account over a period. The total matches the figure you clicked on a report. Click a row to open the entry.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <select id="organizational-at-account" class="organizational-input" style="width:260px;font-size:0.8125rem;padding:4px 6px;" aria-label="Account">
+                  <option value="">Choose an account…</option>
+                </select>
+                <label for="organizational-at-from" class="organizational-hint" style="margin:0;">From</label>
+                <input type="date" id="organizational-at-from" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <label for="organizational-at-to" class="organizational-hint" style="margin:0;">To</label>
+                <input type="date" id="organizational-at-to" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <button class="organizational-btn organizational-btn-outline" onclick="loadAccountTransactions()">Run</button>
+                <span class="organizational-hint" id="organizational-at-meta"></span>
+                <a id="organizational-at-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div id="organizational-at-body" style="padding:0;"></div>
+            </section>
+          </div>
+
+          <div id="report-detail-receivables-schedule" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Receivables Schedule</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Open items owed to the organization: invoices not fully paid and booked pledge installments not yet collected. A pledge held in Funding (not yet booked) is not included.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-rs-asof" class="organizational-hint" style="margin:0;">As of</label>
+                <input type="date" id="organizational-rs-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <button class="organizational-btn organizational-btn-outline" onclick="loadSchedule('receivables-schedule')">Run</button>
+                <span class="organizational-hint" id="organizational-rs-meta"></span>
+                <a id="organizational-rs-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div id="organizational-rs-tiles" style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;"></div>
+              <div id="organizational-rs-body" style="padding:0;"></div>
+              <div id="organizational-rs-ledger" class="organizational-hint" style="padding:12px 16px;"></div>
+            </section>
+          </div>
+
+          <div id="report-detail-payables-schedule" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">Payables Schedule</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Items the organization owes: approved bills not fully paid and approved expense claims not yet paid.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-ps-asof" class="organizational-hint" style="margin:0;">As of</label>
+                <input type="date" id="organizational-ps-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <button class="organizational-btn organizational-btn-outline" onclick="loadSchedule('payables-schedule')">Run</button>
+                <span class="organizational-hint" id="organizational-ps-meta"></span>
+                <a id="organizational-ps-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div id="organizational-ps-tiles" style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;"></div>
+              <div id="organizational-ps-body" style="padding:0;"></div>
+              <div id="organizational-ps-ledger" class="organizational-hint" style="padding:12px 16px;"></div>
+            </section>
+          </div>
+
+          <div id="report-detail-general-ledger" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;">General Ledger</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">Posted lines by account. Balances are in each account's natural direction (debit for assets and expenses, credit for the rest). Income and expense balances start at zero each fiscal year. Click a transaction number to open it.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <label for="organizational-gl-from" class="organizational-hint" style="margin:0;">From</label>
+                <input type="date" id="organizational-gl-from" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <label for="organizational-gl-to" class="organizational-hint" style="margin:0;">To</label>
+                <input type="date" id="organizational-gl-to" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
+                <select id="organizational-gl-account" class="organizational-input" style="width:240px;font-size:0.8125rem;padding:4px 6px;" aria-label="Account">
+                  <option value="">All accounts</option>
+                </select>
+                <button class="organizational-btn organizational-btn-outline" onclick="loadGeneralLedger()">Run</button>
+                <span class="organizational-hint" id="organizational-gl-meta"></span>
+                <a id="organizational-gl-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div id="organizational-gl-body" style="padding:0;"></div>
+            </section>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/select-search.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/table-sort.js" defer></script>
+  <script src="/organizational/js/reports.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/shared/js/idle-logout.js"></script>
+  <script src="/organizational/js/embed-height.js" defer></script>
+</body>
+</html>

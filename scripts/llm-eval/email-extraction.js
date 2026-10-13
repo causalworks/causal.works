@@ -1,0 +1,144 @@
+'use strict';
+
+const fs = require('fs');
+
+const CONFIGS = [
+  { label: 'gemini-A', provider: 'gemini', model: 'gemini-2.5-flash' },
+  { label: 'gemini-B', provider: 'gemini', model: 'gemini-2.5-flash' },
+  { label: 'mistral-small', provider: 'mistral', model: 'mistral-small-2603' },
+  { label: 'mistral-medium', provider: 'mistral', model: 'mistral-medium-latest' },
+  { label: 'mistral-large', provider: 'mistral', model: 'mistral-large-2512' },
+];
+const BASELINE = 'gemini-A';
+
+const PARAM_RULES = `PARAMETER SELECTION RULES (these override anything above that conflicts):
+- Choose e4a_parameters by the lever the ASK ITSELF pulls: the decision, rule or system the action tries to change (the root cause). Do not choose a parameter because of the harm or topic the campaign is about (its impact) if the ask does not change that lever.
+- If the ask is an event RSVP, webinar, screening, general-purpose donation or newsletter with no specific decision or policy target, return [] for e4a_parameters and [] for secondary_turnarounds. An empty array is a correct answer.
+- Pick only parameters the ask directly moves; one is typical. Never pad to reach a count.
+- Do not choose a parameter on a keyword match alone (for example "trade" does not imply Green tech transfer). Its meaning must fit the ask.
+
+`;
+const PARAM_RULES_2 = PARAM_RULES.replace(
+  /- If the ask is an event RSVP[^\n]*\n/,
+  `- If the ask is an event RSVP, webinar, screening or newsletter with no specific decision or policy target, return [] for e4a_parameters and [] for secondary_turnarounds. An empty array is a correct answer.
+- Donations: if the email names a specific campaign, lawsuit, bill or decision the gift supports, choose the parameter for the lever that campaign targets. If it only asks for general support of the organization's work, return [] for e4a_parameters and [] for secondary_turnarounds.
+`
+);
+if (process.env.VARIANT === 'rules' || process.env.VARIANT === 'rules2') {
+  const RULES = process.env.VARIANT === 'rules2' ? PARAM_RULES_2 : PARAM_RULES;
+  const client = require('../../server/ai/llmClient');
+  const real = client.generate;
+  client.generate = (task, input, opts) =>
+    real(task, typeof input === 'string' ? input.replace('Content to analyze:', RULES + 'Content to analyze:') : input, opts);
+}
+const FALLBACK_ASK = 'Manual review required';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function quiet(fn) {
+  const { log, warn, error } = console;
+  console.log = console.warn = console.error = () => {};
+  return fn().finally(() => { console.log = log; console.warn = warn; console.error = error; });
+}
+
+async function runOne(extractAction, cfg, row) {
+  process.env.LLM_PROVIDER_EMAIL_EXTRACT = cfg.provider;
+  process.env.LLM_MODEL_EMAIL_EXTRACT = cfg.model;
+  const started = Date.now();
+  let result = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    result = await quiet(() => extractAction(row.raw, 'activist email', {
+      senderEmail: row.sender, replyTo: row.reply_to, fromName: '', suggestedOrgFromSender: '',
+    }));
+    if (result.action_ask !== FALLBACK_ASK) break;
+    await sleep(15000 * (attempt + 1));
+  }
+  return { result, failed: result.action_ask === FALLBACK_ASK, ms: Date.now() - started };
+}
+
+async function run(samplePath, outPath, limit) {
+  const { extractAction } = require('../../server/ai/ai-service');
+  let sample = JSON.parse(fs.readFileSync(samplePath, 'utf8'));
+  if (process.env.DEDUPE) { const seen = new Set(); sample = sample.filter((r) => !seen.has(r.raw) && seen.add(r.raw)); }
+  if (limit) sample = sample.slice(0, Number(limit));
+  const out = fs.existsSync(outPath) ? JSON.parse(fs.readFileSync(outPath, 'utf8')) : { sample, runs: {} };
+  out.sample = sample;
+  for (const cfg of CONFIGS.filter((c) => !process.env.ONLY || process.env.ONLY.split(',').includes(c.label))) {
+    out.runs[cfg.label] = out.runs[cfg.label] || { cfg, items: {} };
+    for (const row of sample) {
+      if (out.runs[cfg.label].items[row.id]) continue;
+      out.runs[cfg.label].items[row.id] = await runOne(extractAction, cfg, row);
+      fs.writeFileSync(outPath, JSON.stringify(out));
+      process.stdout.write('.');
+    }
+    process.stdout.write(` ${cfg.label} done\n`);
+  }
+}
+
+// ---- scoring ----
+const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const asSet = (a) => new Set((Array.isArray(a) ? a : []).map(norm).filter(Boolean));
+function jaccard(a, b) {
+  const A = asSet(a), B = asSet(b);
+  if (!A.size && !B.size) return 1;
+  let i = 0; for (const x of A) if (B.has(x)) i++;
+  return i / (A.size + B.size - i);
+}
+const dateStr = (d) => (d ? String(d).slice(0, 10) : null);
+const present = (v) => (v == null || v === '' ? 0 : 1);
+
+const FIELDS = {
+  action_type: (a, b) => (a.action_type === b.action_type ? 1 : 0),
+  turnaround: (a, b) => (norm(a.turnaround_category) === norm(b.turnaround_category) ? 1 : 0),
+  org_name: (a, b) => {
+    const x = norm(a.org_name), y = norm(b.org_name);
+    return x === y || x.includes(y) || y.includes(x) ? 1 : 0;
+  },
+  deadline_date: (a, b) => (dateStr(a.decision_window_date) === dateStr(b.decision_window_date) ? 1 : 0),
+  timing_within_1: (a, b) => (Math.abs((a.timing_confidence || 0) - (b.timing_confidence || 0)) <= 1 ? 1 : 0),
+  boundaries: (a, b) => jaccard(a.boundary_ids, b.boundary_ids),
+  e4a_params: (a, b) => jaccard(a.e4a_parameters, b.e4a_parameters),
+  secondary: (a, b) => jaccard(a.secondary_turnarounds, b.secondary_turnarounds),
+  rep_targets: (a, b) => jaccard(a.rep_targets, b.rep_targets),
+  leverage_null_match: (a, b) => (present(a.leverage_point) === present(b.leverage_point) ? 1 : 0),
+  stake_null_match: (a, b) => (present(a.material_stake) === present(b.material_stake) ? 1 : 0),
+};
+
+function report(outPath) {
+  const out = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+  const labels = Object.keys(out.runs);
+  const ids = out.sample.map((r) => r.id);
+  const get = (label, id) => out.runs[label].items[id];
+  const pad = (s, n) => String(s).padEnd(n);
+
+  console.log('\nRun health');
+  for (const l of labels) {
+    const items = ids.map((id) => get(l, id)).filter(Boolean);
+    const failed = items.filter((i) => i.failed).length;
+    const avgMs = Math.round(items.reduce((a, i) => a + i.ms, 0) / Math.max(1, items.length));
+    console.log(`  ${pad(l, 16)} done ${items.length}/${ids.length}  failed ${failed}  avg ${avgMs} ms`);
+  }
+
+  const compare = (title, refOf) => {
+    console.log(`\n${title}  (share of items agreeing; list fields = overlap score)`);
+    console.log('  ' + pad('field', 20) + labels.map((l) => pad(l, 16)).join(''));
+    for (const [name, fn] of Object.entries(FIELDS)) {
+      const cells = labels.map((l) => {
+        let sum = 0, n = 0;
+        for (const id of ids) {
+          const cand = get(l, id), ref = refOf(id);
+          if (!cand || cand.failed || !ref) continue;
+          sum += fn(cand.result, ref); n++;
+        }
+        return pad(n ? (sum / n).toFixed(2) : '-', 16);
+      });
+      console.log('  ' + pad(name, 20) + cells.join(''));
+    }
+  };
+  compare(`Agreement with ${BASELINE} (Gemini today)`, (id) => (get(BASELINE, id) && !get(BASELINE, id).failed ? get(BASELINE, id).result : null));
+  compare('Agreement with the stored answer from when the email arrived', (id) => out.sample.find((r) => r.id === id));
+}
+
+const [cmd, a, b, c] = process.argv.slice(2);
+if (cmd === 'run' && a && b) run(a, b, c).catch((e) => { console.error(e); process.exit(1); });
+else if (cmd === 'report' && a) report(a);
+else { console.error('usage: run <sample.json> <results.json> [limit] | report <results.json>'); process.exit(1); }

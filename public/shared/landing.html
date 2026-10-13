@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>causal.works — a coordination platform for advocacy and activism</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: block;
+      background: var(--surface-page);
+      padding: 0;
+    }
+
+    .lp-wrap {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 64px 28px 80px;
+    }
+
+    /* ── Header ── */
+    .lp-header {
+      margin-bottom: 52px;
+    }
+
+    .lp-wordmark {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: var(--brand);
+      margin-bottom: 6px;
+    }
+
+    .lp-tagline {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Cards ── */
+    .lp-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    @media (max-width: 580px) {
+      .lp-cards {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .lp-card {
+      background: var(--surface-card);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      border-top: 3px solid var(--brand);
+      padding: 28px 24px 26px;
+    }
+
+    .lp-card-tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+    }
+
+    .lp-card-headline {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text-primary);
+      line-height: 1.3;
+      margin-bottom: 14px;
+    }
+
+    .lp-card-body {
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: var(--text-secondary);
+    }
+
+    .lp-card-turnarounds {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* ── Connector ── */
+    .lp-connector {
+      margin-bottom: 44px;
+      padding: 0 2px;
+    }
+
+    .lp-connector p {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      font-style: italic;
+      margin: 0;
+      padding-left: 14px;
+      border-left: 2px solid var(--border-strong);
+    }
+
+    /* ── Context section ── */
+    .lp-context {
+      margin-bottom: 52px;
+    }
+
+    .lp-context-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .lp-context-links {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .lp-context-link {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--brand);
+      text-decoration: none;
+    }
+
+    .lp-context-link:hover {
+      text-decoration: underline;
+    }
+
+    .lp-context-link-sub {
+      display: block;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    .lp-disclaimer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── CTA ── */
+    .lp-cta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 44px;
+    }
+
+    .lp-cta-btn {
+      display: inline-block;
+      background: var(--brand);
+      color: #fff;
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 700;
+      padding: 11px 22px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      letter-spacing: -0.01em;
+      transition: background 0.15s;
+    }
+
+    .lp-cta-btn:hover {
+      background: var(--brand-dark);
+      text-decoration: none;
+    }
+
+    .lp-cta-note {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+  </style>
+</head>
+<body>
+  <div class="lp-wrap">
+
+    <header class="lp-header">
+      <div class="lp-wordmark">causal.works</div>
+      <div class="lp-tagline">a coordination platform for advocacy and activism</div>
+    </header>
+
+    <div class="lp-cta">
+      <a class="lp-cta-btn" href="/login.html">Sign in →</a>
+      <span class="lp-cta-note">Access by invitation</span>
+    </div>
+
+    <div class="lp-cards">
+
+      <div class="lp-card">
+        <div class="lp-card-tag">agency — for individuals</div>
+        <div class="lp-card-headline">A personal tracker for civic and financial action</div>
+        <div class="lp-card-body">
+          Your elected officials, your bank, and the organizations you give to all take actions that affect you. Agency tracks what they're doing, and surfaces the petitions, events, and volunteer opportunities most relevant to you. A ledger keeps a record of what you've done, where your money sits, and what it's funding.
+        </div>
+      </div>
+
+      <div class="lp-card">
+        <div class="lp-card-tag">cooperative — for organizations</div>
+        <div class="lp-card-headline">A shared workspace for coordination</div>
+        <div class="lp-card-body">
+          Member directory, shared library, and Workshop — where orgs map interventions together using systems-thinking tools — give the network a place to coordinate. Your financial data stays yours: budget planning, grants and donor pipeline, Xero actuals, and 990 compliance run on your own private chart of accounts, separate from what you share with the network.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="lp-context" id="further-context">
+      <div class="lp-context-label">Further context</div>
+      <div class="lp-context-links">
+        <a class="lp-context-link" href="https://earth4all.life/the-five-extraordinary-turnarounds/" target="_blank" rel="noopener">
+          Earth4All — the five turnarounds
+          <span class="lp-context-link-sub">The systemic framework underlying Causal's action feed and budget alignment</span>
+        </a>
+        <a class="lp-context-link" href="https://platform.coop/about/vision-and-advantages/" target="_blank" rel="noopener">
+          What is a platform cooperative?
+          <span class="lp-context-link-sub">Why cooperative structure matters for coordination infrastructure</span>
+        </a>
+        <a class="lp-context-link" href="/privacy">
+          Privacy policy
+          <span class="lp-context-link-sub">How Causal handles member and user data</span>
+        </a>
+      </div>
+      <p class="lp-disclaimer">Causal is not affiliated with Earth4All. The turnaround framework is used as an analytical lens.</p>
+    </div>
+
+  </div>
+
+</body>
+</html>

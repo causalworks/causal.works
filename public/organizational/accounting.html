@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-N6HEYXJP0W"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-N6HEYXJP0W');
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>causalworks</title>
+  <meta name="theme-color" content="#800020">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-app" data-organizational-active="accounting">
+  <div id="app-header"></div>
+
+  <div class="organizational-workspace">
+    <div id="organizational-sidebar-mount"></div>
+    <div class="organizational-workspace-main">
+      <main class="organizational-main organizational-main-wide">
+        <p id="organizational-org-error" class="organizational-error" hidden></p>
+        <div id="organizational-org-loading" class="organizational-empty">Loading workspace…</div>
+
+        <div id="organizational-org-dashboard" hidden>
+          <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Accounting</h1>
+
+          <div class="organizational-tabs" id="organizational-accounting-workspace-tabs">
+            <button type="button" class="organizational-tab active" data-section="dashboard">Dashboard</button>
+            <button type="button" class="organizational-tab" data-section="banking">Banking</button>
+            <button type="button" class="organizational-tab" data-section="transactions">Transactions</button>
+            <button type="button" class="organizational-tab" data-section="purchases">Purchases</button>
+            <button type="button" class="organizational-tab" data-section="sales">Sales</button>
+            <button type="button" class="organizational-tab" data-section="gift-postings">Gift Postings</button>
+            <span class="organizational-tab-divider" aria-hidden="true"></span>
+            <span id="organizational-accounting-more-wrap" style="position:relative;display:flex;">
+              <button type="button" class="organizational-tab" id="organizational-accounting-more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
+              <div class="organizational-account-dropdown" id="organizational-accounting-more-menu" role="menu" hidden style="bottom:auto;top:100%;left:0;right:auto;margin:2px 0 0;min-width:190px;">
+                <button type="button" role="menuitem" class="organizational-account-dropdown-item" data-section="fixed-assets">Fixed Assets</button>
+                <button type="button" role="menuitem" class="organizational-account-dropdown-item" data-section="find-recode">Recode</button>
+                <button type="button" role="menuitem" class="organizational-account-dropdown-item" data-section="expense-claims">Expense Claims</button>
+                <button type="button" role="menuitem" class="organizational-account-dropdown-item" data-section="board-designations">Board Designations</button>
+                <button type="button" role="menuitem" class="organizational-account-dropdown-item" data-section="approval-policy">Flagged Review</button>
+              </div>
+            </span>
+            <button type="button" class="organizational-budget-settings-btn" id="organizational-accounting-settings-btn" data-section="settings" aria-label="Accounting settings" title="Accounting settings">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+          </div>
+
+          <!-- ============================= Dashboard tab ============================= -->
+          <div id="organizational-accounting-tab-dashboard">
+
+            <div class="organizational-budget-stat-strip" id="organizational-accounting-dash-cash-tiles" style="margin-bottom:25px;"></div>
+
+            <section class="organizational-card" data-acc-card style="padding:0;margin:0 0 12px;cursor:pointer;">
+              <div data-acc-head role="button" tabindex="0" aria-expanded="false" style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+                <b style="font-size:0.9375rem;">To do</b>
+                <span id="organizational-accounting-dash-todo-summary" style="flex:1;min-width:0;color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+                <span data-acc-chevron aria-hidden="true" style="color:var(--text-secondary);transition:transform 0.15s;">&#8250;</span>
+              </div>
+              <div data-acc-body hidden style="border-top:1px solid var(--border-subtle);cursor:auto;">
+                <section data-acc-scroll class="organizational-dash-needs-attention" id="organizational-accounting-dash-todo" style="border:0;border-radius:0;box-shadow:none;"></section>
+                <p class="organizational-empty" id="organizational-accounting-dash-todo-empty" style="padding:16px;" hidden>Nothing is waiting for you.</p>
+              </div>
+            </section>
+
+            <section class="organizational-card" data-acc-card style="padding:0;margin:0 0 12px;cursor:pointer;">
+              <div data-acc-head role="button" tabindex="0" aria-expanded="false" style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+                <b style="font-size:0.9375rem;">Recent activity</b>
+                <span id="organizational-accounting-dash-activity-summary" style="flex:1;min-width:0;color:var(--text-secondary);font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+                <span data-acc-chevron aria-hidden="true" style="color:var(--text-secondary);transition:transform 0.15s;">&#8250;</span>
+              </div>
+              <div data-acc-body hidden style="border-top:1px solid var(--border-subtle);cursor:auto;">
+                <div id="organizational-accounting-dash-activity-list" data-acc-scroll></div>
+                <p class="organizational-empty" id="organizational-accounting-dash-activity-empty" style="padding:16px 20px;" hidden>No recent activity.</p>
+              </div>
+            </section>
+
+          </div>
+
+          <!-- ============================= Transactions tab ============================= -->
+          <div id="organizational-accounting-tab-transactions" hidden>
+
+            <div id="organizational-txn-list">
+
+            <section class="organizational-card organizational-card-flush" style="margin-top:0;">
+              <div id="organizational-ledger-filter-bar" style="padding:6px 12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border);">
+                <input type="search" id="organizational-ledger-filter-q" class="organizational-input" placeholder="Search payee, memo, reference, #" aria-label="Search transactions" style="width:200px;font-size:0.8125rem;padding:4px 7px;">
+                <input type="date" id="organizational-ledger-filter-from" class="organizational-input" style="width:128px;font-size:0.8125rem;padding:4px 7px;">
+                <span style="color:var(--text-secondary);font-size:0.8125rem;">to</span>
+                <input type="date" id="organizational-ledger-filter-to" class="organizational-input" style="width:128px;font-size:0.8125rem;padding:4px 7px;">
+                <select id="organizational-ledger-filter-status" class="organizational-input" style="width:130px;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="">Any status</option>
+                  <option value="posted">Posted</option>
+                  <option value="pending_approval">Pending approval</option>
+                  <option value="voided">Voided</option>
+                </select>
+                <select id="organizational-ledger-filter-grant" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="">All grants</option>
+                </select>
+                <label style="display:flex;align-items:center;gap:4px;font-size:0.8125rem;color:var(--text-secondary);"><input type="checkbox" id="organizational-ledger-filter-voided" style="width:auto;"> Show voided</label>
+              </div>
+              <div id="organizational-ledger-pager" style="padding:6px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border);font-size:0.8125rem;color:var(--text-secondary);">
+                <label for="organizational-ledger-page-size">Rows per page</label>
+                <select id="organizational-ledger-page-size" class="organizational-input" style="width:90px;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="50">50</option>
+                  <option value="200">200</option>
+                  <option value="1000">1000</option>
+                  <option value="5000">All</option>
+                </select>
+                <span id="organizational-ledger-range" aria-live="polite"></span>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-ledger-prev" style="font-size:0.8125rem;">Previous</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-ledger-next" style="font-size:0.8125rem;">Next</button>
+                <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+                  <a id="organizational-ledger-export" class="organizational-btn organizational-btn-outline" href="#" download style="font-size:0.8125rem;">Export CSV</a>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-ledger-add" style="font-size:0.8125rem;">+ New</button>
+                </span>
+              </div>
+              <div class="organizational-table-wrap" id="organizational-ledger-table-wrap" style="overflow:auto;">
+                <table class="organizational-table" aria-label="Ledger transactions">
+                  <thead>
+                    <tr>
+                      <th style="width:28px;position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);"></th>
+                      <th style="position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);">Date</th>
+                      <th style="position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);">Payee / memo</th>
+                      <th style="position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);">Source</th>
+                      <th style="text-align:right;position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);">Amount</th>
+                      <th style="position:sticky;top:0;z-index:1;background:var(--surface-active);box-shadow:0 1px 0 var(--border-strong);">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-ledger-tbody">
+                    <tr class="organizational-table-empty">
+                      <td colspan="6">No transactions yet. Post a transaction to get started.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            </div>
+
+            <div id="organizational-txn-page" class="organizational-grant-panel--wide" hidden style="width:auto;margin:12px 0 0;padding:0 16px;">
+              <nav aria-label="Breadcrumb" style="font-size:0.8125rem;color:var(--text-secondary);">
+                <a href="#" id="organizational-txn-page-back">Transactions</a>
+              </nav>
+              <h2 style="margin:4px 0 12px;font-size:1.25rem;">New transaction</h2>
+              <div id="organizational-txn-page-error" class="organizational-panel-error" hidden></div>
+              <div id="organizational-txn-page-body" style="max-width:1100px;padding:0 0 20px;"></div>
+            </div>
+
+            <div id="organizational-ledger-panel" class="organizational-grant-panel--wide" hidden style="width:auto;margin:12px 0 0;padding:0 16px;">
+              <nav aria-label="Breadcrumb" style="font-size:0.8125rem;color:var(--text-secondary);">
+                <a href="#" id="organizational-ledger-page-back">Transactions</a>
+              </nav>
+              <h2 id="organizational-ledger-panel-title" style="margin:4px 0 12px;font-size:1.25rem;">Transaction</h2>
+              <div id="organizational-ledger-panel-error" class="organizational-panel-error" hidden></div>
+              <div id="organizational-ledger-panel-body" style="max-width:1100px;padding:0 0 20px;"></div>
+              <div id="organizational-ledger-page-notes" style="max-width:1100px;"></div>
+            </div>
+
+          </div>
+
+          <!-- ============================= Banking tab ============================= -->
+          <div id="organizational-accounting-tab-banking" hidden>
+
+            <div id="organizational-banking-account-dropdown" style="position:relative;display:inline-block;margin:8px 0 14px;"></div>
+            <select id="organizational-banking-account" style="display:none;"></select>
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:space-between;">
+              <div class="organizational-tabs" id="organizational-banking-view-tabs">
+                <button type="button" class="organizational-tab active" data-view="reconcile">Reconcile</button>
+                <button type="button" class="organizational-tab" data-view="cash-coding">Cash Coding</button>
+                <button type="button" class="organizational-tab" data-view="statements">Statements</button>
+                <button type="button" class="organizational-tab" data-view="register">Register</button>
+                <button type="button" class="organizational-tab" data-view="reconcile-month">Reconcile Month</button>
+                <button type="button" class="organizational-tab" data-view="rules">Rules</button>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-connect-btn">+ Connect bank</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-report-btn">Reconciliation report</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-import-btn">Import statement</button>
+                <input type="file" id="organizational-banking-import-file" accept=".csv,.pdf,application/pdf,text/csv" style="display:none;">
+              </div>
+            </div>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content active" id="organizational-banking-view-reconcile">
+              <div style="padding:8px 16px;border-bottom:1px solid var(--border);">
+                <select id="organizational-banking-status-filter" class="organizational-input" style="width:180px;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="unconfirmed">Unconfirmed</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="transfer_pending">Transfer pending</option>
+                </select>
+              </div>
+              <div id="organizational-banking-cards" style="padding:12px 16px;">
+                <p class="organizational-empty">No unconfirmed lines. Import a statement or connect a bank to get started.</p>
+              </div>
+              <div class="organizational-table-wrap" id="organizational-banking-table-wrap" hidden>
+                <table class="organizational-table" aria-label="Statements">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Payee</th>
+                      <th>Amount</th>
+                      <th></th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-banking-tbody">
+                    <tr class="organizational-table-empty">
+                      <td colspan="6">No lines.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-cash-coding">
+              <div style="padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--border);">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-uncheck" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Uncheck all</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-discard" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Discard changes</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-apply-rules" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Apply rules</button>
+                <span class="organizational-hint" id="organizational-cashcoding-status" style="margin:0;flex:1;"></span>
+                <label style="font-size:0.8125rem;color:var(--text-secondary);"><input type="checkbox" id="organizational-cashcoding-show-matches"> <span id="organizational-cashcoding-show-label">Show lines with suggested matches</span></label>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Cash Coding grid" style="table-layout:fixed;">
+                  <colgroup>
+                    <col style="width:32px;"><col style="width:92px;"><col style="width:13%;"><col style="width:17%;"><col style="width:19%;">
+                    <col style="width:12%;"><col style="width:11%;"><col style="width:9%;"><col style="width:84px;"><col style="width:84px;"><col style="width:28px;"><col style="width:28px;">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="organizational-cashcoding-select-all" aria-label="Select all"></th>
+                      <th>Date</th>
+                      <th>Payee</th>
+                      <th>Description</th>
+                      <th>Account</th>
+                      <th>Program</th>
+                      <th>Grant</th>
+                      <th>Restriction</th>
+                      <th style="text-align:right;">Spent</th>
+                      <th style="text-align:right;">Received</th>
+                      <th></th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-cashcoding-tbody">
+                    <tr class="organizational-table-empty">
+                      <td colspan="12">No unconfirmed lines.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="position:sticky;bottom:0;padding:10px 16px;display:flex;justify-content:center;border-top:1px solid var(--border);background:var(--surface-card);">
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-cashcoding-save-all">Save &amp; reconcile all</button>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-statements">
+              <div style="padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-statements-summary" style="margin:0;flex:1;"></span>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-statements-toggle" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Search</button>
+              </div>
+              <div id="organizational-statements-filters" hidden style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface-page);">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                  <input type="search" id="organizational-statements-q" class="organizational-input" placeholder="Search payee or description" aria-label="Search payee or description" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:220px;">
+                  <label style="font-size:0.8125rem;color:var(--text-secondary);">From</label><input type="date" id="organizational-statements-from" class="organizational-input" aria-label="From date" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                  <label style="font-size:0.8125rem;color:var(--text-secondary);">To</label><input type="date" id="organizational-statements-to" class="organizational-input" aria-label="To date" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                  <input type="text" id="organizational-statements-min" class="organizational-input" placeholder="Min amount" aria-label="Min amount" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:100px;">
+                  <input type="text" id="organizational-statements-max" class="organizational-input" placeholder="Max amount" aria-label="Max amount" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:100px;">
+                  <label style="font-size:0.8125rem;color:var(--text-secondary);"><input type="checkbox" id="organizational-statements-exact"> Exact amount</label>
+                  <select id="organizational-statements-status" class="organizational-input" aria-label="Status" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;"><option value="all">All statuses</option><option value="unconfirmed">Waiting to match</option><option value="confirmed">Matched</option><option value="transfer_pending">Transfer pending</option></select>
+                  <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-statements-run" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Search</button>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-statements-clear" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Clear</button>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-statements-close" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Close</button>
+                </div>
+              </div>
+              <p class="organizational-panel-error" id="organizational-statements-error" hidden style="margin:0 16px 8px;"></p>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Statements">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Payee</th>
+                      <th>Description</th>
+                      <th style="text-align:right;">Spent</th>
+                      <th style="text-align:right;">Received</th>
+                      <th>Status</th>
+                      <th>Came in as</th>
+                      <th>Entry</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-statements-tbody">
+                    <tr class="organizational-table-empty"><td colspan="8">Pick a bank account.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-register">
+              <div style="padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-register-summary" style="margin:0;flex:1;"></span>
+                <span id="organizational-register-selcount" class="organizational-hint" style="margin:0;">No entries selected</span>
+                <button type="button" disabled class="organizational-btn organizational-btn-outline" id="organizational-register-unreconcile" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Unreconcile</button>
+                <button type="button" disabled class="organizational-btn organizational-btn-outline" id="organizational-register-void" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Void</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-register-toggle" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Search</button>
+              </div>
+              <div id="organizational-register-filters" hidden style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface-page);">
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                  <input type="search" id="organizational-register-q" class="organizational-input" placeholder="Search contact, memo, reference" aria-label="Search contact, memo, reference" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:220px;">
+                  <label style="font-size:0.8125rem;color:var(--text-secondary);">From</label><input type="date" id="organizational-register-from" class="organizational-input" aria-label="From date" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                  <label style="font-size:0.8125rem;color:var(--text-secondary);">To</label><input type="date" id="organizational-register-to" class="organizational-input" aria-label="To date" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                  <input type="text" id="organizational-register-min" class="organizational-input" placeholder="Min amount" aria-label="Min amount" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:100px;">
+                  <input type="text" id="organizational-register-max" class="organizational-input" placeholder="Max amount" aria-label="Max amount" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:100px;">
+                  <select id="organizational-register-rec" class="organizational-input" aria-label="Reconciled" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;"><option value="all">All entries</option><option value="reconciled">Reconciled</option><option value="unreconciled">Not reconciled</option></select>
+                  <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-register-run" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Search</button>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-register-clear" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Clear</button>
+                  <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-register-close" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Close</button>
+                </div>
+              </div>
+              <p class="organizational-panel-error" id="organizational-register-error" hidden style="margin:0 16px 8px;"></p>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Register">
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="organizational-register-select-all" aria-label="Select all"></th>
+                      <th>Date</th>
+                      <th>Contact</th>
+                      <th>Memo</th>
+                      <th>Reference</th>
+                      <th>Related account</th>
+                      <th>Program</th>
+                      <th>Grant</th>
+                      <th style="text-align:right;">Spent</th>
+                      <th style="text-align:right;">Received</th>
+                      <th style="text-align:right;">Balance</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-register-tbody">
+                    <tr class="organizational-table-empty"><td colspan="12">Pick a bank account.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-reconcile-month">
+              <div id="organizational-reconcilemonth-list-wrap">
+                <div style="padding:8px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);">
+                  <span class="organizational-hint" id="organizational-reconcilemonth-summary" style="margin:0;flex:1;"></span>
+                  <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-reconcilemonth-new" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">+ New period</button>
+                </div>
+                <div id="organizational-reconcilemonth-form" hidden style="padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface-page);">
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                    <label style="font-size:0.8125rem;color:var(--text-secondary);">From</label>
+                    <input type="date" id="organizational-reconcilemonth-start" class="organizational-input" aria-label="Period start" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                    <label style="font-size:0.8125rem;color:var(--text-secondary);">To</label>
+                    <input type="date" id="organizational-reconcilemonth-end" class="organizational-input" aria-label="Period end" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;">
+                    <input type="text" inputmode="decimal" id="organizational-reconcilemonth-opening" class="organizational-input" placeholder="Opening statement balance" aria-label="Opening statement balance" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:190px;">
+                    <input type="text" inputmode="decimal" id="organizational-reconcilemonth-closing" class="organizational-input" placeholder="Closing statement balance" aria-label="Closing statement balance" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;width:190px;">
+                    <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-reconcilemonth-create" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Start</button>
+                    <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-reconcilemonth-form-cancel" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 8px;padding:0 12px;">Cancel</button>
+                  </div>
+                </div>
+                <p class="organizational-panel-error" id="organizational-reconcilemonth-error" hidden style="margin:8px 16px;"></p>
+                <div class="organizational-table-wrap">
+                  <table class="organizational-table" aria-label="Reconcile Month periods">
+                    <thead><tr><th>Period</th><th style="text-align:right;">Opening</th><th style="text-align:right;">Closing</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="organizational-reconcilemonth-tbody"><tr class="organizational-table-empty"><td colspan="5">Pick a bank account.</td></tr></tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="organizational-reconcilemonth-detail" hidden></div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-rules">
+              <div style="padding:8px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">
+                <p class="organizational-hint" style="margin:0;">First matching active rule (by priority, lowest first) pre-fills a line's coding. Rules never post automatically -- you still confirm each coding.</p>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-bankrules-add">+ New rule</button>
+              </div>
+              <section class="organizational-card" id="organizational-bankrules-form" hidden style="padding:12px 16px;margin:12px 16px;"></section>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Bank rules">
+                  <thead>
+                    <tr>
+                      <th>Priority</th>
+                      <th>Name</th>
+                      <th>Conditions</th>
+                      <th>Codes to</th>
+                      <th>Active</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-bankrules-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No rules yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+          </div>
+
+          <!-- ============================= Approval Policy tab ============================= -->
+          <div id="organizational-accounting-tab-approval-policy" hidden>
+
+            <p class="organizational-hint" style="margin-top:8px;">Transactions that need a second look under your approval policy. The policy itself is in Accounting settings.</p>
+
+            <section class="organizational-card" style="padding:0;">
+              <div id="organizational-flagged-review-body"><p class="organizational-empty" style="padding:16px 20px;">Loading…</p></div>
+            </section>
+
+          </div>
+
+          <!-- ============================= Accounting settings ============================= -->
+          <div id="organizational-accounting-tab-settings" hidden>
+            <p class="organizational-hint" style="margin:8px 0 12px;">How Accounting behaves for your organization. People who cannot change a setting see it greyed, with who can.</p>
+            <div id="organizational-acctset-index"></div>
+
+            <h2 id="acct-sec-periods" class="organizational-subheading" style="margin-top:20px;">Periods and closing</h2>
+            <section class="organizational-card" id="organizational-acctset-years-card" style="padding:12px 16px;">
+              <p class="organizational-hint" style="margin:0 0 8px;">Locking a fiscal year makes its budget, schedule, personnel, grant, actuals and balance sheet data read-only until it is reopened with a reason. Reconcile Month for each bank account is on the Banking tab.</p>
+              <div id="organizational-acctset-years-body">Loading…</div>
+              <p id="organizational-acctset-years-note" class="organizational-hint" style="margin:8px 0 0;" hidden></p>
+              <div id="organizational-acctset-years-bar" hidden></div>
+              <p id="organizational-acctset-years-error" class="organizational-panel-error" hidden></p>
+            </section>
+
+            <h2 id="acct-sec-controls" class="organizational-subheading">Controls</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                <b style="font-size:0.9375rem;">Approval policy</b>
+                <a href="#" id="organizational-approval-policy-export-link" target="_blank" class="organizational-btn organizational-btn-outline">Export</a>
+              </div>
+              <div id="organizational-approval-policy-error" class="organizational-panel-error" hidden></div>
+              <div id="organizational-approval-policy-body">Loading…</div>
+              <p class="organizational-hint" style="margin:12px 0 0;">Flagged transactions are reviewed under <a href="#" data-acctset-go="approval-policy">Flagged Review</a>.</p>
+              <hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">
+              <p style="margin:0;"><b style="font-size:0.9375rem;">Expense claim approval</b></p>
+              <p class="organizational-hint" style="margin:2px 0 0;">Who approves expense claims and whether they are posted before or after payout is set on the <a href="#" data-acctset-go="expense-claims" data-acctset-click="organizational-expenseclaims-settings-btn">Expense Claims</a> page.</p>
+              <hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">
+              <p style="margin:0;"><b style="font-size:0.9375rem;">Your accounting entry access</b></p>
+              <p class="organizational-hint" style="margin:2px 0 0;" id="organizational-acctset-entry-line">Loading…</p>
+            </section>
+
+            <h2 id="acct-sec-fixed" class="organizational-subheading">Fixed assets</h2>
+            <section class="organizational-card" id="organizational-fa-settings-card" style="padding:12px 16px;">
+              <label class="organizational-label" style="max-width:280px;">Capitalization threshold
+                <input type="text" inputmode="decimal" id="organizational-fa-threshold" class="organizational-input" aria-label="Capitalization threshold in dollars">
+              </label>
+              <p class="organizational-hint" style="margin:6px 0 10px;">Things you buy for less than this are expensed right away. At or above it, they are tracked as fixed assets and depreciated. Entries below it do not appear in the list of entries waiting for an asset. Federal awards use the lesser of this and $10,000 for equipment. Your accountant can confirm the right amount.</p>
+              <p id="organizational-fa-threshold-error" class="organizational-panel-error" hidden></p>
+              <div class="organizational-actions"><button type="button" class="organizational-btn" id="organizational-fa-threshold-save">Save</button></div>
+              <p id="organizational-fa-threshold-note" class="organizational-hint" style="margin:8px 0 0;" hidden>Changed by finance or an admin.</p>
+            </section>
+
+            <h2 id="acct-sec-export" class="organizational-subheading">Export for your accountant or auditor</h2>
+            <section class="organizational-card" id="organizational-acctset-export-card" style="padding:12px 16px;">
+              <p class="organizational-hint" style="margin:0 0 10px;">Your data is yours. Pick a fiscal year and download the files an accountant or auditor asks for. They match the screens exactly, voided entries shown as zero.</p>
+              <label class="organizational-label" style="max-width:220px;">Fiscal year
+                <select id="organizational-acctset-export-year" class="organizational-input" aria-label="Fiscal year to export"></select>
+              </label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+                <a class="organizational-btn organizational-btn-outline" id="organizational-acctset-export-tb" href="#">Trial balance</a>
+                <a class="organizational-btn organizational-btn-outline" id="organizational-acctset-export-gl" href="#">General ledger</a>
+                <a class="organizational-btn organizational-btn-outline" id="organizational-acctset-export-journal" href="#">Journal (every entry)</a>
+                <a class="organizational-btn organizational-btn-outline" id="organizational-acctset-export-coa" href="#">Chart of accounts</a>
+              </div>
+              <p class="organizational-hint" style="margin:8px 0 0;">The chart of accounts opens Financial structure, where Export CSV downloads it.</p>
+            </section>
+
+            <h2 id="acct-sec-1099" class="organizational-subheading">Vendors and 1099</h2>
+            <section id="organizational-1099-section" hidden>
+              <section class="organizational-card">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;">
+                  <input type="checkbox" id="organizational-1099-enabled">
+                  We report vendor payments on 1099s
+                </label>
+                <div id="organizational-1099-detail">
+                  <label class="organizational-label" style="max-width:280px;">Report vendors at (optional)
+                    <input type="text" inputmode="decimal" id="organizational-1099-threshold" class="organizational-input" placeholder="Legal amount">
+                  </label>
+                  <p class="organizational-hint" id="organizational-1099-legal" style="margin:6px 0 12px;"></p>
+                  <p class="organizational-hint" style="margin:0 0 4px;"><b>What is counted.</b> Payments on bills to vendors marked 1099 eligible (Contacts, Edit compliance), on lines whose account, or the line itself, is marked reportable. Totals are by calendar year of payment.</p>
+                  <p class="organizational-hint" style="margin:0 0 4px;"><b>What is left out.</b> Payments by credit or debit card or through a payment network, which the processor reports on a 1099-K. Payments to corporations are generally exempt, except for legal and medical services; set the vendor's entity type in Edit compliance.</p>
+                  <p class="organizational-hint" style="margin:0 0 12px;"><b>Filing.</b> Forms are due to vendors and the IRS by January 31 for the year before. We track totals and export a CSV; we do not file with the IRS.</p>
+                </div>
+                <p id="organizational-1099-error" class="organizational-panel-error" hidden></p>
+                <div class="organizational-actions">
+                  <button type="button" class="organizational-btn" id="organizational-1099-save">Save 1099 settings</button>
+                </div>
+              </section>
+            </section>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p class="organizational-hint" style="margin:0;">Each vendor's W-9, tax ID, entity type and 1099 eligibility are on the contact (<a href="#" data-acctset-contacts="vendor">Contacts, vendors</a>, Edit compliance). <span id="organizational-acctset-1099-csv"></span></p>
+            </section>
+
+            <h2 id="acct-sec-banking" class="organizational-subheading">Banking</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p style="margin:0;"><b style="font-size:0.9375rem;">Bank rules</b></p>
+              <p class="organizational-hint" style="margin:2px 0 12px;">Saved rules that pre-fill Cash Coding. They never post by themselves. Managed under <a href="#" data-acctset-go="banking" data-acctset-view="rules">Banking, Rules</a>.</p>
+              <p style="margin:0;"><b style="font-size:0.9375rem;">Connected bank accounts and statement import</b></p>
+              <p class="organizational-hint" style="margin:2px 0 0;">Managed on the <a href="#" data-acctset-go="banking">Banking</a> tab, next to the accounts they feed.</p>
+            </section>
+
+            <h2 class="organizational-subheading">Chart of accounts, programs and projects</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p class="organizational-hint" style="margin:0;">Shared by every module. Managed under <a href="#" id="organizational-acctset-structure-link">Financial structure</a>.</p>
+            </section>
+
+            <h2 class="organizational-subheading">Default accounts</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <label class="organizational-label" for="organizational-acctset-pledge-account">Pledge receivable account</label>
+              <select id="organizational-acctset-pledge-account" class="organizational-select" style="max-width:360px;"></select>
+              <p class="organizational-hint" style="margin:6px 0 0;">A new pledge in Funding starts with this account. The pledge can still change it.</p>
+              <p id="organizational-acctset-defaults-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
+            </section>
+
+            <h2 id="acct-sec-state" class="organizational-subheading">State</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <div id="organizational-acctset-state">Loading…</div>
+            </section>
+
+            <h2 class="organizational-subheading">Where your books live</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p class="organizational-hint" style="margin:0;" id="organizational-acctset-books-line">Loading…</p>
+            </section>
+
+          </div>
+
+          <!-- ============================= Purchases (Bills) tab ============================= -->
+          <div id="organizational-accounting-tab-purchases" hidden>
+
+            <div id="organizational-purchases-list">
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:space-between;">
+              <select id="organizational-bills-filter-status" class="organizational-input" style="width:170px;">
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="pending_approval">Pending approval</option>
+                <option value="approved">Approved</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="paid">Paid</option>
+                <option value="void">Void</option>
+              </select>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="#" id="organizational-bills-manage-vendors-link" class="organizational-btn organizational-btn-outline">Manage vendors →</a>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-bills-aging-btn">AP Aging report</button>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-bills-add">+ New bill</button>
+              </div>
+            </div>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Bills">
+                  <thead>
+                    <tr>
+                      <th>Vendor</th>
+                      <th>Bill date</th>
+                      <th>Due date</th>
+                      <th>Reference</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-bills-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No bills yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="organizational-grants-head" style="margin-top:24px;justify-content:space-between;">
+              <h3 style="margin:0;">Vendor credit notes</h3>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-billcreditnotes-add">+ New credit note</button>
+            </div>
+            <section class="organizational-card" id="organizational-billcreditnotes-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Vendor credit notes">
+                  <thead>
+                    <tr><th>Vendor</th><th>Bill #</th><th>Amount</th><th>Reason</th><th>Status</th><th></th></tr>
+                  </thead>
+                  <tbody id="organizational-billcreditnotes-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No credit notes yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="organizational-grants-head" style="margin-top:24px;justify-content:space-between;">
+              <h3 style="margin:0;">Recurring schedules</h3>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-billschedules-add">+ New schedule</button>
+            </div>
+            <section class="organizational-card" id="organizational-billschedules-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Recurring bill schedules">
+                  <thead>
+                    <tr><th>Vendor</th><th>Frequency</th><th>Next occurrence</th><th>End date</th><th>Status</th><th></th></tr>
+                  </thead>
+                  <tbody id="organizational-billschedules-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No recurring schedules yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            </div>
+
+            <div id="organizational-bill-page" class="organizational-grant-panel--wide" hidden style="width:auto;margin:12px 0 0;padding:0 16px;">
+              <nav aria-label="Breadcrumb" style="font-size:0.8125rem;color:var(--text-secondary);">
+                <a href="#" id="organizational-bill-page-back">Purchases</a> › <a href="#" id="organizational-bill-page-back-bills">Bills</a>
+              </nav>
+              <h2 id="organizational-bill-page-title" style="margin:4px 0 12px;font-size:1.25rem;">Bill</h2>
+              <div id="organizational-bill-page-error" class="organizational-panel-error" hidden></div>
+              <div id="organizational-bill-page-body" style="max-width:1100px;padding:0 0 20px;"></div>
+              <div id="organizational-bill-page-notes" style="max-width:1100px;"></div>
+            </div>
+
+          </div>
+
+          <!-- ============================= Sales (Invoices) tab ============================= -->
+          <div id="organizational-accounting-tab-sales" hidden>
+
+            <div id="organizational-sales-list">
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:space-between;">
+              <select id="organizational-invoices-filter-status" class="organizational-input" style="width:170px;">
+                <option value="">All statuses</option>
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="partially_paid">Partially paid</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+                <option value="void">Void</option>
+                <option value="written_off">Written off</option>
+              </select>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="#" id="organizational-invoices-manage-customers-link" class="organizational-btn organizational-btn-outline">Manage customers →</a>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-invoices-aging-btn">AR Aging report</button>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-invoices-add">+ New invoice</button>
+              </div>
+            </div>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Invoices">
+                  <thead>
+                    <tr>
+                      <th>Customer</th>
+                      <th>Invoice date</th>
+                      <th>Due date</th>
+                      <th>Reference</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-invoices-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No invoices yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="organizational-grants-head" style="margin-top:24px;justify-content:space-between;">
+              <h3 style="margin:0;">Customer credit notes</h3>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-invoicecreditnotes-add">+ New credit note</button>
+            </div>
+            <section class="organizational-card" id="organizational-invoicecreditnotes-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Customer credit notes">
+                  <thead>
+                    <tr><th>Customer</th><th>Invoice #</th><th>Amount</th><th>Reason</th><th>Status</th><th></th></tr>
+                  </thead>
+                  <tbody id="organizational-invoicecreditnotes-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No credit notes yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <div class="organizational-grants-head" style="margin-top:24px;justify-content:space-between;">
+              <h3 style="margin:0;">Recurring schedules</h3>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-invoiceschedules-add">+ New schedule</button>
+            </div>
+            <section class="organizational-card" id="organizational-invoiceschedules-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Recurring invoice schedules">
+                  <thead>
+                    <tr><th>Customer</th><th>Frequency</th><th>Next occurrence</th><th>End date</th><th>Status</th><th></th></tr>
+                  </thead>
+                  <tbody id="organizational-invoiceschedules-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No recurring schedules yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            </div>
+
+            <div id="organizational-invoice-page" class="organizational-grant-panel--wide" hidden style="width:auto;margin:12px 0 0;padding:0 16px;">
+              <nav aria-label="Breadcrumb" style="font-size:0.8125rem;color:var(--text-secondary);">
+                <a href="#" id="organizational-invoice-page-back">Sales</a> › <a href="#" id="organizational-invoice-page-back-invoices">Invoices</a>
+              </nav>
+              <h2 id="organizational-invoice-page-title" style="margin:4px 0 12px;font-size:1.25rem;">Invoice</h2>
+              <div id="organizational-invoice-page-error" class="organizational-panel-error" hidden></div>
+              <div id="organizational-invoice-page-body" style="max-width:1100px;padding:0 0 20px;"></div>
+              <div id="organizational-invoice-page-notes" style="max-width:1100px;"></div>
+            </div>
+
+          </div>
+
+          <!-- ============================= Fixed Assets tab ============================= -->
+          <div id="organizational-accounting-tab-fixed-assets" hidden>
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:space-between;">
+              <p class="organizational-hint" style="margin:0;">Straight-line depreciation only. "Run depreciation" always previews before posting anything.</p>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-fixedassets-run-depreciation-btn">Run depreciation…</button>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-fixedassets-add">+ New asset</button>
+              </div>
+            </div>
+
+            <section class="organizational-card" id="organizational-fixedassets-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card" id="organizational-fixedassets-depr-panel" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card" id="organizational-fixedassets-dispose-panel" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Fixed assets">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Acquired</th>
+                      <th>Cost</th>
+                      <th>Accum. depr.</th>
+                      <th>Net book value</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-fixedassets-tbody">
+                    <tr class="organizational-table-empty"><td colspan="7">No fixed assets yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <h2 class="organizational-subheading" style="margin-top:20px;">Entries waiting for an asset</h2>
+            <section class="organizational-card organizational-card-flush" id="organizational-fixedassets-waiting">
+              <p class="organizational-hint" style="margin:12px 16px;">The register holds every fixed asset. When an entry adds cost to a fixed asset account, it waits here until you add it as an asset, so the register always accounts for the books.</p>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Entries waiting for an asset">
+                  <thead><tr><th>Date</th><th>Entry</th><th>Account</th><th style="text-align:right;">Amount</th><th></th></tr></thead>
+                  <tbody id="organizational-fixedassets-waiting-body"><tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr></tbody>
+                </table>
+              </div>
+              <p id="organizational-fixedassets-waiting-dep" class="organizational-hint" style="margin:10px 16px 12px;" hidden></p>
+            </section>
+
+          </div>
+
+          <!-- ============================= Expense Claims tab ============================= -->
+          <div id="organizational-accounting-tab-expense-claims" hidden>
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:space-between;">
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.8125rem;">
+                <input type="checkbox" id="organizational-expenseclaims-mine-only"> My claims only
+              </label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-expenseclaims-settings-btn">Approval settings…</button>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-expenseclaims-add">+ New claim</button>
+              </div>
+            </div>
+
+            <section class="organizational-card" id="organizational-expenseclaims-settings-panel" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+            <section class="organizational-card" id="organizational-expenseclaims-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Expense claims">
+                  <thead>
+                    <tr>
+                      <th>Submitted by</th>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-expenseclaims-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No expense claims yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card" id="organizational-expenseclaims-detail-panel" hidden style="padding:12px 16px;margin-top:12px;"></section>
+
+          </div>
+
+          <!-- ============================= Board Designations tab ============================= -->
+          <div id="organizational-accounting-tab-board-designations" hidden>
+
+            <div class="organizational-grants-head" style="margin-top:8px;justify-content:flex-end;">
+              <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-boarddesig-add">+ New designation</button>
+            </div>
+
+            <section class="organizational-card" id="organizational-boarddesig-form" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Board designations">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Purpose</th>
+                      <th>Board approved</th>
+                      <th>Balance</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-boarddesig-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No board designations yet.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <p style="margin-top:12px;font-size:0.8125rem;color:var(--text-secondary);">
+              Board-designated funds are internal earmarks of net assets without donor restriction
+              (e.g. an operating reserve or building fund) — not a separate legal restriction, but a
+              board policy the org tracks for its own liquidity disclosure. To move money into or out
+              of a designation, post a manual transaction on the Transactions tab using your org's own
+              net-assets-without-restriction account(s): tag <strong>only the line representing the
+              designated side of the transfer</strong> with this designation, and leave the offsetting
+              line untagged — the balance shown here is a running sum of the tagged side only, so
+              tagging both lines of the same transfer would always net to zero.
+            </p>
+
+          </div>
+
+          <!-- ============================= Find & Recode tab ============================= -->
+          <div id="organizational-accounting-tab-find-recode" hidden>
+
+            <p class="organizational-hint" style="margin:8px 0 16px;">
+              Search posted General Ledger transactions matching your conditions, then
+              bulk-recode the account, program/activity, or grant on the ones you select.
+              Amounts are never changed, and posted transactions are never edited in place — a
+              new correcting journal is posted instead, so the originals stay intact. System
+              accounts (AR, AP, Bank, Clearing, Contribution Revenue, Expense Claims Payable)
+              never appear here.
+            </p>
+
+            <section class="organizational-card" style="padding:14px 16px;margin-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+                <span style="font-size:0.875rem;">Find transaction lines that match</span>
+                <select id="organizational-recode-match-mode" class="organizational-input" style="width:90px;font-size:0.8125rem;padding:4px 6px;">
+                  <option value="all">All</option>
+                  <option value="any">Any</option>
+                </select>
+                <span style="font-size:0.875rem;">of the following conditions:</span>
+              </div>
+              <div id="organizational-recode-conditions"></div>
+              <button type="button" class="organizational-btn-link" id="organizational-recode-add-condition" style="background:none;border:none;color:var(--accent);cursor:pointer;padding:6px 0;font-size:0.875rem;">+ Add a condition</button>
+              <div style="margin-top:10px;">
+                <button type="button" class="organizational-btn" id="organizational-recode-search-btn">Search</button>
+                <span id="organizational-recode-search-hint" class="organizational-hint" style="margin-left:10px;"></span>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush" id="organizational-recode-results-card" hidden>
+              <div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);">
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.8125rem;cursor:pointer;">
+                  <input type="checkbox" id="organizational-recode-select-all">
+                  Select all
+                </label>
+                <span id="organizational-recode-selected-count" class="organizational-hint"></span>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Recode results">
+                  <thead id="organizational-recode-results-thead"></thead>
+                  <tbody id="organizational-recode-results-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card" id="organizational-recode-action-bar" style="padding:14px 16px;" hidden>
+              <p style="margin:0 0 10px;font-weight:600;font-size:0.875rem;">Recode selected to:</p>
+              <div id="organizational-recode-change-fields" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;"></div>
+              <div style="margin-top:12px;">
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-recode-preview-btn">Preview</button>
+                <button type="button" class="organizational-btn" id="organizational-recode-confirm-btn" disabled style="margin-left:8px;">Recode selected</button>
+              </div>
+              <div id="organizational-recode-preview-result" style="margin-top:12px;font-size:0.875rem;"></div>
+            </section>
+
+            <p id="organizational-recode-error" class="organizational-error" hidden></p>
+
+          </div>
+
+          <!-- ============================= Gift Postings tab ============================= -->
+          <div id="organizational-accounting-tab-gift-postings" hidden>
+
+            <p class="organizational-hint" style="margin:8px 0 16px;">
+              In-kind gifts and pledges recorded in Donors land here unposted. Cash donations,
+              grants, and dues aren't listed — they already reach the ledger via ordinary bank
+              deposit coding in Banking. Review the account coding and post (or
+              void) each one explicitly.
+            </p>
+
+            <div class="organizational-grants-head" style="margin-top:0;justify-content:flex-end;gap:8px;">
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-giftpostings-run-accretion-btn">Run pledge accretion…</button>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-giftpostings-run-recovery-btn">Run indirect cost recovery…</button>
+            </div>
+
+            <section class="organizational-card" id="organizational-giftpostings-run-panel" hidden style="padding:12px 16px;margin-bottom:12px;"></section>
+
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Pending gift postings">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Date</th>
+                      <th>Donor</th>
+                      <th>Amount</th>
+                      <th>Details</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-giftpostings-tbody">
+                    <tr class="organizational-table-empty"><td colspan="6">No gifts pending posting.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="organizational-card" id="organizational-giftpostings-post-panel" hidden style="padding:12px 16px;margin-top:12px;"></section>
+
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="organizational-banking-import-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-banking-import-panel" class="organizational-grant-panel organizational-grant-panel--wide" aria-label="Import statement">
+    <div class="organizational-panel-header">
+      <h3>Import bank statement</h3>
+      <button type="button" id="organizational-banking-import-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-banking-import-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-banking-import-panel-body"></div>
+  </aside>
+
+  <div id="organizational-plaid-map-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-plaid-map-panel" class="organizational-grant-panel organizational-grant-panel--wide" aria-label="Map connected accounts">
+    <div class="organizational-panel-header">
+      <h3>Map connected accounts</h3>
+      <button type="button" id="organizational-plaid-map-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-plaid-map-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-plaid-map-panel-body"></div>
+  </aside>
+
+  <div id="organizational-banking-report-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-banking-report-panel" class="organizational-grant-panel" aria-label="Reconciliation report">
+    <div class="organizational-panel-header">
+      <h3>Reconciliation report</h3>
+      <button type="button" id="organizational-banking-report-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-banking-report-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-banking-report-panel-body"></div>
+  </aside>
+
+  <div id="organizational-bills-aging-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-bills-aging-panel" class="organizational-grant-panel" aria-label="AP Aging report">
+    <div class="organizational-panel-header">
+      <h3>AP Aging report</h3>
+      <button type="button" id="organizational-bills-aging-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div class="organizational-panel-body" id="organizational-bills-aging-panel-body"></div>
+  </aside>
+
+  <div id="organizational-invoices-aging-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-invoices-aging-panel" class="organizational-grant-panel" aria-label="AR Aging report">
+    <div class="organizational-panel-header">
+      <h3>AR Aging report</h3>
+      <button type="button" id="organizational-invoices-aging-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div class="organizational-panel-body" id="organizational-invoices-aging-panel-body"></div>
+  </aside>
+
+  <div id="organizational-vendorcompliance-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="organizational-vendorcompliance-panel" class="organizational-grant-panel organizational-grant-panel--wide" aria-label="Vendor compliance">
+    <div class="organizational-panel-header">
+      <h3 id="organizational-vendorcompliance-panel-title">Vendor compliance</h3>
+      <button type="button" id="organizational-vendorcompliance-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="organizational-vendorcompliance-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="organizational-vendorcompliance-panel-body"></div>
+  </aside>
+
+  <script src="/organizational/js/time-utils.js"></script>
+  <script src="/organizational/js/utils.js"></script>
+  <script src="/organizational/js/select-search.js"></script>
+  <script src="/organizational/js/state-rules.js"></script>
+  <script src="/organizational/js/strings.js" defer></script>
+  <script src="/organizational/js/sidebar.js" defer></script>
+  <script src="/organizational/js/messages-placeholder.js" defer></script>
+  <script src="/organizational/js/table-sort.js" defer></script>
+  <script src="/organizational/js/ledger.js" defer></script>
+  <script src="/organizational/js/accounting-dashboard.js" defer></script>
+  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js" defer></script>
+  <script src="/organizational/js/banking.js" defer></script>
+  <script src="/organizational/js/bank-views.js" defer></script>
+  <script src="/organizational/js/document-attach.js" defer></script>
+  <script src="/organizational/js/contact-picker.js" defer></script>
+  <script src="/organizational/js/formula-input.js" defer></script>
+  <script src="/organizational/js/record-notes.js" defer></script>
+  <script src="/organizational/js/bills-ui.js" defer></script>
+  <script src="/organizational/js/invoices-ui.js" defer></script>
+  <script src="/organizational/js/fixed-assets.js" defer></script>
+  <script src="/organizational/js/expense-claims.js" defer></script>
+  <script src="/organizational/js/board-designations.js" defer></script>
+  <script src="/organizational/js/find-recode.js" defer></script>
+  <script src="/organizational/js/gift-postings.js" defer></script>
+  <script src="/organizational/js/settings-1099.js" defer></script>
+  <script src="/organizational/js/settings-index.js" defer></script>
+  <script src="/organizational/js/accounting-settings.js" defer></script>
+  <script src="/organizational/js/accounting-workspace.js" defer></script>
+  <div id="organizational-overlay-container"></div>
+  <script>
+    fetch('/organizational/partials/organizational-overlay.html').then(r => r.text()).then(html => {
+      document.getElementById('organizational-overlay-container').innerHTML = html;
+    });
+  </script>
+  <script>
+    // Load header chrome
+    fetch('/organizational/header.html').then(r => r.text()).then(html => {
+      document.getElementById('app-header').innerHTML = html;
+      document.body.style.visibility = 'visible';
+    });
+  </script>
+  <script src="/organizational/js/module-reports-link.js" defer></script>
+  <script src="/organizational/js/module-quicklinks.js" defer></script>
+  <script src="/shared/js/idle-logout.js"></script>
+</body>
+</html>

@@ -1,0 +1,226 @@
+'use strict';
+
+const { requireAuth } = require('../../auth');
+const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
+const { requireAccountingWriter } = require('../middleware/requireAccountingAccess');
+const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
+const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
+const { postInKindGift, postPledgeCommitment, voidGiftPosting } = require('../lib/giftPosting');
+const { computeDuePledgeAccretionPeriods, runPledgeAccretion } = require('../lib/pledgeAccretion');
+const { linkOrReclassifyGrantGiftTransaction } = require('../lib/grantGiftPayment');
+const { postDisbursement, unpostDisbursement } = require('../lib/disbursementPosting');
+const { FINANCE_ROLES } = require('../lib/orgRoles');
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function registerGiftPostingRoutes(app, pool) {
+  const auth = requireAuth(pool);
+  const readGate = (req, res, next) => {
+    if (['admin', ...FINANCE_ROLES].includes(req.coopOrgRole) || (req.accessPermissions || []).includes('accounting_read')) return next();
+    return res.status(403).json({ code: 'no_access', error: 'You do not have access to gift postings. Ask an admin to give you access.' });
+  };
+  const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool), readGate];
+  const writeAuth = [...orgAuth, requireAccountingWriter(pool)];
+
+  app.get('/api/organizational/orgs/:slug/gift-postings', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT g.id, g.gift_type, g.payment_method, g.amount_cents, g.received_at,
+                g.in_kind_description, g.in_kind_valuation_method, g.in_kind_revenue_account_id, g.in_kind_expense_account_id,
+                g.total_pledged_cents, g.is_multi_year_pledge, g.discount_rate_bps, g.pledge_years, g.discounted_present_value_cents, g.receivable_account_id,
+                g.pledge_status, g.pledge_status_changed_at, g.pledge_status_note, u.email AS pledge_status_changed_by_email,
+                g.program_id, g.grant_id, g.constituent_id, c.display_name AS constituent_name, c.kind AS constituent_kind,
+                gr.name AS grant_name
+         FROM org_gifts g
+         LEFT JOIN org_constituents c ON c.id = g.constituent_id
+         LEFT JOIN org_grants gr ON gr.id = g.grant_id
+         LEFT JOIN users u ON u.id = g.pledge_status_changed_by
+         WHERE g.org_id = $1 AND g.posting_status = 'unposted'
+         ORDER BY g.received_at DESC, g.id DESC`,
+        [req.orgId]
+      );
+      const rows = r.rows.map((row) => ({
+        id: row.id,
+        gift_type: row.gift_type,
+        payment_method: row.payment_method,
+        amount_cents: Number(row.amount_cents),
+        received_at: row.received_at,
+        constituent_name: row.constituent_name || null,
+        constituent_kind: row.constituent_kind || null,
+        grant_id: row.grant_id != null ? Number(row.grant_id) : null,
+        grant_name: row.grant_name || null,
+        program_id: row.program_id != null ? Number(row.program_id) : null,
+        in_kind: row.payment_method === 'in_kind' ? {
+          description: row.in_kind_description,
+          valuation_method: row.in_kind_valuation_method,
+          revenue_account_id: row.in_kind_revenue_account_id != null ? Number(row.in_kind_revenue_account_id) : null,
+          expense_account_id: row.in_kind_expense_account_id != null ? Number(row.in_kind_expense_account_id) : null,
+        } : null,
+        pledge: row.gift_type === 'pledge' ? {
+          total_pledged_cents: row.total_pledged_cents != null ? Number(row.total_pledged_cents) : null,
+          is_multi_year_pledge: !!row.is_multi_year_pledge,
+          discount_rate_bps: row.discount_rate_bps != null ? Number(row.discount_rate_bps) : null,
+          pledge_years: row.pledge_years != null ? Number(row.pledge_years) : null,
+          needs_discounting: !!row.is_multi_year_pledge,
+          pledge_status: row.pledge_status || null,
+          marked_by: row.pledge_status_changed_by_email || null,
+          marked_at: row.pledge_status_changed_at || null,
+          marked_note: row.pledge_status_note || null,
+          discounted_present_value_cents: row.discounted_present_value_cents != null ? Number(row.discounted_present_value_cents) : null,
+          receivable_account_id: row.receivable_account_id != null ? Number(row.receivable_account_id) : null,
+        } : null,
+        is_cash_grant: row.gift_type === 'grant' && row.payment_method !== 'in_kind',
+      }));
+      const d = await pool.query(
+        `SELECT d.id, d.disbursement_date, d.amount_cents, d.admin_fee_cents, d.notes, p.id AS project_id, p.name AS project_name,
+                p.program_id, p.disbursement_expense_account_id, COALESCE(p.sponsorship_model::text, s.sponsorship_model::text) AS model
+           FROM org_sponsored_project_disbursements d
+           JOIN org_sponsored_projects p ON p.id = d.sponsored_project_id
+           LEFT JOIN org_settings s ON s.org_id = d.org_id
+          WHERE d.org_id = $1 AND d.status = 'approved' AND d.ledger_transaction_id IS NULL
+          ORDER BY d.disbursement_date, d.id`, [req.orgId]);
+      return res.json({
+        gift_postings: rows,
+        disbursements: d.rows.map((x) => ({
+          id: x.id, date: String(x.disbursement_date).slice(0, 10), amount_cents: Number(x.amount_cents), admin_fee_cents: x.admin_fee_cents != null ? Number(x.admin_fee_cents) : null,
+          notes: x.notes || null, project_id: x.project_id, project_name: x.project_name, program_id: x.program_id != null ? Number(x.program_id) : null,
+          expense_account_id: x.disbursement_expense_account_id != null ? Number(x.disbursement_expense_account_id) : null, model: x.model || null,
+        })),
+      });
+    } catch (e) {
+      console.error('GET /gift-postings:', e.message);
+      return res.status(500).json({ error: 'Could not load pending gift postings' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/post', ...writeAuth, async (req, res) => {
+    const giftId = Number.parseInt(String(req.params.giftId), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const body = req.body || {};
+    const postingDate = body.posting_date != null ? String(body.posting_date) : null;
+
+    try {
+      const kindR = await pool.query('SELECT gift_type, payment_method FROM org_gifts WHERE id = $1 AND org_id = $2 LIMIT 1', [giftId, orgId]);
+      if (!kindR.rows.length) return res.status(404).json({ error: 'Gift not found' });
+      const isInKind = kindR.rows[0].payment_method === 'in_kind';
+      const isPledge = kindR.rows[0].gift_type === 'pledge';
+
+      let result;
+      if (isInKind) {
+        result = await postInKindGift(pool, {
+          orgId, userId, giftId, postingDate,
+          revenueAccountId: body.revenue_account_id != null ? Number(body.revenue_account_id) : undefined,
+          expenseAccountId: body.expense_account_id != null ? Number(body.expense_account_id) : undefined,
+          programId: body.program_id != null ? Number(body.program_id) : undefined,
+          donorRestrictionClass: body.donor_restriction_class !== undefined ? body.donor_restriction_class : undefined,
+        });
+      } else if (isPledge) {
+        result = await postPledgeCommitment(pool, {
+          orgId, userId, giftId, postingDate,
+          revenueAccountId: body.revenue_account_id != null ? Number(body.revenue_account_id) : undefined,
+          receivableAccountId: body.receivable_account_id != null ? Number(body.receivable_account_id) : undefined,
+          discountRateBps: body.discount_rate_bps != null ? Number(body.discount_rate_bps) : undefined,
+          pledgeYears: body.pledge_years != null ? Number(body.pledge_years) : undefined,
+          programId: body.program_id != null ? Number(body.program_id) : undefined,
+          donorRestrictionClass: body.donor_restriction_class !== undefined ? body.donor_restriction_class : undefined,
+        });
+      } else {
+        return res.status(400).json({ error: 'This gift is neither in-kind nor a pledge -- nothing to post' });
+      }
+      return res.status(result.httpStatus).json(result.body);
+    } catch (e) {
+      console.error('POST /gift-postings/:giftId/post:', e.message);
+      return res.status(500).json({ error: 'Could not post gift' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/disbursement/:id/post', ...writeAuth, async (req, res) => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'invalid disbursement id' });
+    const b = req.body || {};
+    try {
+      const out = await postDisbursement(pool, {
+        orgId: req.orgId, userId: req.user.user_id ?? req.user.id, disbursementId: id, postingDate: b.posting_date != null ? String(b.posting_date) : null,
+        expenseAccountId: b.expense_account_id != null ? Number(b.expense_account_id) : undefined,
+        bankAccountId: b.bank_account_id != null ? Number(b.bank_account_id) : undefined,
+        programId: b.program_id != null ? Number(b.program_id) : undefined,
+      });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) { console.error('POST disbursement post:', e.message); return res.status(500).json({ error: 'Could not post the disbursement' }); }
+  });
+  app.post('/api/organizational/orgs/:slug/gift-postings/disbursement/:id/unpost', ...writeAuth, async (req, res) => {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'invalid disbursement id' });
+    try {
+      const out = await unpostDisbursement(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, disbursementId: id, reason: String((req.body && req.body.reason) || '').trim() });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) { console.error('POST disbursement unpost:', e.message); return res.status(500).json({ error: 'Could not unpost the disbursement' }); }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/void', ...writeAuth, async (req, res) => {
+    const giftId = Number.parseInt(String(req.params.giftId), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const voidReason = req.body && req.body.void_reason != null ? String(req.body.void_reason) : null;
+    try {
+      const result = await voidGiftPosting(pool, { orgId, userId, giftId, voidReason });
+      return res.status(result.httpStatus).json(result.body);
+    } catch (e) {
+      console.error('POST /gift-postings/:giftId/void:', e.message);
+      return res.status(500).json({ error: 'Could not void gift posting' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/link-transaction', ...writeAuth, async (req, res) => {
+    const giftId = Number.parseInt(String(req.params.giftId), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const transactionId = req.body && req.body.ledger_transaction_id != null ? Number.parseInt(String(req.body.ledger_transaction_id), 10) : null;
+    if (!Number.isInteger(transactionId) || transactionId < 1) return res.status(400).json({ error: 'ledger_transaction_id is required' });
+    try {
+      const result = await linkOrReclassifyGrantGiftTransaction(pool, { orgId, userId, giftId, transactionId });
+      return res.status(result.httpStatus).json(result.body);
+    } catch (e) {
+      console.error('POST /gift-postings/:giftId/link-transaction:', e.message);
+      return res.status(500).json({ error: 'Could not link transaction' });
+    }
+  });
+
+  app.get('/api/organizational/orgs/:slug/pledges/run-accretion-preview', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
+    const throughDate = req.query.through_date != null ? String(req.query.through_date) : null;
+    if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
+    try {
+      const due = await computeDuePledgeAccretionPeriods(pool, req.orgId, throughDate);
+      return res.json({
+        periods: due.map((d) => ({ gift_id: d.gift_id, period_date: d.period_date, amount_cents: String(d.amount_cents) })),
+        total_cents: String(due.reduce((s, d) => s + d.amount_cents, 0)),
+      });
+    } catch (e) {
+      console.error('GET /pledges/run-accretion-preview:', e.message);
+      return res.status(500).json({ error: 'Could not compute pledge accretion preview' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/pledges/run-accretion', ...writeAuth, async (req, res) => {
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const body = req.body || {};
+    const throughDate = body.through_date != null ? String(body.through_date) : null;
+    if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
+    const incomeAccountId = body.income_account_id != null ? Number.parseInt(String(body.income_account_id), 10) : null;
+    if (!Number.isInteger(incomeAccountId) || incomeAccountId < 1) return res.status(400).json({ error: 'income_account_id is required' });
+    try {
+      const { posted, failed } = await runPledgeAccretion(pool, { orgId, userId, throughDate, incomeAccountId });
+      return res.json({ posted, failed, posted_count: posted.length, failed_count: failed.length });
+    } catch (e) {
+      console.error('POST /pledges/run-accretion:', e.message);
+      return res.status(500).json({ error: 'Could not run pledge accretion' });
+    }
+  });
+}
+
+module.exports = { registerGiftPostingRoutes };

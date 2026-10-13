@@ -1,0 +1,16 @@
+as_of_date,account_code,balance,restriction_class,notes
+2025-12-31,1000,45000,unrestricted,Checking account balance
+2025-12-31,1010,125000,unrestricted,Savings and money market
+2025-12-31,1100,18500,unrestricted,Accounts receivable
+2025-12-31,1200,12000,unrestricted,Grants receivable
+2025-12-31,1300,5000,unrestricted,Prepaid expenses
+2025-12-31,1500,85000,unrestricted,Investments
+2025-12-31,1700,250000,unrestricted,Equipment at cost
+2025-12-31,1800,-62500,unrestricted,Accumulated depreciation
+2025-12-31,2000,15000,unrestricted,Accounts payable
+2025-12-31,2100,8000,unrestricted,Payroll taxes payable
+2025-12-31,2200,12000,unrestricted,Accrued expenses
+2025-12-31,2500,50000,unrestricted,Notes payable
+2025-12-31,3000,320000,unrestricted,Unrestricted net assets
+2025-12-31,3100,85000,temporarily_restricted,Temporarily restricted assets
+2025-12-31,3200,42000,permanently_restricted,Permanently restricted endowment

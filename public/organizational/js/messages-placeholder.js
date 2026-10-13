@@ -88,18 +88,21 @@
     drawer.setAttribute('aria-label', 'Messages (placeholder)');
     drawer.innerHTML = sampleHtml();
 
-    var slot = document.querySelector('[data-messages-slot]') || document.getElementById('organizational-module-quicklinks');
+    var slot = document.querySelector('[data-messages-slot]');
+    var before = null;
     if (!slot) {
-      var title = document.getElementById('organizational-org-title');
-      if (title && title.parentNode) {
-        slot = document.createElement('div');
-        slot.style.cssText = 'float:right;order:2;margin-left:auto;display:flex;gap:14px;align-items:center;padding-top:8px;';
-        title.parentNode.insertBefore(slot, title);
-      }
+      var gear = document.querySelector('.organizational-budget-settings-btn');
+      slot = gear ? gear.parentNode : document.querySelector('.organizational-tabs');
+      before = gear;
     }
     if (slot) {
-      tab.style.cssText = 'position:static;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;';
-      slot.appendChild(tab);
+      tab.style.cssText = 'position:static;margin-left:auto;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;align-self:center;';
+      if (before) {
+        before.style.marginLeft = '10px';
+        slot.insertBefore(tab, before);
+      } else {
+        slot.appendChild(tab);
+      }
     } else {
       document.body.appendChild(tab);
     }

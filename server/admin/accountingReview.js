@@ -9,7 +9,7 @@ const MODULES = {
   budget: { file: 'budget-review.json', prefix: 'U' },
   sponsorship: { file: 'sponsorship-review.json', prefix: 'S' },
   membership: { file: 'membership-review.json', prefix: 'M' },
-  platform: { file: 'platform-review.json', prefix: 'X' },
+  platform: { file: 'platform-review.json', prefix: 'C' },
 };
 const DATA_DIR = path.join(__dirname, '..', '..', 'docs', 'private', 'reviews');
 const moduleOf = (req) => (MODULES[String(req.query.module || 'accounting')] ? String(req.query.module || 'accounting') : null);
@@ -18,7 +18,7 @@ const PAGE_PATH = path.join(__dirname, 'accounting-review.html');
 const DECIDER_EMAIL = 'loopy@causal.works';
 const SHARED = 'shared';
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,120}$/;
-const ITEM_ID_RE = /^[FUSM]?(?:[BPIQ]\d{2}|[AL]-\d{10,16})$/;
+const ITEM_ID_RE = /^[FUSMC]?(?:[BPIQ]\d{2}|[AL]-\d{10,16})$/;
 const MINE_FIELDS = new Set([
   'works', 'priority', 'comments', 'answer', 'reasoning',
   'area', 'issue', 'example', 'frequency'
@@ -79,7 +79,7 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
       reviewer = forWho.trim().toLowerCase();
       enteredBy = me(req) + ' (interview)';
     }
-    if (scope === 'mine' && /^[FUSM]?Q/.test(itemId)) {
+    if (scope === 'mine' && /^[FUSMC]?Q/.test(itemId)) {
       if (data.answer === '') data.reasoning = '';
       if (data.reasoning && data.answer === undefined) {
         const cur = await pool.query(
@@ -111,11 +111,11 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
 
   app.delete('/admin/api/accounting-review/:itemId', requireAdmin, async (req, res) => {
     const { itemId } = req.params;
-    if (!ITEM_ID_RE.test(itemId) || !/^[FUSM]?[AL]-/.test(itemId)) {
+    if (!ITEM_ID_RE.test(itemId) || !/^[FUSMC]?[AL]-/.test(itemId)) {
       return res.status(400).json({ error: 'Only added rows can be deleted' });
     }
     try {
-      if (/^[FUSM]?L-/.test(itemId)) {
+      if (/^[FUSMC]?L-/.test(itemId)) {
         if (!canDecide(req)) return res.status(403).json({ error: 'Only the admin can edit the decision log' });
         await pool.query('DELETE FROM accounting_review_entry WHERE item_id = $1', [itemId]);
       } else {

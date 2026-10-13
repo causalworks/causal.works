@@ -100,7 +100,7 @@
   var YESNO = ["Yes", "No", "N/A"];
   var SHARED = 'shared';
   // One review per module; ids carry the module so answers stay apart (Accounting B01, Funding FB01, Budget UB01).
-  var MODS = { accounting: { name: 'Accounting', pfx: '' }, funding: { name: 'Funding', pfx: 'F' }, budget: { name: 'Budget', pfx: 'U' }, sponsorship: { name: 'Sponsorship', pfx: 'S' }, membership: { name: 'Membership', pfx: 'M' }, platform: { name: 'Platform intelligence', pfx: 'X' } };
+  var MODS = { accounting: { name: 'Accounting', pfx: '' }, funding: { name: 'Funding', pfx: 'F' }, budget: { name: 'Budget', pfx: 'U' }, sponsorship: { name: 'Sponsorship', pfx: 'S' }, membership: { name: 'Membership', pfx: 'M' }, platform: { name: 'Platform intelligence', pfx: 'C' } };
   var MODULE = ((location.search.match(/[?&]module=(accounting|funding|budget|sponsorship|membership|platform)/) || [])[1]) || 'accounting';
   var PFX = MODS[MODULE].pfx;
   document.title = MODS[MODULE].name + ' module review';

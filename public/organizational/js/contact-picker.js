@@ -57,6 +57,7 @@
       hidden.value = contact.id;
       input.value = contact.display_name;
       closeList();
+      if (typeof options.onSelect === 'function') options.onSelect(contact);
     }
 
     function renderQuickAddRow(query) {

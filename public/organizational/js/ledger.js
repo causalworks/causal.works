@@ -89,6 +89,7 @@
   async function loadAccounts(slug) {
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/accounts');
     savedDefaultBankId = out && out.data && out.data.defaults && out.data.defaults.bank_account_id || null;
+    savedGiftAccountId = out && out.data && out.data.defaults && out.data.defaults.individual_gift_account_id || null;
     accountsCache = (out && out.data && (out.data.accounts || out.data)) || [];
     if (!Array.isArray(accountsCache)) accountsCache = [];
     accountsCache = accountsCache.filter((a) => a.is_posting);
@@ -600,6 +601,13 @@
 
   function lastBankKey() { return 'ledger-last-bank:' + currentSlug; }
   let savedDefaultBankId = null;
+  let savedGiftAccountId = null;
+  function suggestGiftAccount(contact) {
+    if (entryType !== 'receive' || !savedGiftAccountId || !contact || contact.kind !== 'individual') return;
+    const sel = document.querySelector('#ledger-lines-wrap [data-post-line] .ledger-line-account');
+    if (!sel || sel.value) return;
+    if (accountsCache.some((a) => Number(a.id) === savedGiftAccountId)) sel.value = String(savedGiftAccountId);
+  }
   function defaultBankId() {
     const cash = accountsCache.filter((a) => a.is_cash_account);
     if (savedDefaultBankId && cash.some((a) => Number(a.id) === savedDefaultBankId)) return savedDefaultBankId;
@@ -854,7 +862,7 @@
     if (contactField && window.OrganizationalContactPicker) {
       window.OrganizationalContactPicker.mount(contactField, {
         getCache: () => contactsCache, role: entryType === 'receive' ? 'donor' : 'vendor', label: 'contact',
-        slug: currentSlug, valueElementId: 'ledger-contact',
+        slug: currentSlug, valueElementId: 'ledger-contact', onSelect: suggestGiftAccount,
       });
     }
     if (cancelBtn) cancelBtn.addEventListener('click', () => (postMode ? leavePostPage() : closePostPanel()));

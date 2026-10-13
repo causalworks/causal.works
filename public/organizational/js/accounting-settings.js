@@ -135,21 +135,23 @@
   async function loadDefaults() {
     const pledgeSel = $('organizational-acctset-pledge-account');
     const bankSel = $('organizational-acctset-bank-account');
+    const giftSel = $('organizational-acctset-gift-account');
     const note = $('organizational-acctset-defaults-note');
-    if (!pledgeSel || !bankSel) return;
+    if (!pledgeSel || !bankSel || !giftSel) return;
     const out = await apiJson(base() + '/accounts');
-    if (!out || !out.res.ok) { pledgeSel.innerHTML = bankSel.innerHTML = '<option value="">Could not load accounts</option>'; return; }
+    if (!out || !out.res.ok) { pledgeSel.innerHTML = bankSel.innerHTML = giftSel.innerHTML = '<option value="">Could not load accounts</option>'; return; }
     const defaults = out.data.defaults || {};
     const assets = (out.data.accounts || []).filter((a) => a.type === 'asset' && a.is_posting);
     const opts = (list, cur, none) => '<option value="">' + none + '</option>' + list.map((a) =>
       '<option value="' + esc(a.id) + '"' + (Number(a.id) === cur ? ' selected' : '') + '>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
     pledgeSel.innerHTML = opts(assets, defaults.pledge_receivable_account_id, 'None');
     bankSel.innerHTML = opts(assets.filter((a) => a.is_cash_account), defaults.bank_account_id, 'None (use the only account, or the last one used)');
+    giftSel.innerHTML = opts((out.data.accounts || []).filter((a) => a.type === 'income' && a.is_posting && !a.is_system_contribution_revenue_account), defaults.individual_gift_account_id, 'None');
     const manage = canManage();
-    pledgeSel.disabled = bankSel.disabled = !manage;
+    pledgeSel.disabled = bankSel.disabled = giftSel.disabled = !manage;
     note.hidden = manage;
     note.textContent = manage ? '' : 'Changed by finance or an admin.';
-    [[pledgeSel, 'pledge_receivable_account_id'], [bankSel, 'bank_account_id']].forEach(([sel, key]) => {
+    [[pledgeSel, 'pledge_receivable_account_id'], [bankSel, 'bank_account_id'], [giftSel, 'individual_gift_account_id']].forEach(([sel, key]) => {
       if (sel.dataset.wired) return;
       sel.dataset.wired = '1';
       sel.addEventListener('change', async () => {

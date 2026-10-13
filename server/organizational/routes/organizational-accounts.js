@@ -101,12 +101,13 @@ function registerOrganizationalAccountRoutes(app, pool) {
       }
 
       const r = await pool.query(sql, params);
-      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
+      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id, default_individual_gift_account_id FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
       return res.json({
         accounts: r.rows.map(rowToAccount),
         defaults: {
           pledge_receivable_account_id: d && d.default_pledge_receivable_account_id != null ? Number(d.default_pledge_receivable_account_id) : null,
           bank_account_id: d && d.default_bank_account_id != null ? Number(d.default_bank_account_id) : null,
+          individual_gift_account_id: d && d.default_individual_gift_account_id != null ? Number(d.default_individual_gift_account_id) : null,
         },
       });
     } catch (e) {
@@ -137,8 +138,9 @@ function registerOrganizationalAccountRoutes(app, pool) {
   app.put('/api/organizational/orgs/:slug/account-defaults', ...orgAuth, requireWriteAccess('structure'), async (req, res) => {
     const body = req.body || {};
     const FIELDS = [
-      { key: 'pledge_receivable_account_id', col: 'default_pledge_receivable_account_id', cash: false, msg: 'Choose an asset account that accepts postings' },
-      { key: 'bank_account_id', col: 'default_bank_account_id', cash: true, msg: 'Choose a bank account from the list' },
+      { key: 'pledge_receivable_account_id', col: 'default_pledge_receivable_account_id', cash: false, type: 'asset', msg: 'Choose an asset account that accepts postings' },
+      { key: 'bank_account_id', col: 'default_bank_account_id', cash: true, type: 'asset', msg: 'Choose a bank account from the list' },
+      { key: 'individual_gift_account_id', col: 'default_individual_gift_account_id', cash: false, type: 'income', msg: 'Choose an income account that accepts postings' },
     ];
     const changes = [];
     for (const f of FIELDS) {
@@ -153,7 +155,7 @@ function registerOrganizationalAccountRoutes(app, pool) {
       for (const c of changes) {
         if (c.want === null) continue;
         const a = await pool.query(
-          `SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND type = 'asset' AND is_posting AND archived_at IS NULL` + (c.cash ? ' AND is_cash_account' : ''),
+          `SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND type = '${c.type}' AND is_posting AND archived_at IS NULL` + (c.cash ? ' AND is_cash_account' : ''),
           [c.want, req.orgId]);
         if (!a.rows.length) return res.status(400).json({ error: c.msg });
       }

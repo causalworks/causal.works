@@ -1198,6 +1198,18 @@
       })();
     }
 
+    const previous = gifts.filter(g => g.gift_type === 'donation' && g.posting_status !== 'void' && g.payment_method !== 'in_kind');
+    if (previous.length) {
+      const last = previous[0];
+      if (last.payment_method && methodEl) methodEl.value = last.payment_method;
+      const campaignInput = section.querySelector('#gift-campaign');
+      if (last.campaign && campaignInput) campaignInput.value = last.campaign;
+      const amountInput = section.querySelector('#gift-amount');
+      if (previous.length > 1 && Number(previous[1].amount_cents) === Number(last.amount_cents) && amountInput) {
+        amountInput.value = (Number(last.amount_cents) / 100).toFixed(2);
+      }
+    }
+
     const submitBtn = section.querySelector('#gift-submit');
     if (submitBtn) {
       submitBtn.addEventListener('click', async () => {

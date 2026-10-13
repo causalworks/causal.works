@@ -14,6 +14,7 @@
   let currentSlug      = '';
   let fundersCache     = [];
   const sorter = donorsTbody && window.OrganizationalTableSort ? window.OrganizationalTableSort.attach(donorsTbody.closest('table'), {
+    state: { index: 5, dir: 'desc' },
     columns: [
       { key: 'name', type: 'text', get: (c) => c.display_name },
       { key: 'kind', type: 'text', get: (c) => kindLabel(c) },

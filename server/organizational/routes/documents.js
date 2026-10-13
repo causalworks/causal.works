@@ -414,7 +414,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         if (client) { await client.query('ROLLBACK').catch(() => {}); client.release(); client = null; }
         cleanup();
         if (e.code === '23505') {
-          return res.status(409).json({ error: 'An identical file has already been uploaded for this organization' });
+          return res.status(409).json({ error: (req.body && req.body.source_ref_type) ? 'That file is already attached to this record.' : 'An identical file has already been uploaded for this organization' });
         }
         console.error('POST /documents:', e.message);
         return res.status(500).json({ error: 'Could not save document' });

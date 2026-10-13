@@ -755,11 +755,13 @@
                 <input type="date" id="organizational-rs-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
                 <button class="organizational-btn organizational-btn-outline" onclick="loadSchedule('receivables-schedule')">Run</button>
                 <span class="organizational-hint" id="organizational-rs-meta"></span>
-                <a id="organizational-rs-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+                <button class="organizational-btn organizational-btn-outline" id="organizational-rs-save" onclick="saveSchedule('receivables-schedule')" style="margin-left:auto;">Save a copy</button>
+                <a id="organizational-rs-csv" class="organizational-btn organizational-btn-outline" href="#" download>Export CSV</a>
               </div>
               <div id="organizational-rs-tiles" style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;"></div>
               <div id="organizational-rs-body" style="padding:0;"></div>
               <div id="organizational-rs-ledger" class="organizational-hint" style="padding:12px 16px;"></div>
+              <div id="organizational-rs-saved" style="padding:4px 16px 14px;"></div>
             </section>
           </div>
 
@@ -775,11 +777,13 @@
                 <input type="date" id="organizational-ps-asof" class="organizational-input" style="width:150px;font-size:0.8125rem;padding:4px 7px;">
                 <button class="organizational-btn organizational-btn-outline" onclick="loadSchedule('payables-schedule')">Run</button>
                 <span class="organizational-hint" id="organizational-ps-meta"></span>
-                <a id="organizational-ps-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+                <button class="organizational-btn organizational-btn-outline" id="organizational-ps-save" onclick="saveSchedule('payables-schedule')" style="margin-left:auto;">Save a copy</button>
+                <a id="organizational-ps-csv" class="organizational-btn organizational-btn-outline" href="#" download>Export CSV</a>
               </div>
               <div id="organizational-ps-tiles" style="display:flex;flex-wrap:wrap;gap:10px;padding:12px 16px;"></div>
               <div id="organizational-ps-body" style="padding:0;"></div>
               <div id="organizational-ps-ledger" class="organizational-hint" style="padding:12px 16px;"></div>
+              <div id="organizational-ps-saved" style="padding:4px 16px 14px;"></div>
             </section>
           </div>
 

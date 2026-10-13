@@ -2212,6 +2212,45 @@
     if (asOfEl && !asOfEl.value) asOfEl.value = out.data.as_of;
     scheduleCache[name] = out.data;
     renderSchedule(name);
+    loadSavedCopies(name);
+  }
+
+  async function loadSavedCopies(name) {
+    var cfg = SCHEDULES[name];
+    var el = document.getElementById(cfg.prefix + '-saved');
+    if (!el) return;
+    var base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/reports/';
+    var out = await apiJson(base + cfg.endpoint + '/saved', { method: 'GET' });
+    var copies = (out && out.res.ok && out.data.copies) || [];
+    if (!copies.length) { el.innerHTML = '<div class="organizational-hint" style="margin:0;">No saved copies yet. Save a copy to keep this schedule as of its date.</div>'; return; }
+    el.innerHTML = '<div style="font-size:var(--text-xs);color:var(--text-secondary);margin-bottom:2px;">Saved copies (' + copies.length + ')</div>' + copies.map(function (c) {
+      var saved = new Date(c.created_at);
+      var when = Number.isNaN(saved.getTime()) ? '' : saved.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.8125rem;">' +
+        '<a href="' + base + 'saved-copies/' + c.id + '/download" target="_blank" rel="noopener" style="flex:1 1 auto;">' + escapeHtml(c.title) + '</a>' +
+        '<span style="color:var(--text-secondary);white-space:nowrap;">saved ' + escapeHtml(when) + (c.saved_by ? ' by ' + escapeHtml(c.saved_by) : '') + '</span>' +
+        '<button type="button" class="organizational-btn-icon" data-saved-delete="' + c.id + '" title="Delete this copy" aria-label="Delete this copy">✕</button></div>';
+    }).join('');
+    el.querySelectorAll('[data-saved-delete]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        if (!window.confirm('Delete this saved copy? The file is removed and cannot be recovered.')) return;
+        var r = await apiJson(base + 'saved-copies/' + btn.getAttribute('data-saved-delete'), { method: 'DELETE' });
+        if (r && r.res.ok) loadSavedCopies(name);
+      });
+    });
+  }
+
+  async function saveSchedule(name) {
+    var cfg = SCHEDULES[name];
+    var btn = document.getElementById(cfg.prefix + '-save');
+    var asOfEl = document.getElementById(cfg.prefix + '-asof');
+    var meta = document.getElementById(cfg.prefix + '-meta');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    var q = asOfEl && asOfEl.value ? '?as_of=' + encodeURIComponent(asOfEl.value) : '';
+    var out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/reports/' + cfg.endpoint + '/save' + q, { method: 'POST' });
+    if (btn) { btn.disabled = false; btn.textContent = 'Save a copy'; }
+    if (!out || !out.res.ok) { if (meta) meta.textContent = (out && out.data && out.data.error) || 'Could not save a copy.'; return; }
+    loadSavedCopies(name);
   }
 
   function renderSchedule(name) {
@@ -2473,6 +2512,7 @@
   window.loadGeneralLedger = loadGeneralLedger;
   window.loadAccountTransactions = loadAccountTransactions;
   window.loadSchedule = loadSchedule;
+  window.saveSchedule = saveSchedule;
 
   load().catch(function(e) {
     if (loadingEl) loadingEl.hidden = true;

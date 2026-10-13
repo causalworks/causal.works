@@ -7,8 +7,17 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
+const { requireWriteAccess } = require('../middleware/requireWriteAccess');
+const { htmlToPdfBuffer } = require('../lib/OrganizationalHtmlPdf');
+const { scheduleReportHtml } = require('../lib/scheduleReportHtml');
+const { logAudit } = require('../lib/auditLog');
 const { receivableItems, payableItems } = require('../lib/receivablesPayables');
 
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const UPLOADS_ROOT = path.resolve(process.env.CAUSAL_UPLOADS_ROOT || path.join(__dirname, '../../../uploads'));
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BUCKETS = ['current', '1_30', '31_60', '61_90', '90_plus'];
 
@@ -73,35 +82,110 @@ function registerReceivablesPayablesRoutes(app, pool) {
     return res.send(rows.join('\r\n') + '\r\n');
   }
 
-  app.get('/api/organizational/orgs/:slug/reports/receivables-schedule', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
-    const orgId = req.orgId;
-    const asOf = asOfOf(req, res);
-    if (!asOf) return;
+  const KINDS = {
+    receivables: { title: 'Receivables schedule', labels: { invoice: 'Invoice', pledge: 'Pledge' }, ledgerLabel: 'Ledger balance of the receivable accounts',
+      items: receivableItems, filter: `a.type = 'asset' AND (a.is_system_ar_account OR a.name ILIKE '%receivable%')`, sign: 1 },
+    payables: { title: 'Payables schedule', labels: { bill: 'Bill', claim: 'Expense claim' }, ledgerLabel: 'Ledger balance of the payable accounts',
+      items: payableItems, filter: `a.type = 'liability' AND (a.is_system_ap_account OR a.is_system_expense_claims_payable_account)`, sign: -1 },
+  };
+
+  async function buildSchedule(orgId, kind, asOf) {
+    const cfg = KINDS[kind];
+    const items = await cfg.items(pool, orgId);
+    const ledger = await ledgerBalance(orgId, asOf, cfg.filter, cfg.sign);
+    return summarize(items, asOf, ledger);
+  }
+
+  ['receivables', 'payables'].forEach((kind) => {
+    app.get('/api/organizational/orgs/:slug/reports/' + kind + '-schedule', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+      const asOf = asOfOf(req, res);
+      if (!asOf) return;
+      try {
+        const out = await buildSchedule(req.orgId, kind, asOf);
+        if (req.query.format === 'csv') return sendCsv(res, kind + '-schedule', asOf, out, KINDS[kind].labels);
+        return res.json({ as_of: asOf, ...out });
+      } catch (e) {
+        console.error('GET reports/' + kind + '-schedule:', e.message);
+        return res.status(500).json({ error: 'Could not build the ' + kind + ' schedule' });
+      }
+    });
+
+    app.get('/api/organizational/orgs/:slug/reports/' + kind + '-schedule/saved', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+      try {
+        const r = await pool.query(
+          `SELECT d.id, d.title, d.document_date::text AS as_of, d.byte_size, d.created_at, u.email AS saved_by
+             FROM org_documents d LEFT JOIN users u ON u.id = d.uploaded_by_user_id
+            WHERE d.org_id = $1 AND d.category = 'saved_report' AND d.source_ref_type = $2 AND d.archived_at IS NULL
+            ORDER BY d.created_at DESC LIMIT 100`, [req.orgId, kind + '-schedule']);
+        return res.json({ copies: r.rows.map((x) => ({ id: x.id, title: x.title, as_of: x.as_of, byte_size: Number(x.byte_size), created_at: x.created_at, saved_by: x.saved_by })) });
+      } catch (e) {
+        console.error('GET reports/' + kind + '-schedule/saved:', e.message);
+        return res.status(500).json({ error: 'Could not load the saved copies' });
+      }
+    });
+
+    app.post('/api/organizational/orgs/:slug/reports/' + kind + '-schedule/save', ...orgAuth, requireWriteAccess('finance'), async (req, res) => {
+      const asOf = asOfOf(req, res);
+      if (!asOf) return;
+      const orgId = req.orgId;
+      const userId = req.user.user_id ?? req.user.id;
+      let filePath = null;
+      try {
+        const cfg = KINDS[kind];
+        const out = await buildSchedule(orgId, kind, asOf);
+        const orgR = await pool.query('SELECT display_name AS name FROM coop_members WHERE id = $1', [orgId]);
+        const html = scheduleReportHtml({ title: cfg.title, orgName: orgR.rows[0] ? orgR.rows[0].name : '', asOf, out, labels: cfg.labels, ledgerLabel: cfg.ledgerLabel });
+        const pdf = await htmlToPdfBuffer(html);
+        const dir = path.join(UPLOADS_ROOT, 'documents', String(orgId), String(new Date().getUTCFullYear()));
+        fs.mkdirSync(dir, { recursive: true });
+        filePath = path.join(dir, 'saved-' + crypto.randomBytes(12).toString('hex') + '.pdf');
+        fs.writeFileSync(filePath, pdf);
+        const checksum = crypto.createHash('sha256').update(pdf).digest('hex');
+        const r = await pool.query(
+          `INSERT INTO org_documents
+             (org_id, category, title, original_filename, stored_path, mime_type, byte_size, checksum_sha256, document_date,
+              retention_class, visibility, source_ref_type, uploaded_by_user_id)
+           VALUES ($1, 'saved_report', $2, $3, $4, 'application/pdf', $5, $6, $7::date, 'fixed_term', 'admins_only', $8, $9)
+           RETURNING id`,
+          [orgId, cfg.title + ' as of ' + asOf, kind + '-schedule-' + asOf + '.pdf', path.relative(UPLOADS_ROOT, filePath), pdf.length, checksum, asOf, kind + '-schedule', userId]);
+        await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_documents', recordId: r.rows[0].id, metadata: { saved_report: kind + '-schedule', as_of: asOf } });
+        return res.status(201).json({ id: r.rows[0].id });
+      } catch (e) {
+        if (filePath) fs.unlink(filePath, () => {});
+        console.error('POST reports/' + kind + '-schedule/save:', e.message);
+        return res.status(500).json({ error: 'Could not save a copy' });
+      }
+    });
+  });
+
+  app.get('/api/organizational/orgs/:slug/reports/saved-copies/:id/download', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
     try {
-      const items = await receivableItems(pool, orgId);
-      const ledger = await ledgerBalance(orgId, asOf, `a.type = 'asset' AND (a.is_system_ar_account OR a.name ILIKE '%receivable%')`, 1);
-      const out = summarize(items, asOf, ledger);
-      if (req.query.format === 'csv') return sendCsv(res, 'receivables-schedule', asOf, out, { invoice: 'Invoice', pledge: 'Pledge' });
-      return res.json({ as_of: asOf, ...out });
+      const r = await pool.query(
+        `SELECT stored_path, original_filename FROM org_documents WHERE id = $1 AND org_id = $2 AND category = 'saved_report' AND archived_at IS NULL`, [Number(req.params.id), req.orgId]);
+      if (!r.rows.length) return res.status(404).json({ error: 'Saved copy not found' });
+      const full = path.resolve(UPLOADS_ROOT, r.rows[0].stored_path);
+      if (!full.startsWith(UPLOADS_ROOT + path.sep) || !fs.existsSync(full)) return res.status(404).json({ error: 'The saved file is no longer on the server' });
+      res.set('Content-Type', 'application/pdf');
+      res.set('Content-Disposition', 'inline; filename="' + r.rows[0].original_filename + '"');
+      return fs.createReadStream(full).pipe(res);
     } catch (e) {
-      console.error('GET reports/receivables-schedule:', e.message);
-      return res.status(500).json({ error: 'Could not build the receivables schedule' });
+      console.error('GET reports/saved-copies/:id/download:', e.message);
+      return res.status(500).json({ error: 'Could not open the saved copy' });
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/reports/payables-schedule', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
-    const orgId = req.orgId;
-    const asOf = asOfOf(req, res);
-    if (!asOf) return;
+  app.delete('/api/organizational/orgs/:slug/reports/saved-copies/:id', ...orgAuth, requireWriteAccess('finance'), async (req, res) => {
     try {
-      const items = await payableItems(pool, orgId);
-      const ledger = await ledgerBalance(orgId, asOf, `a.type = 'liability' AND (a.is_system_ap_account OR a.is_system_expense_claims_payable_account)`, -1);
-      const out = summarize(items, asOf, ledger);
-      if (req.query.format === 'csv') return sendCsv(res, 'payables-schedule', asOf, out, { bill: 'Bill', claim: 'Expense claim' });
-      return res.json({ as_of: asOf, ...out });
+      const r = await pool.query(
+        `DELETE FROM org_documents WHERE id = $1 AND org_id = $2 AND category = 'saved_report' RETURNING id, stored_path`, [Number(req.params.id), req.orgId]);
+      if (!r.rows.length) return res.status(404).json({ error: 'Saved copy not found' });
+      const full = path.resolve(UPLOADS_ROOT, r.rows[0].stored_path);
+      if (full.startsWith(UPLOADS_ROOT + path.sep)) fs.unlink(full, () => {});
+      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'delete', tableName: 'org_documents', recordId: r.rows[0].id, metadata: { saved_report: true } });
+      return res.json({ ok: true });
     } catch (e) {
-      console.error('GET reports/payables-schedule:', e.message);
-      return res.status(500).json({ error: 'Could not build the payables schedule' });
+      console.error('DELETE reports/saved-copies/:id:', e.message);
+      return res.status(500).json({ error: 'Could not delete the saved copy' });
     }
   });
 }

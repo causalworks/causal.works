@@ -191,6 +191,7 @@
       if (res.ok && data.org) {
         applyOptionalFeaturesVisibility(!!data.org.membership_enabled, !!data.org.fiscal_sponsorship_mode);
         window.OrganizationalApplyNumberColors(!!data.org.show_number_colors);
+        setHeaderOrg(data.org.display_name || '—');
       }
     } catch (e) {
       console.error('organizational-sidebar: could not check optional features', e);
@@ -420,7 +421,19 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   }
 
+  let headerOrgObserver = null;
   function setHeaderOrg(name) {
+    if (!document.getElementById('organizational-header-name')) {
+      if (headerOrgObserver) headerOrgObserver.disconnect();
+      headerOrgObserver = new MutationObserver(function () {
+        if (!document.getElementById('organizational-header-name')) return;
+        headerOrgObserver.disconnect();
+        headerOrgObserver = null;
+        setHeaderOrg(name);
+      });
+      headerOrgObserver.observe(document.body, { childList: true, subtree: true });
+      return;
+    }
     const demoMatch = window.location.pathname.match(/^\/organizational\/o\/(demo-company)(\/|$)/);
     const nameEl = document.getElementById('organizational-header-name');
     if (nameEl) nameEl.textContent = name || '—';

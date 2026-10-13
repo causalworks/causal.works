@@ -135,7 +135,7 @@ function parseRuleBody(body, { partial } = { partial: false }) {
   return { fields: out };
 }
 
-async function matchRulesForLines(pool, orgId, lineIds) {
+async function matchRulesForLines(pool, orgId, lineIds, ruleId) {
   if (!lineIds.length) return {};
   const r = await pool.query(
     `SELECT DISTINCT ON (bsl.id)
@@ -144,7 +144,7 @@ async function matchRulesForLines(pool, orgId, lineIds) {
             br.action_program_id, ap.name AS action_program_name,
             br.action_grant_id, br.action_donor_restriction_class::text AS action_donor_restriction_class
      FROM org_bank_statement_lines bsl
-     JOIN org_bank_rules br ON br.org_id = bsl.org_id AND br.is_active = true
+     JOIN org_bank_rules br ON br.org_id = bsl.org_id AND br.is_active = true AND ($3::int IS NULL OR br.id = $3)
        AND (br.bank_account_id IS NULL OR br.bank_account_id = bsl.bank_account_id)
        AND (br.payee_contains IS NULL OR lower(COALESCE(bsl.payee_raw, '')) LIKE '%' || lower(br.payee_contains) || '%')
        AND (br.description_contains IS NULL OR lower(COALESCE(bsl.description_raw, '')) LIKE '%' || lower(br.description_contains) || '%')
@@ -155,7 +155,7 @@ async function matchRulesForLines(pool, orgId, lineIds) {
      JOIN org_programs ap ON ap.id = br.action_program_id
      WHERE bsl.org_id = $1 AND bsl.id = ANY($2::int[]) AND bsl.status = 'unconfirmed'
      ORDER BY bsl.id, br.priority ASC, br.id ASC`,
-    [orgId, lineIds]
+    [orgId, lineIds, ruleId || null]
   );
   const out = {};
   for (const row of r.rows) {
@@ -269,7 +269,9 @@ function registerBankRuleRoutes(app, pool) {
     const lineIds = Array.isArray(body.line_ids) ? body.line_ids.map((v) => Number.parseInt(String(v), 10)).filter((n) => Number.isInteger(n) && n > 0) : [];
     if (!lineIds.length) return res.status(400).json({ error: 'line_ids must be a non-empty array' });
     try {
-      const matches = await matchRulesForLines(pool, req.orgId, lineIds);
+      const ruleId = body.rule_id != null ? Number.parseInt(String(body.rule_id), 10) : null;
+      if (body.rule_id != null && !(ruleId > 0)) return res.status(400).json({ error: 'rule_id must be a positive integer' });
+      const matches = await matchRulesForLines(pool, req.orgId, lineIds, ruleId);
       return res.json({ matches });
     } catch (e) {
       console.error('POST /bank-statement-lines/match-rules:', e.message);

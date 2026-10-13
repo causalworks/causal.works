@@ -125,6 +125,13 @@
 
   let currentUnconfirmedLines = [];
 
+  function setBankingTabCounts(n) {
+    [['reconcile', 'Reconcile'], ['cash-coding', 'Cash Coding']].forEach(([view, text]) => {
+      const b = document.querySelector('#organizational-banking-view-tabs [data-view="' + view + '"]');
+      if (b) b.textContent = text + (n ? ' (' + n + ')' : '');
+    });
+  }
+
   function renderRows(lines, status) {
     const isUnconfirmed = (status || 'unconfirmed') === 'unconfirmed';
     if (cardsContainer) cardsContainer.hidden = !isUnconfirmed;
@@ -132,6 +139,7 @@
 
     if (isUnconfirmed) {
       currentUnconfirmedLines = lines;
+      setBankingTabCounts(lines.length);
       renderUnconfirmedCards(lines);
       return;
     }
@@ -534,7 +542,7 @@
     else {
       items.push(['split', 'Split']);
       if (idx > 0) items.push(['removesplit', 'Remove this split']);
-      if (idx === 0) { items.push(['transfer', 'Code as a transfer']); items.push(['copyabove', 'Copy coding from the line above']); items.push(['clear', 'Clear coding']); }
+      if (idx === 0) { items.push(['createrule', 'Create bank rule from this line']); items.push(['transfer', 'Code as a transfer']); items.push(['copyabove', 'Copy coding from the line above']); items.push(['clear', 'Clear coding']); }
     }
     const menu = document.createElement('div');
     menu.id = 'cc-menu';
@@ -565,6 +573,17 @@
       cashCodingTransfers.delete(lineId);
       cashCodingRuleApplied.delete(lineId);
       cashCodingChecked.delete(lineId);
+    } else if (act === 'createrule') {
+      const sp = splits[0] || blankSplit();
+      const rulesTab = document.querySelector('#organizational-banking-view-tabs [data-view="rules"]');
+      if (rulesTab) rulesTab.click();
+      openRuleForm({
+        name: line.payee_raw ? 'Rule: ' + line.payee_raw : '',
+        payee_contains: line.payee_raw || '', description_contains: line.payee_raw ? '' : (line.description_raw || ''),
+        direction: line.credit_debit_indicator,
+        action_account_id: sp.accountId || '', action_program_id: sp.programId || '', action_grant_id: sp.grantId || '', action_donor_restriction_class: sp.restrictionClass || '',
+      });
+      return;
     } else if (act === 'copyabove') {
       const order = sortedCashCodingLines(cashCodingLines.filter((l) => cashCodingShowMatches || !(cashCodingMatchRows.get(l.id) || []).length));
       const at = order.findIndex((l) => l.id === lineId);
@@ -575,7 +594,19 @@
   }
 
   if (cashCodingTbodyEl) {
+    let cashCodingShiftDown = false;
+    let cashCodingLastTicked = null;
+    const cashCodingDisplayedIds = () => sortedCashCodingLines(cashCodingLines.filter((l) => cashCodingShowMatches || !(cashCodingMatchRows.get(l.id) || []).length)).map((l) => l.id);
+    cashCodingTbodyEl.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'd') {
+        const holder = e.target.closest('[data-line]');
+        if (!holder) return;
+        e.preventDefault();
+        cashCodingMenuAction('copyabove', Number(holder.getAttribute('data-line')), 0);
+      }
+    });
     cashCodingTbodyEl.addEventListener('click', (e) => {
+      if (e.target.classList && e.target.classList.contains('cc-check')) cashCodingShiftDown = e.shiftKey;
       if (e.target.closest('.cc-match')) {
         const tab = document.querySelector('#organizational-banking-view-tabs [data-view="reconcile"]');
         if (tab) tab.click();
@@ -594,6 +625,13 @@
       if (t.classList.contains('cc-check')) {
         const id = Number(t.getAttribute('data-line'));
         if (t.checked) cashCodingChecked.add(id); else cashCodingChecked.delete(id);
+        if (t.checked && cashCodingShiftDown && cashCodingLastTicked != null) {
+          const order = cashCodingDisplayedIds();
+          const a = order.indexOf(cashCodingLastTicked), b = order.indexOf(id);
+          if (a >= 0 && b >= 0) { order.slice(Math.min(a, b), Math.max(a, b) + 1).forEach((x) => cashCodingChecked.add(x)); renderCashCodingGrid(); }
+        }
+        if (t.checked) cashCodingLastTicked = id;
+        cashCodingShiftDown = false;
         const all = document.getElementById('organizational-cashcoding-select-all');
         if (all && !t.checked) all.checked = false;
         return;
@@ -697,15 +735,16 @@
   });
 
   const applyRulesBtn = document.getElementById('organizational-cashcoding-apply-rules');
-  if (applyRulesBtn) applyRulesBtn.addEventListener('click', async () => {
+
+  async function applyRulesToTicked(ruleId) {
     const selected = cashCodingLines.filter((l) => cashCodingChecked.has(l.id)).map((l) => l.id);
-    if (!selected.length) { showError('Tick the lines to apply rules to first.'); return; }
+    if (!selected.length) { showError('Tick the lines to apply a rule to first.'); return; }
     showError('');
     const eligible = selected.filter((id) => !cashCodingTransfers.has(id) && !(cashCodingMatchRows.get(id) || []).length);
     if (!eligible.length) { showError('None of the ticked lines can take a rule (transfers and lines with a suggested match are skipped).'); return; }
 
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bank-statement-lines/match-rules', {
-      method: 'POST', body: JSON.stringify({ line_ids: eligible }),
+      method: 'POST', body: JSON.stringify(ruleId ? { line_ids: eligible, rule_id: ruleId } : { line_ids: eligible }),
     });
     if (!out || !out.res.ok) { showError('Could not check rules.'); return; }
 
@@ -722,9 +761,41 @@
     }
     renderCashCodingGrid();
     setCashCodingStatus(matchedCount
-      ? matchedCount + ' of ' + eligible.length + ' matched a rule.'
-      : 'No rule matched.');
-  });
+      ? matchedCount + ' of ' + eligible.length + (ruleId ? ' matched that rule.' : ' matched a rule.')
+      : (ruleId ? 'None of the ticked lines match that rule.' : 'No rule matched.'));
+  }
+
+  function closeRuleMenu() { const el = document.getElementById('cc-rule-menu'); if (el) el.remove(); }
+
+  async function openRuleMenu(btn) {
+    closeRuleMenu();
+    if (!bankRulesCache.length) await loadBankRules();
+    const active = bankRulesCache.filter((r) => r.is_active);
+    const group = (title, list) => '<div style="padding:6px 12px 2px;font-size:0.75rem;font-weight:600;color:var(--text-secondary);">' + title + '</div>'
+      + (list.length ? list.map((r) => '<button type="button" class="cc-rule-item" data-rule="' + r.id + '" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 12px;font-size:0.8125rem;cursor:pointer;">' + esc(r.name) + '</button>').join('')
+        : '<div style="padding:4px 12px 6px;font-size:0.8125rem;color:var(--text-secondary);">None</div>');
+    const menu = document.createElement('div');
+    menu.id = 'cc-rule-menu';
+    const r = btn.getBoundingClientRect();
+    menu.style.cssText = 'position:fixed;z-index:1000;top:' + (r.bottom + 2) + 'px;left:' + r.left + 'px;min-width:260px;max-height:340px;overflow-y:auto;background:var(--surface-card);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-lg);padding:4px 0;';
+    menu.innerHTML = '<button type="button" class="cc-rule-item" data-rule="" style="display:block;width:100%;text-align:left;background:none;border:none;padding:6px 12px;font-size:0.8125rem;cursor:pointer;font-weight:600;">All rules, in priority order</button>'
+      + group('Money out rules', active.filter((x) => x.direction !== 'credit'))
+      + group('Money in rules', active.filter((x) => x.direction !== 'debit'));
+    document.body.appendChild(menu);
+    menu.addEventListener('click', (e) => {
+      const it = e.target.closest('.cc-rule-item');
+      if (!it) return;
+      closeRuleMenu();
+      applyRulesToTicked(it.getAttribute('data-rule') ? Number(it.getAttribute('data-rule')) : null);
+    });
+    setTimeout(() => document.addEventListener('click', closeRuleMenu, { once: true }), 0);
+  }
+
+  if (applyRulesBtn) applyRulesBtn.addEventListener('click', (e) => { e.stopPropagation(); openRuleMenu(applyRulesBtn); });
+
+  const shortcutsBtn = document.getElementById('organizational-cashcoding-shortcuts');
+  const shortcutsHint = document.getElementById('organizational-cashcoding-shortcuts-hint');
+  if (shortcutsBtn && shortcutsHint) shortcutsBtn.addEventListener('click', () => { shortcutsHint.hidden = !shortcutsHint.hidden; });
 
   const reconcileMultiSplit = new Set();
   const reconcileSplits = new Map();

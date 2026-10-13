@@ -110,6 +110,7 @@ function registerAccountingDashboardRoutes(app, pool) {
       const countsR = await pool.query(
         `SELECT (SELECT COUNT(*) FROM org_bills WHERE org_id = $1 AND status = 'pending_approval')::int AS bills_pending_approval,
                 ((SELECT COUNT(*) FROM org_gifts WHERE org_id = $1 AND posting_status = 'unposted') + (SELECT COUNT(*) FROM org_sponsored_project_disbursements WHERE org_id = $1 AND status = 'approved' AND ledger_transaction_id IS NULL))::int AS gift_postings_waiting,
+                (SELECT COUNT(*) FROM org_gifts WHERE org_id = $1 AND not_gift_flagged_at IS NOT NULL AND review_status <> 'dismissed' AND posting_status <> 'void')::int AS gifts_flagged,
                 (SELECT COUNT(*) FROM org_expense_claims WHERE org_id = $1 AND status = 'pending_approval')::int AS claims_to_approve,
                 (SELECT COUNT(*) FROM org_expense_claims WHERE org_id = $1 AND status = 'approved')::int AS claims_to_pay`,
         [orgId]
@@ -131,6 +132,7 @@ function registerAccountingDashboardRoutes(app, pool) {
         owed_to_you_cents: String(owedTotal),
         owed_to_you_overdue_cents: String(owedOverdue),
         gift_postings_waiting: c.gift_postings_waiting,
+        gifts_flagged: c.gifts_flagged,
         claims_to_approve: c.claims_to_approve,
         claims_to_pay: c.claims_to_pay,
         fixed_assets_waiting: fixedWaiting.cost_entries.length + (Number(fixedWaiting.depreciation_unassigned_cents) > 0 ? 1 : 0),

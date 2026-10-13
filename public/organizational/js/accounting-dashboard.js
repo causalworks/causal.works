@@ -51,6 +51,7 @@
     add('neutral', 'Bills due this week', n(t.bills_due_week && t.bills_due_week.count), escapeHtml(money(t.bills_due_week && t.bills_due_week.cents)) + ' to pay', base + '/purchases?filter=due_week');
     add('neutral', 'Expense claims to approve', n(t.claims_to_approve), 'Review and approve', base + '/expense-claims');
     add('neutral', 'Expense claims to pay', n(t.claims_to_pay), 'Approved, not yet paid', base + '/expense-claims');
+    add('amber', 'Gifts flagged as not a gift', n(t.gifts_flagged), 'Funding asks you to review them', base + '/gift-postings');
     add('neutral', 'Gifts waiting to post', n(t.gift_postings_waiting), 'In-kind gifts, pledges and grant gifts', base + '/gift-postings');
     add('neutral', 'Fixed asset entries waiting', n(t.fixed_assets_waiting), 'In the books, not yet in the register', base + '/fixed-assets');
     add('amber', 'Federal-award sign-offs', (summary.pending_federal_approvals || []).length, 'A second person must approve', base + '/transactions?status=pending_approval');

@@ -123,6 +123,8 @@ function rowToGift(row) {
     receivable_account_id: row.receivable_account_id != null ? Number(row.receivable_account_id) : null,
     review_status: row.review_status || null,
     gift_source: row.gift_origin || row.source || null,
+    not_gift_flagged_at: row.not_gift_flagged_at || null,
+    not_gift_note: row.not_gift_note || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -986,6 +988,35 @@ function registerOrganizationalDonorRoutes(app, pool) {
     } catch (e) {
       console.error('POST gifts/:id/confirm:', e.message);
       return res.status(500).json({ error: 'Could not confirm this gift' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gifts/:id/not-a-gift', ...orgBase, gateGiftOf('id'), async (req, res) => {
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const giftId = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'Invalid id' });
+    const note = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
+    if (note.length < 3) return res.status(400).json({ error: 'Say why this is not a gift (a refund, a transfer, a reimbursement).' });
+    try {
+      const u = await pool.query(
+        `UPDATE org_gifts SET not_gift_flagged_at = NOW(), not_gift_flagged_by = $1, not_gift_note = $2,
+                review_status = CASE WHEN review_status = 'to_confirm' THEN 'dismissed' ELSE review_status END,
+                reviewed_by = CASE WHEN review_status = 'to_confirm' THEN $1 ELSE reviewed_by END,
+                reviewed_at = CASE WHEN review_status = 'to_confirm' THEN NOW() ELSE reviewed_at END
+          WHERE id = $3 AND org_id = $4 AND posting_status <> 'void' AND review_status <> 'dismissed' AND not_gift_flagged_at IS NULL
+          RETURNING id, ledger_transaction_id`, [userId, note, giftId, orgId]);
+      if (!u.rows.length) return res.status(404).json({ error: 'This gift is already flagged, dismissed or voided' });
+      logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+        fields: [{ fieldName: 'Not a gift', oldValue: null, newValue: 'flagged for Accounting' }], metadata: { ...reqMeta(req), reason: note } }).catch(() => {});
+      if (u.rows[0].ledger_transaction_id) {
+        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: u.rows[0].ledger_transaction_id,
+          fields: [{ fieldName: 'Donor review', oldValue: null, newValue: 'Marked not a gift' }], metadata: { ...reqMeta(req), reason: note } }).catch(() => {});
+      }
+      return res.json({ id: giftId, flagged: true });
+    } catch (e) {
+      console.error('POST gifts/:id/not-a-gift:', e.message);
+      return res.status(500).json({ error: 'Could not flag this gift' });
     }
   });
 

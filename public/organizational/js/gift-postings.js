@@ -72,7 +72,8 @@
     const dis = ((out && out.res.ok && out.data && out.data.disbursements) || []).map((d) => ({
       id: 'd' + d.id, disbursement: d, received_at: d.date, constituent_name: d.project_name, amount_cents: d.amount_cents,
     }));
-    renderRows(rows.concat(dis));
+    const flagged = ((out && out.res.ok && out.data && out.data.flagged) || []).map((f) => ({ ...f, flag: f }));
+    renderRows(flagged.concat(rows, dis));
   }
 
   function renderRows(rows) {
@@ -85,6 +86,14 @@
     tbody.innerHTML = (sorter ? sorter.sortRows(rows) : rows).map((g) => {
       const isInKind = !!g.in_kind;
       const isCashGrant = !!g.is_cash_grant;
+      if (g.flag) {
+        return '<tr data-id="' + g.id + '"><td><strong style="color:var(--amber);">Not a gift?</strong></td>'
+          + '<td>' + esc((g.received_at || '').slice(0, 10)) + '</td><td>' + esc(g.constituent_name || '—') + '</td><td>' + fmtUsd(g.amount_cents) + '</td>'
+          + '<td style="font-size:0.8125rem;color:var(--text-secondary);">Flagged by ' + esc(g.flag.flagged_by || 'Funding') + ': ' + esc(g.flag.note || '')
+          + (g.flag.ledger_transaction_id ? ' · <a href="/organizational/o/' + encodeURIComponent(currentSlug) + '/transactions?txn=' + g.flag.ledger_transaction_id + '">Open the entry</a> to recode it first' : '') + '</td>'
+          + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-accept" data-id="' + g.id + '">Not a gift</button> '
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-keep" data-id="' + g.id + '">Keep as gift</button></td></tr>';
+      }
       const typeLabel = g.disbursement ? 'Disbursement' : isCashGrant ? 'Grant (cash)' : (isInKind ? 'In-kind' : 'Pledge');
       const details = g.disbursement
         ? 'Approved in Sponsorship' + (g.disbursement.notes ? ': ' + esc(g.disbursement.notes) : '') + (g.disbursement.admin_fee_cents ? ' · fee ' + fmtUsd(g.disbursement.admin_fee_cents) + ' tracked on the project' : '')
@@ -106,6 +115,14 @@
         '<td><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-giftpostings-review-btn" data-id="' + g.id + '">' + btnLabel + '</button></td>' +
       '</tr>';
     }).join('');
+    const resolveFlag = async (id, keep) => {
+      const msg = keep ? 'Keep this as a gift? The flag is removed.' : 'Remove this gift from Funding? Recode its entry in Accounting first if it needs it.';
+      if (!window.confirm(msg)) return;
+      const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + id + '/not-a-gift', { method: 'POST', body: JSON.stringify({ keep }) });
+      if (r && r.res.ok) await loadPending();
+    };
+    tbody.querySelectorAll('.gp-flag-accept').forEach((b) => b.addEventListener('click', () => resolveFlag(b.dataset.id, false)));
+    tbody.querySelectorAll('.gp-flag-keep').forEach((b) => b.addEventListener('click', () => resolveFlag(b.dataset.id, true)));
     tbody.querySelectorAll('.organizational-giftpostings-review-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const gift = rows.find((g) => String(g.id) === btn.dataset.id);

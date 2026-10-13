@@ -1,5 +1,7 @@
 'use strict';
 
+const { logAudit } = require('../lib/auditLog');
+
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireAccountingWriter } = require('../middleware/requireAccountingAccess');
@@ -79,7 +81,14 @@ function registerGiftPostingRoutes(app, pool) {
            LEFT JOIN org_settings s ON s.org_id = d.org_id
           WHERE d.org_id = $1 AND d.status = 'approved' AND d.ledger_transaction_id IS NULL
           ORDER BY d.disbursement_date, d.id`, [req.orgId]);
+      const f = await pool.query(
+        `SELECT g.id, g.amount_cents, g.received_at, g.not_gift_note, g.not_gift_flagged_at, g.ledger_transaction_id, c.display_name AS constituent_name, u.email AS flagged_by
+           FROM org_gifts g LEFT JOIN org_constituents c ON c.id = g.constituent_id LEFT JOIN users u ON u.id = g.not_gift_flagged_by
+          WHERE g.org_id = $1 AND g.not_gift_flagged_at IS NOT NULL AND g.review_status <> 'dismissed' AND g.posting_status <> 'void'
+          ORDER BY g.not_gift_flagged_at`, [req.orgId]);
       return res.json({
+        flagged: f.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, note: x.not_gift_note, flagged_at: x.not_gift_flagged_at,
+          flagged_by: x.flagged_by, ledger_transaction_id: x.ledger_transaction_id, constituent_name: x.constituent_name || null })),
         gift_postings: rows,
         disbursements: d.rows.map((x) => ({
           id: x.id, date: String(x.disbursement_date).slice(0, 10), amount_cents: Number(x.amount_cents), admin_fee_cents: x.admin_fee_cents != null ? Number(x.admin_fee_cents) : null,
@@ -157,6 +166,27 @@ function registerGiftPostingRoutes(app, pool) {
       const out = await unpostDisbursement(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, disbursementId: id, reason: String((req.body && req.body.reason) || '').trim() });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) { console.error('POST disbursement unpost:', e.message); return res.status(500).json({ error: 'Could not unpost the disbursement' }); }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/not-a-gift', ...writeAuth, async (req, res) => {
+    const giftId = Number.parseInt(String(req.params.giftId), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
+    const accept = !(req.body && req.body.keep);
+    const userId = req.user.user_id ?? req.user.id;
+    try {
+      const u = accept
+        ? await pool.query(`UPDATE org_gifts SET review_status = 'dismissed', reviewed_by = $1, reviewed_at = NOW()
+                             WHERE id = $2 AND org_id = $3 AND not_gift_flagged_at IS NOT NULL AND review_status <> 'dismissed' RETURNING id`, [userId, giftId, req.orgId])
+        : await pool.query(`UPDATE org_gifts SET not_gift_flagged_at = NULL, not_gift_flagged_by = NULL, not_gift_note = NULL
+                             WHERE id = $1 AND org_id = $2 AND not_gift_flagged_at IS NOT NULL RETURNING id`, [giftId, req.orgId]);
+      if (!u.rows.length) return res.status(404).json({ error: 'No flagged gift with that id' });
+      await logAudit(pool, { orgId: req.orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+        fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: accept ? 'accepted, removed from Funding' : 'kept as a gift' }] });
+      return res.json({ id: giftId, accepted: accept });
+    } catch (e) {
+      console.error('POST /gift-postings/:giftId/not-a-gift:', e.message);
+      return res.status(500).json({ error: 'Could not resolve the flag' });
+    }
   });
 
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/void', ...writeAuth, async (req, res) => {

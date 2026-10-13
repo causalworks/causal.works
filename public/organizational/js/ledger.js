@@ -1009,8 +1009,9 @@
     const statusParam = new URLSearchParams(window.location.search).get('status');
     if (statusParam && filterStatus && Array.from(filterStatus.options).some((o) => o.value === statusParam)) filterStatus.value = statusParam;
     await loadTransactions(true);
+    const wantEdit = !!new URLSearchParams(window.location.search).get('edit');
     if (openTxn) await openDetailPanel(openTxn);
-    if (openTxn && new URLSearchParams(window.location.search).get('edit') && lastDetail && lastDetail.edit && lastDetail.edit.allowed && canWrite()) {
+    if (openTxn && wantEdit && lastDetail && lastDetail.edit && lastDetail.edit.allowed && canWrite()) {
       renderEditForm();
       const incomeLine = lastDetail.lines.find((l) => l.account_type === 'income' && Number(l.credit_cents) > 0);
       const row = incomeLine && panelBody.querySelector('.ledger-edit-line[data-line="' + incomeLine.id + '"] .ledger-edit-account');

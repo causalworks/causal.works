@@ -337,7 +337,7 @@ async function ensureDemoReps(uid) {
   }
 }
 
-const DEMO_VISIT_TRACKING_UNTIL = Date.parse('2026-10-14T00:00:00Z');
+const DEMO_VISIT_TRACKING_UNTIL = Date.parse('2026-10-28T00:00:00Z');
 const DEMO_VISIT_BOT_RX = /bot|crawl|spider|scan|curl|python|go-http|headless|monitor|preview|facebookexternal|slurp|wget|okhttp|android [1-4]\.|msie|mozilla\/4\.0|windows nt [3-5]\./i;
 
 const PROBE_PATH_RX = /\.env(\.|\/|$)|\/\.git(\/|$)|\.php$|wp-(admin|login|content|includes|json)|xmlrpc|phpunit|phpinfo|eval-stdin|cgi-bin|actuator|\/\.(aws|ssh|svn|hg)|crossdomain\.xml|\/(database|credentials|configuration)\.(config|xml|ini|json|ya?ml)|\/vendor\/|\/laravel\//i;

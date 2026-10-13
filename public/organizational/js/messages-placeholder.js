@@ -91,12 +91,11 @@
     var slot = document.querySelector('[data-messages-slot]');
     var tabStyle = 'position:static;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;';
     if (!slot) {
-      var gear = document.querySelector('.organizational-budget-settings-btn');
-      var tabRow = gear ? gear.parentNode : document.querySelector('.organizational-tabs');
-      if (tabRow && tabRow.parentNode) {
+      var title = document.getElementById('organizational-org-title');
+      if (title && title.parentNode) {
         slot = document.createElement('div');
-        slot.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0 0;';
-        tabRow.parentNode.insertBefore(slot, tabRow.nextSibling);
+        slot.style.cssText = 'float:right;order:2;margin-left:auto;display:flex;align-items:center;';
+        title.parentNode.insertBefore(slot, title);
         tabStyle += 'padding:5px 10px;';
       }
     }

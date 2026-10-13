@@ -46,6 +46,25 @@ function registerOrganizationalLedgerRoutes(app, pool) {
   const orgAuth = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool)];
   const financeWriter = requireAccountingWriter(pool);
 
+  app.get('/api/organizational/orgs/:slug/ledger/next-reference', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
+    const bank = Number.parseInt(String(req.query.bank_account_id), 10);
+    if (!Number.isInteger(bank)) return res.status(400).json({ error: 'bank_account_id is required' });
+    try {
+      const r = await pool.query(
+        `SELECT t.reference_number FROM org_ledger_transactions t
+          WHERE t.org_id = $1 AND t.entry_type = 'spend' AND t.source = 'manual' AND t.status <> 'voided'
+            AND COALESCE(btrim(t.reference_number), '') <> ''
+            AND EXISTS (SELECT 1 FROM org_ledger_lines l WHERE l.transaction_id = t.id AND l.account_id = $2)
+          ORDER BY t.id DESC LIMIT 1`, [req.orgId, bank]);
+      const last = r.rows[0] && r.rows[0].reference_number.trim();
+      const m = last && last.match(/^(.*?)(\d+)$/);
+      return res.json({ reference: m ? m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0') : null });
+    } catch (e) {
+      console.error('GET /ledger/next-reference:', e.message);
+      return res.status(500).json({ error: 'Could not suggest a reference' });
+    }
+  });
+
   app.get('/api/organizational/orgs/:slug/ledger/transactions', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
     const orgId = req.orgId;
     const grantId = req.query.grant_id != null ? Number.parseInt(String(req.query.grant_id), 10) : null;

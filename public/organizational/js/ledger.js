@@ -584,22 +584,18 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function lastDateKey() { return 'ledger-last-date:' + currentSlug; }
-  function lastRefKey() { return 'ledger-last-spend-ref:' + currentSlug; }
   function defaultEntryDate() {
     try { return sessionStorage.getItem(lastDateKey()) || todayIso(); } catch (_) { return todayIso(); }
   }
-  function nextReference() {
-    if (entryType !== 'spend') return '';
-    let last = '';
-    try { last = localStorage.getItem(lastRefKey()) || ''; } catch (_) {}
-    const m = last.match(/^(.*?)(\d+)$/);
-    return m ? m[1] + String(Number(m[2]) + 1).padStart(m[2].length, '0') : '';
+  async function suggestReference() {
+    const refEl = document.getElementById('ledger-txn-ref');
+    const bank = val('ledger-bank-account');
+    if (entryType !== 'spend' || !refEl || !bank || refEl.dataset.touched) return;
+    const out = await apiJson(base() + '/next-reference?bank_account_id=' + encodeURIComponent(bank));
+    if (out && out.res.ok && !refEl.dataset.touched && document.getElementById('ledger-bank-account').value === bank) refEl.value = out.data.reference || '';
   }
-  function rememberDateAndRef(date, ref) {
-    try {
-      if (date) sessionStorage.setItem(lastDateKey(), date);
-      if (entryType === 'spend' && ref) localStorage.setItem(lastRefKey(), ref);
-    } catch (_) {}
+  function rememberDate(date) {
+    try { if (date) sessionStorage.setItem(lastDateKey(), date); } catch (_) {}
   }
 
   function lastBankKey() { return 'ledger-last-bank:' + currentSlug; }
@@ -667,7 +663,7 @@
   function commonFieldsHtml(payeeLabel, payeeHtml, memoLabel) {
     return '<div class="organizational-panel-field-row">'
       + '<label class="organizational-label" style="flex:1">Date *<input type="date" id="ledger-txn-date" class="organizational-input" value="' + defaultEntryDate() + '" required></label>'
-      + '<label class="organizational-label" style="flex:1">Reference #<input type="text" id="ledger-txn-ref" class="organizational-input" maxlength="100" value="' + esc(nextReference()) + '"></label>'
+      + '<label class="organizational-label" style="flex:1">Reference #<input type="text" id="ledger-txn-ref" class="organizational-input" maxlength="100"></label>'
       + '</div>'
       + (payeeHtml ? payeeHtml : payeeLabel ? '<div class="organizational-panel-field-full"><label class="organizational-label">' + payeeLabel + '<input type="text" id="ledger-txn-payee" class="organizational-input" maxlength="300"></label></div>' : '')
       + '<div class="organizational-panel-field-full"><label class="organizational-label">' + (memoLabel || 'Memo') + '<input type="text" id="ledger-txn-memo" class="organizational-input" maxlength="500"></label></div>';
@@ -817,6 +813,13 @@
     const saveBtn = document.getElementById('ledger-save');
     const tabs = document.getElementById('ledger-entry-tabs');
     const minLines = entryType === 'journal' ? 2 : 1;
+    const refEl = document.getElementById('ledger-txn-ref');
+    const bankEl = document.getElementById('ledger-bank-account');
+    if (refEl && bankEl && entryType === 'spend') {
+      refEl.addEventListener('input', () => { refEl.dataset.touched = '1'; });
+      bankEl.addEventListener('change', suggestReference);
+      suggestReference();
+    }
 
     if (tabs) tabs.addEventListener('click', (e) => {
       const b = e.target.closest('.ledger-entry-tab');
@@ -930,7 +933,7 @@
     if (!out) return;
     if (out.res.ok) {
       rememberBank(body.bank_account_id || body.from_account_id);
-      rememberDateAndRef(body.transaction_date, body.reference_number);
+      rememberDate(body.transaction_date);
       closePostPanel();
       await loadTransactions(true);
     } else {

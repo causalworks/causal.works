@@ -65,6 +65,32 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     }
   });
 
+  app.get('/api/organizational/orgs/:slug/ledger/contact-defaults', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
+    const contact = Number.parseInt(String(req.query.constituent_id), 10);
+    const entryType = String(req.query.entry_type || '');
+    if (!Number.isInteger(contact) || !['receive', 'spend'].includes(entryType)) return res.status(400).json({ error: 'constituent_id and entry_type (receive or spend) are required' });
+    try {
+      const t = await pool.query(
+        `SELECT t.id, t.memo FROM org_ledger_transactions t
+          WHERE t.org_id = $1 AND t.constituent_id = $2 AND t.entry_type = $3 AND t.status = 'posted'
+            AND t.source IN ('manual', 'bank_reconciliation')
+          ORDER BY t.transaction_date DESC, t.id DESC LIMIT 1`, [req.orgId, contact, entryType]);
+      if (!t.rows.length) return res.json({ found: false });
+      const side = entryType === 'spend' ? 'l.debit_cents > 0' : 'l.credit_cents > 0';
+      const l = await pool.query(
+        `SELECT l.account_id, l.program_id, l.grant_id FROM org_ledger_lines l
+           JOIN org_accounts a ON a.id = l.account_id
+          WHERE l.transaction_id = $1 AND ${side} AND NOT a.is_cash_account
+          ORDER BY l.id LIMIT 1`, [t.rows[0].id]);
+      if (!l.rows.length) return res.json({ found: false });
+      const row = l.rows[0];
+      return res.json({ found: true, memo: t.rows[0].memo || null, account_id: row.account_id, program_id: row.program_id, grant_id: row.grant_id });
+    } catch (e) {
+      console.error('GET /ledger/contact-defaults:', e.message);
+      return res.status(500).json({ error: 'Could not load the contact\'s usual coding' });
+    }
+  });
+
   app.get('/api/organizational/orgs/:slug/ledger/transactions', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
     const orgId = req.orgId;
     const grantId = req.query.grant_id != null ? Number.parseInt(String(req.query.grant_id), 10) : null;

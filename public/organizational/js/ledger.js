@@ -608,18 +608,24 @@
     if (!sel || sel.value) return;
     if (accountsCache.some((a) => Number(a.id) === savedGiftAccountId)) sel.value = String(savedGiftAccountId);
   }
-  function defaultBankId() {
-    const cash = accountsCache.filter((a) => a.is_cash_account);
-    if (savedDefaultBankId && cash.some((a) => Number(a.id) === savedDefaultBankId)) return savedDefaultBankId;
-    if (cash.length === 1) return Number(cash[0].id);
-    try {
-      const last = Number(localStorage.getItem(lastBankKey()));
-      if (cash.some((a) => Number(a.id) === last)) return last;
-    } catch (_) {}
-    return null;
-  }
-  function rememberBank(id) {
-    try { if (id) localStorage.setItem(lastBankKey(), String(id)); } catch (_) {}
+  async function fillFromContact(contact) {
+    if (!contact || (entryType !== 'receive' && entryType !== 'spend')) return;
+    const type = entryType;
+    const out = await apiJson(base() + '/contact-defaults?constituent_id=' + encodeURIComponent(contact.id) + '&entry_type=' + type);
+    if (type !== entryType) return;
+    const d = out && out.res.ok && out.data;
+    const row = document.querySelector('#ledger-lines-wrap [data-post-line]');
+    if (!d || !d.found || !row) { suggestGiftAccount(contact); return; }
+    const acct = row.querySelector('.ledger-line-account');
+    const prog = row.querySelector('.ledger-line-program');
+    const grant = row.querySelector('.ledger-line-grant');
+    const memo = document.getElementById('ledger-txn-memo');
+    if (!acct.value && accountsCache.some((a) => Number(a.id) === Number(d.account_id))) {
+      acct.value = String(d.account_id);
+      if (prog && !prog.value && d.program_id) prog.value = String(d.program_id);
+      if (grant && !grant.value && d.grant_id) grant.value = String(d.grant_id);
+    } else suggestGiftAccount(contact);
+    if (memo && !memo.value && d.memo) memo.value = d.memo;
   }
   function cashAccountOptions(selectedId) {
     return '<option value="">— Bank account —</option>' + accountsCache.filter((a) => a.is_cash_account).map((a) =>
@@ -862,7 +868,7 @@
     if (contactField && window.OrganizationalContactPicker) {
       window.OrganizationalContactPicker.mount(contactField, {
         getCache: () => contactsCache, role: entryType === 'receive' ? 'donor' : 'vendor', label: 'contact',
-        slug: currentSlug, valueElementId: 'ledger-contact', onSelect: suggestGiftAccount,
+        slug: currentSlug, valueElementId: 'ledger-contact', onSelect: fillFromContact,
       });
     }
     if (cancelBtn) cancelBtn.addEventListener('click', () => (postMode ? leavePostPage() : closePostPanel()));

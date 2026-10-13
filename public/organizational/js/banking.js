@@ -966,8 +966,8 @@
 
   function openImportPanel() {
     showImportError('');
-    importBody.innerHTML = '<p class="organizational-empty">Choose the statement from your bank, as a CSV or a PDF, to preview.</p>'
-      + '<p style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">A CSV works with the columns your bank gives (one amount column, or separate debit and credit columns). A PDF works when it is the bank\'s own statement, not a scan. The preview shows what was read and whether it adds up to the statement balances, before anything is imported.</p>';
+    importBody.innerHTML = '<p class="organizational-empty">Choose the statement from your bank, as a PDF or a CSV, to preview.</p>'
+      + '<p style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">A PDF is the easiest: use the statement your bank sends or lets you download (a scan of paper will not work). A CSV works with the columns your bank gives (one amount column, or separate debit and credit columns). The preview shows what was read and whether it adds up to the statement balances, before anything is imported.</p>';
     importPanel.classList.add('organizational-panel-is-open');
     importOverlay.classList.add('organizational-panel-is-open');
   }
@@ -986,6 +986,8 @@
     openImportPanel();
     await runPreview(file);
   });
+
+  let pdfPreviewUrl = null;
 
   async function runPreview(file) {
     showImportError('');
@@ -1007,7 +1009,10 @@
         + (data.balance_check ? (data.balance_check.ok ? ' <span style="color:var(--green);">— the lines add up to the statement.</span>' : ' <span style="color:var(--red);">— the lines do not add up to the statement.</span>') : '') + '</p>'
       : '';
     const warn = (data.warnings || []).map((w) => '<p style="font-size:0.8125rem;color:var(--text-secondary);">' + esc(w) + '</p>').join('');
-    importBody.innerHTML = '<p>' + (data.kind === 'pdf' ? 'Read from the PDF: ' : '') + data.total + ' transactions found — ' + data.new + ' new, ' + data.duplicates + ' already on this account.</p>' + bal + warn
+    if (pdfPreviewUrl) { URL.revokeObjectURL(pdfPreviewUrl); pdfPreviewUrl = null; }
+    if (data.kind === 'pdf') pdfPreviewUrl = URL.createObjectURL(file);
+    const openPdf = pdfPreviewUrl ? '<p style="font-size:0.8125rem;"><a href="' + pdfPreviewUrl + '" target="_blank" rel="noopener">Open the PDF</a> to check it against the list below.</p>' : '';
+    importBody.innerHTML = openPdf + '<p>' + (data.kind === 'pdf' ? 'Read from the PDF: ' : '') + data.total + ' transactions found — ' + data.new + ' new, ' + data.duplicates + ' already on this account.</p>' + bal + warn
       + (data.errors && data.errors.length ? '<p style="color:var(--organizational-status-danger,#dc2626);">' + data.errors.length + ' row(s) had errors and will be skipped.</p>' : '')
       + '<label style="display:flex;align-items:center;gap:6px;font-size:0.8125rem;"><input type="checkbox" id="banking-import-dupes"> Import duplicates anyway</label>'
       + '<div class="organizational-panel-actions"><button type="button" id="banking-import-confirm" class="organizational-btn organizational-btn-primary">Import</button></div>';

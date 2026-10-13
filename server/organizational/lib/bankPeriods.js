@@ -13,7 +13,7 @@ async function closedPeriodCovering(pool, orgId, bankAccountId, dateStr) {
 function periodLockBody(period) {
   const f = (d) => String(d).slice(0, 10);
   return {
-    error: 'This bank line falls in a closed Reconcile Month period (' + f(period.period_start) + ' to ' + f(period.period_end) + '). Reopen that period in Reconcile Month first.',
+    error: 'This bank line falls in a closed Reconcile Period period (' + f(period.period_start) + ' to ' + f(period.period_end) + '). Reopen that period in Reconcile Period first.',
     code: 'period_closed',
   };
 }

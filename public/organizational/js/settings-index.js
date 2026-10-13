@@ -26,7 +26,7 @@
     { group: 'Financial', modules: ['accounting'], name: 'Export for your accountant', desc: 'Trial balance, general ledger and journal by fiscal year', href: '/accounting-settings', anchor: 'acct-sec-export', mode: acctMode },
     { group: 'Financial', modules: ['accounting'], name: 'Vendors and 1099', desc: 'Whether and at what amount vendor payments are reported', href: '/accounting-settings', anchor: 'acct-sec-1099', mode: acctMode },
     { group: 'Financial', modules: ['accounting', 'budget'], name: 'State requirements', desc: 'What your state means for payroll, 1099s and sales tax', href: '/accounting-settings', anchor: 'acct-sec-state', mode: acctMode },
-    { group: 'Financial', modules: ['accounting'], name: 'Banking', desc: 'Bank accounts, Reconcile Month and reconciliation options', href: '/accounting-settings', anchor: 'acct-sec-banking', mode: acctMode },
+    { group: 'Financial', modules: ['accounting'], name: 'Banking', desc: 'Bank accounts, Reconcile Period and reconciliation options', href: '/accounting-settings', anchor: 'acct-sec-banking', mode: acctMode },
     { group: 'Financial', modules: ['accounting'], name: 'Expense claims', desc: 'Who approves claims and when they are posted', href: '/expense-claims', mode: acctMode },
     { group: 'Financial', name: 'Where your books live', desc: 'This workspace\'s ledger or an optional integration', href: '/settings/organization', mode: (a) => (isAdmin(a) ? 'edit' : acctMode(a)) },
 

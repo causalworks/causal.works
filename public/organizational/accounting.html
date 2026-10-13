@@ -182,13 +182,13 @@
                 <button type="button" class="organizational-tab" data-view="cash-coding">Cash Coding</button>
                 <button type="button" class="organizational-tab" data-view="statements">Statements</button>
                 <button type="button" class="organizational-tab" data-view="register">Register</button>
-                <button type="button" class="organizational-tab" data-view="reconcile-month">Reconcile Month</button>
+                <button type="button" class="organizational-tab" data-view="reconcile-month">Reconcile Period</button>
                 <button type="button" class="organizational-tab" data-view="rules">Rules</button>
               </div>
               <div style="display:flex;gap:8px;align-items:center;">
                 <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-connect-btn">+ Connect bank</button>
                 <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-report-btn">Reconciliation report</button>
-                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-import-btn">Import statement</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-banking-import-btn">Import statement (PDF or CSV)</button>
                 <input type="file" id="organizational-banking-import-file" accept=".csv,.pdf,application/pdf,text/csv" style="display:none;">
               </div>
             </div>
@@ -375,7 +375,7 @@
                 </div>
                 <p class="organizational-panel-error" id="organizational-reconcilemonth-error" hidden style="margin:8px 16px;"></p>
                 <div class="organizational-table-wrap">
-                  <table class="organizational-table" aria-label="Reconcile Month periods">
+                  <table class="organizational-table" aria-label="Reconcile Period periods">
                     <thead><tr><th>Period</th><th style="text-align:right;">Opening</th><th style="text-align:right;">Closing</th><th>Status</th><th></th></tr></thead>
                     <tbody id="organizational-reconcilemonth-tbody"><tr class="organizational-table-empty"><td colspan="5">Pick a bank account.</td></tr></tbody>
                   </table>
@@ -429,7 +429,7 @@
 
             <h2 id="acct-sec-periods" class="organizational-subheading" style="margin-top:20px;">Periods and closing</h2>
             <section class="organizational-card" id="organizational-acctset-years-card" style="padding:12px 16px;">
-              <p class="organizational-hint" style="margin:0 0 8px;">Locking a fiscal year makes its budget, schedule, personnel, grant, actuals and balance sheet data read-only until it is reopened with a reason. Reconcile Month for each bank account is on the Banking tab.</p>
+              <p class="organizational-hint" style="margin:0 0 8px;">Locking a fiscal year makes its budget, schedule, personnel, grant, actuals and balance sheet data read-only until it is reopened with a reason. Reconcile Period for each bank account is on the Banking tab.</p>
               <div id="organizational-acctset-years-body">Loading…</div>
               <p id="organizational-acctset-years-note" class="organizational-hint" style="margin:8px 0 0;" hidden></p>
               <div id="organizational-acctset-years-bar" hidden></div>

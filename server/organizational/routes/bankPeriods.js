@@ -34,7 +34,7 @@ function registerBankPeriodRoutes(app, pool) {
     const r = await pool.query(
       `SELECT id, code, name, type::text AS type FROM org_accounts WHERE id = $1 AND org_id = $2 AND is_cash_account IS TRUE`, [accountId, req.orgId]);
     if (!r.rows.length) { res.status(404).json({ error: 'Bank account not found' }); return null; }
-    if (r.rows[0].type === 'liability') { res.status(400).json({ error: 'Reconcile Month is for bank accounts. Credit cards are not supported yet.' }); return null; }
+    if (r.rows[0].type === 'liability') { res.status(400).json({ error: 'Reconcile Period is for bank accounts. Credit cards are not supported yet.' }); return null; }
     return r.rows[0];
   }
   async function loadPeriod(req, res, acct) {

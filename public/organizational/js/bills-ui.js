@@ -620,7 +620,7 @@
         askReason({
           title: 'Remove this payment and redo it. Why?',
           hint: lineId
-            ? 'The payment is voided and its bank line goes back to Reconcile so you can match or code it again. The bill goes back to unpaid. If that bank line was matched to several bills, all of those payments are removed. A bank month already closed in Reconcile Month must be reopened first.'
+            ? 'The payment is voided and its bank line goes back to Reconcile so you can match or code it again. The bill goes back to unpaid. If that bank line was matched to several bills, all of those payments are removed. A bank month already closed in Reconcile Period must be reopened first.'
             : 'The payment is voided and the bill goes back to unpaid. Record the payment again afterwards.',
           required: true,
           onSubmit: async (reason) => {

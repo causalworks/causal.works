@@ -88,6 +88,7 @@
 
   async function loadAccounts(slug) {
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/accounts');
+    savedDefaultBankId = out && out.data && out.data.defaults && out.data.defaults.bank_account_id || null;
     accountsCache = (out && out.data && (out.data.accounts || out.data)) || [];
     if (!Array.isArray(accountsCache)) accountsCache = [];
     accountsCache = accountsCache.filter((a) => a.is_posting);
@@ -602,8 +603,10 @@
   }
 
   function lastBankKey() { return 'ledger-last-bank:' + currentSlug; }
+  let savedDefaultBankId = null;
   function defaultBankId() {
     const cash = accountsCache.filter((a) => a.is_cash_account);
+    if (savedDefaultBankId && cash.some((a) => Number(a.id) === savedDefaultBankId)) return savedDefaultBankId;
     if (cash.length === 1) return Number(cash[0].id);
     try {
       const last = Number(localStorage.getItem(lastBankKey()));

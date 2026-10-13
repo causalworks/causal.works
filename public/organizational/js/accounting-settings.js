@@ -133,27 +133,31 @@
   }
 
   async function loadDefaults() {
-    const sel = $('organizational-acctset-pledge-account');
+    const pledgeSel = $('organizational-acctset-pledge-account');
+    const bankSel = $('organizational-acctset-bank-account');
     const note = $('organizational-acctset-defaults-note');
-    if (!sel) return;
+    if (!pledgeSel || !bankSel) return;
     const out = await apiJson(base() + '/accounts');
-    if (!out || !out.res.ok) { sel.innerHTML = '<option value="">Could not load accounts</option>'; return; }
-    const cur = out.data.defaults && out.data.defaults.pledge_receivable_account_id;
+    if (!out || !out.res.ok) { pledgeSel.innerHTML = bankSel.innerHTML = '<option value="">Could not load accounts</option>'; return; }
+    const defaults = out.data.defaults || {};
     const assets = (out.data.accounts || []).filter((a) => a.type === 'asset' && a.is_posting);
-    sel.innerHTML = '<option value="">None</option>' + assets.map((a) =>
+    const opts = (list, cur, none) => '<option value="">' + none + '</option>' + list.map((a) =>
       '<option value="' + esc(a.id) + '"' + (Number(a.id) === cur ? ' selected' : '') + '>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
+    pledgeSel.innerHTML = opts(assets, defaults.pledge_receivable_account_id, 'None');
+    bankSel.innerHTML = opts(assets.filter((a) => a.is_cash_account), defaults.bank_account_id, 'None (use the only account, or the last one used)');
     const manage = canManage();
-    sel.disabled = !manage;
+    pledgeSel.disabled = bankSel.disabled = !manage;
     note.hidden = manage;
     note.textContent = manage ? '' : 'Changed by finance or an admin.';
-    if (!sel.dataset.wired) {
+    [[pledgeSel, 'pledge_receivable_account_id'], [bankSel, 'bank_account_id']].forEach(([sel, key]) => {
+      if (sel.dataset.wired) return;
       sel.dataset.wired = '1';
       sel.addEventListener('change', async () => {
-        const res = await apiJson(base() + '/account-defaults', { method: 'PUT', body: JSON.stringify({ pledge_receivable_account_id: sel.value ? Number(sel.value) : null }) });
+        const res = await apiJson(base() + '/account-defaults', { method: 'PUT', body: JSON.stringify({ [key]: sel.value ? Number(sel.value) : null }) });
         note.hidden = false;
         note.textContent = res && res.res.ok ? 'Saved.' : ((res && res.data && res.data.error) || 'Could not save.');
       });
-    }
+    });
   }
 
   function wire() {

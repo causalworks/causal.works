@@ -101,10 +101,13 @@ function registerOrganizationalAccountRoutes(app, pool) {
       }
 
       const r = await pool.query(sql, params);
-      const d = (await pool.query('SELECT default_pledge_receivable_account_id FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
+      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
       return res.json({
         accounts: r.rows.map(rowToAccount),
-        defaults: { pledge_receivable_account_id: d && d.default_pledge_receivable_account_id != null ? Number(d.default_pledge_receivable_account_id) : null },
+        defaults: {
+          pledge_receivable_account_id: d && d.default_pledge_receivable_account_id != null ? Number(d.default_pledge_receivable_account_id) : null,
+          bank_account_id: d && d.default_bank_account_id != null ? Number(d.default_bank_account_id) : null,
+        },
       });
     } catch (e) {
       console.error('GET /api/organizational/orgs/:slug/accounts:', e.message);
@@ -132,23 +135,43 @@ function registerOrganizationalAccountRoutes(app, pool) {
   });
 
   app.put('/api/organizational/orgs/:slug/account-defaults', ...orgAuth, requireWriteAccess('structure'), async (req, res) => {
-    const raw = req.body && req.body.pledge_receivable_account_id;
-    const want = raw === null || raw === '' || raw === undefined ? null : Number(raw);
-    if (want !== null && !Number.isInteger(want)) return res.status(400).json({ error: 'Choose an account from the list' });
+    const body = req.body || {};
+    const FIELDS = [
+      { key: 'pledge_receivable_account_id', col: 'default_pledge_receivable_account_id', cash: false, msg: 'Choose an asset account that accepts postings' },
+      { key: 'bank_account_id', col: 'default_bank_account_id', cash: true, msg: 'Choose a bank account from the list' },
+    ];
+    const changes = [];
+    for (const f of FIELDS) {
+      if (!(f.key in body)) continue;
+      const raw = body[f.key];
+      const want = raw === null || raw === '' ? null : Number(raw);
+      if (want !== null && !Number.isInteger(want)) return res.status(400).json({ error: 'Choose an account from the list' });
+      changes.push({ ...f, want });
+    }
+    if (!changes.length) return res.status(400).json({ error: 'Nothing to save' });
     try {
-      if (want !== null) {
-        const a = await pool.query(`SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND type = 'asset' AND is_posting AND archived_at IS NULL`, [want, req.orgId]);
-        if (!a.rows.length) return res.status(400).json({ error: 'Choose an asset account that accepts postings' });
+      for (const c of changes) {
+        if (c.want === null) continue;
+        const a = await pool.query(
+          `SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND type = 'asset' AND is_posting AND archived_at IS NULL` + (c.cash ? ' AND is_cash_account' : ''),
+          [c.want, req.orgId]);
+        if (!a.rows.length) return res.status(400).json({ error: c.msg });
       }
-      const before = (await pool.query('SELECT default_pledge_receivable_account_id FROM org_settings WHERE org_id = $1', [req.orgId])).rows[0];
+      const cols = changes.map((c) => c.col);
+      const before = (await pool.query('SELECT ' + cols.join(', ') + ' FROM org_settings WHERE org_id = $1', [req.orgId])).rows[0];
       if (!before) return res.status(404).json({ error: 'Settings not found' });
-      await pool.query('UPDATE org_settings SET default_pledge_receivable_account_id = $2, updated_at = NOW() WHERE org_id = $1', [req.orgId, want]);
+      const after = {};
+      changes.forEach((c) => { after[c.col] = c.want; });
+      await pool.query('UPDATE org_settings SET ' + cols.map((c, i) => c + ' = $' + (i + 2)).join(', ') + ', updated_at = NOW() WHERE org_id = $1',
+        [req.orgId, ...changes.map((c) => c.want)]);
       await logAudit(pool, {
         orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_settings', recordId: req.orgId,
-        fields: diffFields({ default_pledge_receivable_account_id: before.default_pledge_receivable_account_id }, { default_pledge_receivable_account_id: want }, ['default_pledge_receivable_account_id']),
+        fields: diffFields(before, after, cols),
         metadata: reqMeta(req),
       });
-      return res.json({ pledge_receivable_account_id: want });
+      const out = {};
+      changes.forEach((c) => { out[c.key] = c.want; });
+      return res.json(out);
     } catch (e) {
       console.error('PUT /account-defaults:', e.message);
       return res.status(500).json({ error: 'Could not save this setting' });

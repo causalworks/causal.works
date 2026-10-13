@@ -694,6 +694,7 @@ input:focus {
 .organizational-table-wrap {
   overflow-x: auto;
   padding-bottom: 14px;
+  padding-right: 14px;
 }
 
 .organizational-table {

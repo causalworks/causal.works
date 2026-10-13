@@ -25,7 +25,9 @@
   function enhance(sel, opts) {
     if (!sel || sel.dataset.searchable === '1') return;
     sel.dataset.searchable = '1';
-    const placeholder = (opts && opts.placeholder) || (sel.options[0] && sel.options[0].value === '' ? sel.options[0].textContent : 'Choose…');
+    const first = sel.options[0] && sel.options[0].value === '' ? String(sel.options[0].textContent) : '';
+    const noun = first.replace(/[—–\-…]/g, '').replace(/^\s*(choose|select)\s+(an?|the)?\s*/i, '').trim().toLowerCase();
+    const placeholder = (opts && opts.placeholder) || (noun && !/^(none|not linked|all\b)/.test(noun) ? 'Search ' + noun + '…' : 'Search…');
 
     const input = document.createElement('input');
     input.type = 'text';

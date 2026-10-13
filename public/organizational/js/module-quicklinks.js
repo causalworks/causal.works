@@ -17,5 +17,12 @@
   nav.innerHTML = MODULES.filter(function (x) { return x[0] !== active; }).map(function (x) {
     return '<a class="organizational-nav-link" style="color:var(--text-secondary);" href="' + base + x[2] + '">' + x[1] + ' →</a>';
   }).join('');
-  title.parentNode.insertBefore(nav, title);
+  var gear = document.querySelector('.organizational-budget-settings-btn');
+  if (gear && gear.parentNode) {
+    nav.style.cssText = 'margin-left:auto;display:flex;gap:14px;align-items:center;font-size:0.8125rem;align-self:center;';
+    gear.style.marginLeft = '14px';
+    gear.parentNode.insertBefore(nav, gear);
+  } else {
+    title.parentNode.insertBefore(nav, title);
+  }
 })();

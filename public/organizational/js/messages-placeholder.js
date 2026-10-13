@@ -89,20 +89,20 @@
     drawer.innerHTML = sampleHtml();
 
     var slot = document.querySelector('[data-messages-slot]');
-    var before = null;
+    var tabStyle = 'position:static;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;';
     if (!slot) {
       var gear = document.querySelector('.organizational-budget-settings-btn');
-      slot = gear ? gear.parentNode : document.querySelector('.organizational-tabs');
-      before = gear;
+      var tabRow = gear ? gear.parentNode : document.querySelector('.organizational-tabs');
+      if (tabRow && tabRow.parentNode) {
+        slot = document.createElement('div');
+        slot.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0 0;';
+        tabRow.parentNode.insertBefore(slot, tabRow.nextSibling);
+        tabStyle += 'padding:5px 10px;';
+      }
     }
     if (slot) {
-      tab.style.cssText = 'position:static;margin-left:auto;border-right:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:none;align-self:center;';
-      if (before) {
-        before.style.marginLeft = '10px';
-        slot.insertBefore(tab, before);
-      } else {
-        slot.appendChild(tab);
-      }
+      tab.style.cssText = tabStyle;
+      slot.appendChild(tab);
     } else {
       document.body.appendChild(tab);
     }

@@ -580,9 +580,22 @@
 
   function todayIso() { return new Date().toISOString().slice(0, 10); }
 
-  function cashAccountOptions() {
+  function lastBankKey() { return 'ledger-last-bank:' + currentSlug; }
+  function defaultBankId() {
+    const cash = accountsCache.filter((a) => a.is_cash_account);
+    if (cash.length === 1) return Number(cash[0].id);
+    try {
+      const last = Number(localStorage.getItem(lastBankKey()));
+      if (cash.some((a) => Number(a.id) === last)) return last;
+    } catch (_) {}
+    return null;
+  }
+  function rememberBank(id) {
+    try { if (id) localStorage.setItem(lastBankKey(), String(id)); } catch (_) {}
+  }
+  function cashAccountOptions(selectedId) {
     return '<option value="">— Bank account —</option>' + accountsCache.filter((a) => a.is_cash_account).map((a) =>
-      '<option value="' + a.id + '">' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
+      '<option value="' + a.id + '"' + (selectedId && Number(a.id) === Number(selectedId) ? ' selected' : '') + '>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
   }
   let showAllAccounts = false;
   function detailAccountOptions(selectedId) {
@@ -641,7 +654,7 @@
       const rec = entryType === 'receive';
       return '<div class="organizational-panel-fields">'
         + '<div class="organizational-panel-field-full"><label class="organizational-label">' + (rec ? 'Deposit to *' : 'Paid from *')
-        + '<select id="ledger-bank-account" class="organizational-select">' + cashAccountOptions() + '</select></label></div>'
+        + '<select id="ledger-bank-account" class="organizational-select">' + cashAccountOptions(defaultBankId()) + '</select></label></div>'
         + commonFieldsHtml('', '<div class="organizational-panel-field-full"><label class="organizational-label">' + (rec ? 'Received from' : 'Paid to')
           + '<div id="ledger-contact-field" class="organizational-contact-picker-mount"></div></label></div>')
         + '<div class="organizational-panel-section-head">' + (rec ? 'What it was for' : 'What it was spent on')
@@ -657,7 +670,7 @@
     if (entryType === 'transfer') {
       return '<div class="organizational-panel-fields">'
         + '<div class="organizational-panel-field-row">'
-        + '<label class="organizational-label" style="flex:1">From *<select id="ledger-from-account" class="organizational-select">' + cashAccountOptions() + '</select></label>'
+        + '<label class="organizational-label" style="flex:1">From *<select id="ledger-from-account" class="organizational-select">' + cashAccountOptions(defaultBankId()) + '</select></label>'
         + '<label class="organizational-label" style="flex:1">To *<select id="ledger-to-account" class="organizational-select">' + cashAccountOptions() + '</select></label>'
         + '</div>'
         + commonFieldsHtml('')
@@ -892,6 +905,7 @@
     const out = await apiJson(base() + '/entries', { method: 'POST', body: JSON.stringify(body) });
     if (!out) return;
     if (out.res.ok) {
+      rememberBank(body.bank_account_id || body.from_account_id);
       closePostPanel();
       await loadTransactions(true);
     } else {

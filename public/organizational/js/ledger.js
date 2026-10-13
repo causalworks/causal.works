@@ -1010,6 +1010,12 @@
     if (statusParam && filterStatus && Array.from(filterStatus.options).some((o) => o.value === statusParam)) filterStatus.value = statusParam;
     await loadTransactions(true);
     if (openTxn) await openDetailPanel(openTxn);
+    if (openTxn && new URLSearchParams(window.location.search).get('edit') && lastDetail && lastDetail.edit && lastDetail.edit.allowed && canWrite()) {
+      renderEditForm();
+      const incomeLine = lastDetail.lines.find((l) => l.account_type === 'income' && Number(l.credit_cents) > 0);
+      const row = incomeLine && panelBody.querySelector('.ledger-edit-line[data-line="' + incomeLine.id + '"] .ledger-edit-account');
+      if (row) { row.scrollIntoView({ block: 'center' }); row.focus(); }
+    }
     const newType = new URLSearchParams(window.location.search).get('new');
     if (newType && canWrite()) openPostPanel({ type: newType });
   }

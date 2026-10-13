@@ -207,7 +207,7 @@ function registerGiftPostingRoutes(app, pool) {
           if (!body.uncoded && !(programId > 0)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a program, or leave it uncoded for later.' }); }
           if (await isFiscalYearLocked(client, orgId, t.fiscal_year)) {
             await client.query('ROLLBACK');
-            return res.status(409).json({ error: 'Fiscal year ' + t.fiscal_year + ' is closed, so the entry cannot be recoded. Reopen the year, or void the entry and enter the corrected one, then accept.' });
+            return res.status(409).json({ error: 'Fiscal year ' + t.fiscal_year + ' is closed, so the entry cannot be recoded. Reopen the year, or void the entry and enter the corrected one, then accept.', code: 'recode_in_transactions', transaction_id: t.id });
           }
           const aR = await client.query('SELECT id, code, name, is_posting, is_cash_account FROM org_accounts WHERE org_id = $1 AND id = $2', [orgId, accountId]);
           if (!aR.rows.length || !aR.rows[0].is_posting || aR.rows[0].is_cash_account) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a posting account that is not a bank account.' }); }
@@ -215,7 +215,7 @@ function registerGiftPostingRoutes(app, pool) {
             `SELECT l.id, l.account_id, l.program_id, a.code || ' ' || a.name AS label
                FROM org_ledger_lines l JOIN org_accounts a ON a.id = l.account_id
               WHERE l.transaction_id = $1 AND l.credit_cents > 0 AND (l.source_line_type = 'org_gifts' AND l.source_line_id = $2 OR a.type = 'income')`, [t.id, giftId]);
-          if (lR.rows.length !== 1) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This entry has more than one income line. Recode it in Transactions, then accept.' }); }
+          if (lR.rows.length !== 1) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This entry has more than one income line. Recode it in Transactions, then accept.', code: 'recode_in_transactions', transaction_id: t.id }); }
           const line = lR.rows[0];
           const fields = [{ fieldName: 'Donor review', oldValue: null, newValue: 'Accepted as not a gift' }];
           if (line.account_id !== accountId) fields.push({ fieldName: 'Income line account', oldValue: line.label, newValue: aR.rows[0].code + ' ' + aR.rows[0].name });

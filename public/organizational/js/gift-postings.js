@@ -116,7 +116,7 @@
       '</tr>';
     }).join('');
     const resolveFlag = async (id, keep) => {
-      const msg = keep ? 'Keep this as a gift? The flag is removed.' : 'Remove this gift from Funding? Recode its entry in Accounting first if it needs it.';
+      const msg = keep ? 'Keep this as a gift? The flag is removed.' : 'Remove this gift from Funding?';
       if (!window.confirm(msg)) return;
       const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + id + '/not-a-gift', { method: 'POST', body: JSON.stringify({ keep }) });
       if (r && r.res.ok) await loadPending();
@@ -152,6 +152,12 @@
     const send = async (payload) => {
       statusEl.textContent = 'Saving…';
       const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + f.id + '/not-a-gift', { method: 'POST', body: JSON.stringify(payload) });
+      if (out && !out.res.ok && out.data && out.data.code === 'recode_in_transactions') {
+        if (window.confirm(out.data.error + '\n\nOK opens the entry so you can recode it there.')) {
+          window.location.href = '/organizational/o/' + encodeURIComponent(currentSlug) + '/transactions?txn=' + out.data.transaction_id + '&edit=1';
+        } else statusEl.textContent = '';
+        return;
+      }
       if (!out || !out.res.ok) { statusEl.textContent = (out && out.data && out.data.error) || 'Could not save'; return; }
       postPanel.hidden = true;
       await loadPending();

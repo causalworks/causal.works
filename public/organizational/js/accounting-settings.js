@@ -146,7 +146,7 @@
       '<option value="' + esc(a.id) + '"' + (Number(a.id) === cur ? ' selected' : '') + '>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
     pledgeSel.innerHTML = opts(assets, defaults.pledge_receivable_account_id, 'None');
     bankSel.innerHTML = opts(assets.filter((a) => a.is_cash_account), defaults.bank_account_id, 'None (use the only account, or the last one used)');
-    giftSel.innerHTML = opts((out.data.accounts || []).filter((a) => a.type === 'income' && a.is_posting && !a.is_system_contribution_revenue_account), defaults.individual_gift_account_id, 'None');
+    giftSel.innerHTML = opts((out.data.accounts || []).filter((a) => a.type === 'income' && a.is_posting), defaults.individual_gift_account_id, 'None');
     const manage = canManage();
     pledgeSel.disabled = bankSel.disabled = giftSel.disabled = !manage;
     note.hidden = manage;

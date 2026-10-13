@@ -1204,10 +1204,6 @@
       if (last.payment_method && methodEl) methodEl.value = last.payment_method;
       const campaignInput = section.querySelector('#gift-campaign');
       if (last.campaign && campaignInput) campaignInput.value = last.campaign;
-      const amountInput = section.querySelector('#gift-amount');
-      if (previous.length > 1 && Number(previous[1].amount_cents) === Number(last.amount_cents) && amountInput) {
-        amountInput.value = (Number(last.amount_cents) / 100).toFixed(2);
-      }
     }
 
     const submitBtn = section.querySelector('#gift-submit');

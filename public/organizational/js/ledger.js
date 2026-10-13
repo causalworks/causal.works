@@ -627,6 +627,19 @@
     } else suggestGiftAccount(contact);
     if (memo && !memo.value && d.memo) memo.value = d.memo;
   }
+  function defaultBankId() {
+    const cash = accountsCache.filter((a) => a.is_cash_account);
+    if (savedDefaultBankId && cash.some((a) => Number(a.id) === savedDefaultBankId)) return savedDefaultBankId;
+    if (cash.length === 1) return Number(cash[0].id);
+    try {
+      const last = Number(localStorage.getItem(lastBankKey()));
+      if (cash.some((a) => Number(a.id) === last)) return last;
+    } catch (_) {}
+    return null;
+  }
+  function rememberBank(id) {
+    try { if (id) localStorage.setItem(lastBankKey(), String(id)); } catch (_) {}
+  }
   function cashAccountOptions(selectedId) {
     return '<option value="">— Bank account —</option>' + accountsCache.filter((a) => a.is_cash_account).map((a) =>
       '<option value="' + a.id + '"' + (selectedId && Number(a.id) === Number(selectedId) ? ' selected' : '') + '>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');

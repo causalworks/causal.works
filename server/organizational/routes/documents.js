@@ -100,6 +100,25 @@ function computeRetentionUntil({ retentionClass, retentionYears, effectiveDate, 
   return d.toISOString().slice(0, 10);
 }
 
+async function documentLockMessage(db, orgId, doc) {
+  if (!doc.source_ref_type || !doc.source_ref_id) return null;
+  const tables = { bill: 'org_bills', invoice: 'org_invoices', expense_claim: 'org_expense_claims' };
+  let fiscalYear = null;
+  if (doc.source_ref_type === 'ledger_transaction') {
+    const tx = await db.query('SELECT fiscal_year FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [doc.source_ref_id, orgId]);
+    fiscalYear = tx.rows[0] ? tx.rows[0].fiscal_year : null;
+  } else if (tables[doc.source_ref_type]) {
+    const tx = await db.query(
+      `SELECT t.fiscal_year FROM ${tables[doc.source_ref_type]} r JOIN org_ledger_transactions t ON t.id = r.ledger_transaction_id WHERE r.id = $1 AND r.org_id = $2`,
+      [doc.source_ref_id, orgId]);
+    fiscalYear = tx.rows[0] ? tx.rows[0].fiscal_year : null;
+  }
+  if (fiscalYear != null && await isFiscalYearLocked(db, orgId, fiscalYear)) {
+    return 'This document backs up a record in a closed fiscal year. Reopen the year to remove or replace it.';
+  }
+  return null;
+}
+
 function retentionState(row) {
   if (row.retention_class === 'permanent') return 'permanent';
   const until = row.expiration_date || row.retention_until;
@@ -288,11 +307,13 @@ function registerOrganizationalDocumentRoutes(app, pool) {
       if (!file) return res.status(400).json({ error: 'file is required' });
 
       const cleanup = () => fs.unlink(file.path, () => {});
+      let client = null;
+      const replacedPaths = [];
       if (req.coopOrgRole === 'board') { cleanup(); return res.status(403).json({ error: 'Board members have read-only access and cannot upload documents.' }); }
 
       try {
         const body = req.body || {};
-        const category = String(body.category || '').trim();
+        const category = String(body.category || '').trim() || (body.source_ref_type ? 'other' : '');
         const title = String(body.title || '').trim() || file.originalname;
         if (!category) {
           cleanup();
@@ -319,7 +340,21 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         });
 
         const relPath = path.relative(UPLOADS_ROOT, file.path);
-        const r = await pool.query(
+        let db = pool;
+        if (body.source_ref_type && body.source_ref_id) {
+          client = await pool.connect();
+          await client.query('BEGIN');
+          db = client;
+          const same = await client.query(
+            `SELECT * FROM org_documents WHERE org_id = $1 AND source_ref_type = $2 AND source_ref_id = $3 AND original_filename = $4 AND archived_at IS NULL`,
+            [orgId, String(body.source_ref_type), Number(body.source_ref_id), file.originalname]);
+          for (const old of same.rows) {
+            if (await documentLockMessage(client, orgId, old)) continue;
+            await client.query('DELETE FROM org_documents WHERE id = $1 AND org_id = $2', [old.id, orgId]);
+            replacedPaths.push(old.stored_path);
+          }
+        }
+        const r = await db.query(
           `INSERT INTO org_documents
              (org_id, category, title, description, original_filename, stored_path, mime_type, byte_size,
               checksum_sha256, fiscal_year, document_date, effective_date, expiration_date,
@@ -355,6 +390,11 @@ function registerOrganizationalDocumentRoutes(app, pool) {
           ]
         );
         const doc = r.rows[0];
+        if (client) { await client.query('COMMIT'); client.release(); client = null; }
+        for (const rel of replacedPaths) {
+          const resolved = path.resolve(UPLOADS_ROOT, rel);
+          if (resolved.startsWith(UPLOADS_ROOT + path.sep)) fs.unlink(resolved, () => {});
+        }
         await logAudit(pool, {
           orgId,
           userId,
@@ -369,8 +409,9 @@ function registerOrganizationalDocumentRoutes(app, pool) {
             [doc.source_ref_id, orgId]
           ).catch((e) => console.error('receipt_resolved_at update failed:', e.message));
         }
-        return res.status(201).json({ document: rowToDocument(doc) });
+        return res.status(201).json({ document: rowToDocument(doc), replaced: replacedPaths.length > 0 });
       } catch (e) {
+        if (client) { await client.query('ROLLBACK').catch(() => {}); client.release(); client = null; }
         cleanup();
         if (e.code === '23505') {
           return res.status(409).json({ error: 'An identical file has already been uploaded for this organization' });
@@ -607,18 +648,13 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      if (!isAdmin(role)) return res.status(403).json({ error: 'Insufficient permissions' });
-
       const r = await pool.query(`SELECT * FROM org_documents WHERE id = $1 AND org_id = $2`, [id, orgId]);
       const doc = r.rows[0];
       if (!doc) return res.status(404).json({ error: 'Document not found' });
-
-      if (doc.source_ref_type === 'ledger_transaction' && doc.source_ref_id) {
-        const tx = await pool.query('SELECT fiscal_year FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [doc.source_ref_id, orgId]);
-        if (tx.rows[0] && await isFiscalYearLocked(pool, orgId, tx.rows[0].fiscal_year)) {
-          return res.status(409).json({ error: 'This document backs up an entry in a closed fiscal year. Reopen the year to remove it.' });
-        }
-      }
+      const recordLinked = !!(doc.source_ref_type && doc.source_ref_id);
+      if (!isAdmin(role) && !(recordLinked && canWrite(req, 'finance'))) return res.status(403).json({ error: 'Insufficient permissions' });
+      const lockMsg = await documentLockMessage(pool, orgId, doc);
+      if (lockMsg) return res.status(409).json({ error: lockMsg });
 
       if (!hard) {
         await pool.query(`UPDATE org_documents SET archived_at = NOW(), updated_at = NOW() WHERE id = $1`, [id]);

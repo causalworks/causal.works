@@ -405,7 +405,7 @@
       + (postedEditing ? lockedNote : '')
       + totalsHtml
       + (postedEditing ? '' : paymentSection)
-      + (bill ? window.OrganizationalDocumentAttach.html('bill', ['procurement_quote', 'procurement_solicitation', 'vendor_bill', 'other']) : '')
+      + (bill ? window.OrganizationalDocumentAttach.html('bill', ['procurement_quote', 'procurement_solicitation', 'vendor_bill', 'other'], { defaultCategory: 'vendor_bill' }) : '')
       + '</div>'
       + (canWrite ? '<div class="organizational-panel-actions" style="margin:16px 0 0;padding:14px 0;bottom:0;">' + actions.join('') + '</div>' : '');
   }

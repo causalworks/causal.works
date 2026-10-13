@@ -30,7 +30,7 @@ Rules:
 All financial settings share one neutral home with its own groups: Structure, Accounting, Budget, Funding, Compliance. A module's gear opens it on that module's group. Groups you do not manage are visible but greyed, with who can change them. Someone working in Budget changes Budget settings only. **Planned.**
 
 ### Settings added 2026-10-11
-- **Default accounts** (Accounting settings): the pledge receivable account a new pledge in Funding starts with. A pledge can change it. Changed by finance or an admin; others see it greyed. **Built.**
+- **Default accounts** (Accounting settings): the pledge receivable account a new pledge in Funding starts with, and the bank account new Receive, Spend and Transfer entries start on (with none chosen, the only bank account, or the one last used in the browser). Each entry can change them. Changed by finance or an admin; others see it greyed. **Built.**
 - **Number display** (Financial structure, Display): negative amounts always show in brackets; an optional switch colors positive amounts green and negative amounts red (off by default). Changed by whoever may change the structure. **Built.**
 - **State** (Organization settings, basics): required; drives the state notes shown beside personnel costs in Budget and beside 1099 and sales tax in Accounting. **Built** for the notes; state-driven setup of compliance is **Planned**.
 

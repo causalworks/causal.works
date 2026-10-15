@@ -9,6 +9,7 @@ const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
+const { logAudit, diffFields } = require('../lib/auditLog');
 const { refreshBillStatusAfterCredit, refreshInvoiceStatusAfterCredit } = require('../lib/billInvoicePayments');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -29,7 +30,7 @@ function rowToCreditNote(row) {
     account_id: row.account_id, account_code: row.account_code, account_name: row.account_name,
     program_id: row.program_id, program_name: row.program_name,
     amount_cents: String(row.amount_cents), display_amount_cents: String(displayCents(row.status, row.amount_cents)), reason: row.reason, status: row.status,
-    ledger_transaction_id: row.ledger_transaction_id, fiscal_year: row.fiscal_year,
+    ledger_transaction_id: row.ledger_transaction_id, fiscal_year: row.fiscal_year, note_date: row.note_date ? String(row.note_date).slice(0, 10) : null,
     created_by: row.created_by, created_at: row.created_at,
   };
 }
@@ -166,6 +167,67 @@ function registerCreditNotesRoutes(app, pool) {
         if (translated) return res.status(translated.status).json(translated.body);
         console.error('POST ' + kind + '/apply:', e.message, e.stack);
         return res.status(500).json({ error: 'Could not apply credit note' });
+      }
+    });
+
+    app.patch(base + '/:id', ...orgAuth, financeWriter, async (req, res) => {
+      const orgId = req.orgId;
+      const userId = req.user.user_id ?? req.user.id;
+      const id = Number.parseInt(String(req.params.id), 10);
+      if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
+      const body = req.body || {};
+      try {
+        const r = await pool.query(`SELECT * FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
+        if (!r.rows.length) return res.status(404).json({ error: 'Credit note not found' });
+        const note = r.rows[0];
+        if (note.status === 'void') return res.status(409).json({ error: 'A voided credit note cannot be changed.', code: 'already_void' });
+        const applied = note.status === 'applied';
+        const changeReason = body.change_reason != null ? String(body.change_reason).trim() : '';
+        if (applied) {
+          const blocked = ['amount_cents', 'date', 'constituent_id', originalCol].filter((k) => k in body && String(body[k] ?? '') !== String(k === 'date' ? String(note.note_date || '').slice(0, 10) : (k === 'amount_cents' ? note.amount_cents : note[k === originalCol ? originalCol : k] ?? '')));
+          if (blocked.length) return res.status(409).json({ error: 'The amount, date, contact and linked ' + noun + ' of an applied credit note cannot change. Void it and enter a new one.', code: 'applied_locked' });
+          if (!changeReason) return res.status(400).json({ error: 'A reason for the change is required.', code: 'reason_required' });
+        }
+        const next = {
+          account_id: body.account_id != null ? Number.parseInt(String(body.account_id), 10) : note.account_id,
+          program_id: body.program_id != null ? Number.parseInt(String(body.program_id), 10) : note.program_id,
+          amount_cents: body.amount_cents != null ? Number.parseInt(String(body.amount_cents), 10) : Number(note.amount_cents),
+          note_date: body.date != null ? String(body.date) : String(note.note_date || '').slice(0, 10),
+          reason: body.reason !== undefined ? (String(body.reason || '').trim() || null) : note.reason,
+          original: body[originalCol] !== undefined ? (body[originalCol] === null || body[originalCol] === '' ? null : Number.parseInt(String(body[originalCol]), 10)) : note[originalCol],
+        };
+        if (!Number.isInteger(next.account_id) || next.account_id < 1 || !Number.isInteger(next.program_id) || next.program_id < 1) return res.status(400).json({ error: 'Account and program are required.' });
+        if (!Number.isInteger(next.amount_cents) || next.amount_cents <= 0) return res.status(400).json({ error: 'amount_cents must be a positive integer' });
+        if (!DATE_RE.test(next.note_date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+        if (next.original != null) {
+          const p = await pool.query(`SELECT constituent_id, (${totalSql}) AS total_cents FROM ${parentTable} p WHERE p.id = $1 AND p.org_id = $2`, [next.original, orgId]);
+          if (!p.rows.length) return res.status(404).json({ error: 'The ' + noun + ' was not found' });
+          if (Number(p.rows[0].constituent_id) !== Number(note.constituent_id)) return res.status(400).json({ error: 'The credit note must be for the same contact as the ' + noun + '.' });
+          if (next.amount_cents > Number(p.rows[0].total_cents)) return res.status(400).json({ error: 'The credit note cannot be more than the ' + noun + ' total.' });
+        }
+        const fyEndMonth = await getFiscalYearEndMonth(pool, orgId);
+        const fiscalYear = fiscalYearForDate(next.note_date, fyEndMonth);
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          if (applied && note.ledger_transaction_id) {
+            await client.query('UPDATE org_ledger_lines SET account_id = $1 WHERE transaction_id = $2 AND account_id = $3', [next.account_id, note.ledger_transaction_id, note.account_id]);
+            await client.query('UPDATE org_ledger_lines SET program_id = $1 WHERE transaction_id = $2', [next.program_id, note.ledger_transaction_id]);
+          }
+          await client.query(`UPDATE ${table} SET account_id = $1, program_id = $2, amount_cents = $3, note_date = $4, reason = $5, ${originalCol} = $6, fiscal_year = $7 WHERE id = $8 AND org_id = $9`,
+            [next.account_id, next.program_id, next.amount_cents, next.note_date, next.reason, next.original, fiscalYear, id, orgId]);
+          await client.query('COMMIT');
+        } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+        if (applied) {
+          logAudit(pool, { orgId, userId, action: 'update', tableName: table, recordId: id,
+            fields: diffFields(note, { account_id: next.account_id, program_id: next.program_id, reason: next.reason }, ['account_id', 'program_id', 'reason']), metadata: { change_reason: changeReason } }).catch(() => {});
+        }
+        return res.json({ id, status: note.status });
+      } catch (e) {
+        const translated = translateCreditNoteWriteError(e);
+        if (translated) return res.status(translated.status).json(translated.body);
+        console.error('PATCH ' + kind + ':', e.message);
+        return res.status(500).json({ error: 'Could not change credit note' });
       }
     });
 

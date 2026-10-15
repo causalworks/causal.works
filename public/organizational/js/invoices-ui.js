@@ -894,8 +894,9 @@
       + '<p id="cn-error" class="organizational-panel-error" hidden></p>'
       + '<div class="organizational-panel-actions"><button type="button" id="cn-save" class="organizational-btn organizational-btn-primary">Create credit note</button></div>';
   }
-  async function toggleCreditNoteForm() {
-    const willOpen = cnFormEl.hidden;
+  let cnEditingId = null;
+  async function toggleCreditNoteForm(note) {
+    const willOpen = note ? true : cnFormEl.hidden;
     cnFormEl.hidden = !willOpen;
     if (!willOpen) return;
     cnFormEl.innerHTML = cnFormHtml();
@@ -912,6 +913,27 @@
       ).join('');
     }
     document.getElementById('cn-save').addEventListener('click', createInvoiceCreditNote);
+
+    cnEditingId = note ? note.id : null;
+    if (note) {
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+      set('cn-customer', note.constituent_id);
+      const custInput = document.getElementById('cn-customer-input');
+      if (custInput) custInput.value = note.contact_name || '';
+      set('cn-invoice', note.original_invoice_id || '');
+      set('cn-account', note.account_id);
+      set('cn-program', note.program_id);
+      set('cn-date', note.note_date || '');
+      set('cn-amount', (Number(note.amount_cents) / 100).toFixed(2));
+      set('cn-reason', note.reason || '');
+      const saveBtn = document.getElementById('cn-save');
+      saveBtn.textContent = 'Save changes';
+      if (note.status === 'applied') {
+        ['cn-invoice', 'cn-date', 'cn-amount'].forEach((id) => { document.getElementById(id).disabled = true; });
+        if (custInput) custInput.disabled = true;
+        saveBtn.insertAdjacentHTML('beforebegin', '<label class="organizational-label" style="flex:1 1 100%;margin-bottom:8px;">Reason for the change *<input type="text" id="cn-change-reason" class="organizational-input"></label>');
+      }
+    }
   }
   async function createInvoiceCreditNote() {
     const errEl2 = document.getElementById('cn-error');
@@ -925,9 +947,11 @@
     const reason = document.getElementById('cn-reason').value.trim() || null;
     if (!customerId || !accountId || !programId || !date) { show('Customer, account, program, and date are required.'); return; }
     if (Number.isNaN(amountCents) || amountCents <= 0) { show('A positive amount is required.'); return; }
-    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoice-credit-notes', {
-      method: 'POST',
-      body: JSON.stringify({ constituent_id: Number(customerId), original_invoice_id: invoiceId ? Number(invoiceId) : null, account_id: Number(accountId), program_id: Number(programId), date, amount_cents: amountCents, reason }),
+    const changeReasonEl = document.getElementById('cn-change-reason');
+    if (cnEditingId && changeReasonEl && !changeReasonEl.value.trim()) { show('Give a reason for the change.'); return; }
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoice-credit-notes' + (cnEditingId ? '/' + cnEditingId : ''), {
+      method: cnEditingId ? 'PATCH' : 'POST',
+      body: JSON.stringify({ constituent_id: Number(customerId), original_invoice_id: invoiceId ? Number(invoiceId) : null, account_id: Number(accountId), program_id: Number(programId), date, amount_cents: amountCents, reason, change_reason: changeReasonEl ? changeReasonEl.value.trim() : undefined }),
     });
     if (!out) return;
     if (out.res.ok) {
@@ -966,10 +990,12 @@
       + '<td>' + esc(n.reason || '—') + '</td>'
       + '<td>' + esc(CN_STATUS_LABELS[n.status] || n.status) + '</td>'
       + '<td>' + (n.status === 'draft'
-          ? '<button type="button" class="organizational-btn organizational-btn-outline cn-apply-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Apply</button> '
+          ? '<button type="button" class="organizational-btn organizational-btn-outline cn-edit-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Edit</button> '
+            + '<button type="button" class="organizational-btn organizational-btn-outline cn-apply-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Apply</button> '
             + '<button type="button" class="organizational-btn organizational-btn-outline cn-void-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Void</button>'
           : n.status === 'applied'
-            ? '<button type="button" class="organizational-btn organizational-btn-outline cn-void-btn" data-id="' + n.id + '" data-applied="1" style="font-size:0.75rem;">Void</button>'
+            ? '<button type="button" class="organizational-btn organizational-btn-outline cn-edit-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Edit</button> '
+              + '<button type="button" class="organizational-btn organizational-btn-outline cn-void-btn" data-id="' + n.id + '" data-applied="1" style="font-size:0.75rem;">Void</button>'
             : '')
       + '</td>'
       + '</tr>'
@@ -1159,8 +1185,10 @@
     if (agingBtn) agingBtn.addEventListener('click', openInvoicesAgingPanel);
     if (agingPanelClose) agingPanelClose.addEventListener('click', closeInvoicesAgingPanel);
     if (agingPanelOverlay) agingPanelOverlay.addEventListener('click', closeInvoicesAgingPanel);
-    if (cnAddBtn) cnAddBtn.addEventListener('click', toggleCreditNoteForm);
+    if (cnAddBtn) cnAddBtn.addEventListener('click', () => toggleCreditNoteForm());
     if (cnTbody) cnTbody.addEventListener('click', (e) => {
+      const cnEditBtn = e.target.closest('.cn-edit-btn');
+      if (cnEditBtn) { const note = creditNotesCache.find((x) => x.id === Number(cnEditBtn.getAttribute('data-id'))); if (note) toggleCreditNoteForm(note); return; }
       const applyBtn = e.target.closest('.cn-apply-btn');
       if (applyBtn) { applyOrVoidInvoiceCreditNote(Number(applyBtn.getAttribute('data-id')), 'apply'); return; }
       const voidBtn = e.target.closest('.cn-void-btn');

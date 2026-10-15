@@ -317,6 +317,7 @@
       actions.push('<button type="button" id="invoice-send" class="organizational-btn organizational-btn-outline" title="Saves the invoice, posts it to the ledger as money owed to you, and emails it to the customer when the customer has an email address.">Send</button>');
     } else if (['sent', 'partially_paid', 'overdue'].includes(invoice.status)) {
       actions.push('<button type="button" id="invoice-record-payment" class="organizational-btn organizational-btn-primary">Record payment</button>');
+      actions.push('<button type="button" id="invoice-email" class="organizational-btn organizational-btn-outline">Email to customer</button>');
     }
 
     let paymentSection = '';
@@ -359,7 +360,7 @@
       + '<div style="flex:2;min-width:0;"><label class="organizational-label">Customer *<div id="invoice-customer-field" class="organizational-contact-picker-mount"></div></label></div>'
       + '<label class="organizational-label" style="flex:1">Invoice date *<input type="date" id="invoice-date" class="organizational-input" value="' + esc((invoice && invoice.invoice_date) ? String(invoice.invoice_date).slice(0, 10) : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Due date<input type="date" id="invoice-due-date" class="organizational-input" value="' + esc((invoice && invoice.due_date) ? String(invoice.due_date).slice(0, 10) : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
-      + '<label class="organizational-label" style="flex:1">Invoice no.<input type="text" id="invoice-number" class="organizational-input" maxlength="40" placeholder="Assigned when saved" value="' + esc(invoice ? invoice.invoice_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
+      + '<label class="organizational-label" style="flex:1">Invoice no.<input type="text" id="invoice-number" class="organizational-input" maxlength="40" placeholder="Assigned when sent" value="' + esc(invoice ? invoice.invoice_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Reference / PO<input type="text" id="invoice-reference" class="organizational-input" title="A customer PO or your own number. Shown in the invoice list and in the ledger memo." value="' + esc(invoice ? invoice.reference : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
       + '</div>'
       + '<div style="border-top:1px solid var(--border);margin:12px 0 8px;"></div>'
@@ -521,6 +522,8 @@
       confirmLabel: 'Revert to draft', required: true,
       onSubmit: (r) => transitionInvoice(currentInvoiceId, 'revert-to-draft', r),
     }));
+    const emailBtn = document.getElementById('invoice-email');
+    if (emailBtn) emailBtn.addEventListener('click', () => emailInvoice(currentInvoiceId, invoice && invoice.contact_email));
     const printBtn = document.getElementById('invoice-print');
     if (printBtn) printBtn.addEventListener('click', printInvoice);
     const menuBtn = document.getElementById('invoice-menu-btn');
@@ -666,8 +669,26 @@
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
   }
 
-  async function sendSavedInvoice(id) {
-    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + id + '/send', { method: 'POST' });
+  const EMAIL_NOTES = {
+    no_email: 'It was not emailed: the customer has no email address.',
+    no_org_email: 'It was not emailed: set a contact email in organization settings first.',
+    failed: 'The email did not go through.',
+  };
+
+  function askCustomerEmail(confirmLabel, onSubmit) {
+    askReason({
+      title: 'Customer email address',
+      hint: 'The customer has no email address on file. It is saved on the contact. Leave blank to skip emailing.',
+      confirmLabel,
+      validate: (bar) => { const v = bar.querySelector('#invoice-reason-input').value.trim(); return v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? 'Enter a valid email address.' : ''; },
+      onSubmit: (v) => onSubmit(v || undefined),
+    });
+    const input = document.getElementById('invoice-reason-input');
+    if (input) input.type = 'email';
+  }
+
+  async function postSend(id, customerEmail) {
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + id + '/send', { method: 'POST', body: JSON.stringify(customerEmail ? { customer_email: customerEmail } : {}) });
     await loadInvoices();
     if (!out || !out.res.ok) {
       await openInvoicePanel(id);
@@ -675,8 +696,28 @@
       return;
     }
     await openInvoicePanel(id);
-    const how = { sent: '', no_email: 'It was not emailed: the customer has no email address. Add one on the contact and send it yourself.', no_org_email: 'It was not emailed: set a contact email in organization settings first.', failed: 'It was posted but the email did not go through.', skipped: '' }[out.data.emailed] || '';
-    showPanelError(out.data.emailed === 'sent' ? 'Sent and emailed to the customer.' : ('Sent. ' + how), true);
+    const e = out.data.emailed;
+    showPanelError(e === 'sent' ? 'Sent and emailed to the customer.' : ('Sent. ' + (EMAIL_NOTES[e] || '') + (EMAIL_NOTES[e] ? ' Use Email to customer once fixed.' : '')), true);
+  }
+
+  async function sendSavedInvoice(id) {
+    const got = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + id);
+    const hasEmail = got && got.res.ok && got.data.invoice && got.data.invoice.contact_email;
+    if (hasEmail) { await postSend(id); return; }
+    await loadInvoices();
+    await openInvoicePanel(id);
+    askCustomerEmail('Send and email', (email) => postSend(id, email));
+  }
+
+  async function emailInvoice(id, contactEmail) {
+    const go = async (email) => {
+      const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + id + '/email', { method: 'POST', body: JSON.stringify(email ? { customer_email: email } : {}) });
+      if (!out || !out.res.ok) { showPanelError((out && out.data && (out.data.message || out.data.error)) || 'Could not email invoice.'); return; }
+      const e = out.data.emailed;
+      await openInvoicePanel(id);
+      showPanelError(e === 'sent' ? 'Emailed to the customer.' : (EMAIL_NOTES[e] || 'Not emailed.'), e === 'sent');
+    };
+    if (contactEmail) await go(); else askCustomerEmail('Email invoice', (email) => email ? go(email) : showPanelError('Enter an email address to send the invoice.'));
   }
 
   async function transitionInvoice(id, action, reason) {

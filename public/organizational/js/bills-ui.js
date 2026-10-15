@@ -409,7 +409,7 @@
       + (canCompliance ? '<a href="#" id="bill-vendor-compliance-btn" style="font-size:0.75rem;">Edit compliance</a>' : '') + '</div>'
       + '<label class="organizational-label" style="flex:1">Bill date *<input type="date" id="bill-date" class="organizational-input" value="' + esc((bill && bill.bill_date) ? String(bill.bill_date).slice(0, 10) : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Due date<input type="date" id="bill-due-date" class="organizational-input" value="' + esc((bill && bill.due_date) ? String(bill.due_date).slice(0, 10) : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
-      + '<label class="organizational-label" style="flex:1">Bill no.<input type="text" id="bill-number" class="organizational-input" maxlength="40" placeholder="Assigned when saved" value="' + esc(bill ? bill.bill_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
+      + '<label class="organizational-label" style="flex:1">Bill no.<input type="text" id="bill-number" class="organizational-input" maxlength="40" placeholder="Assigned when approved" value="' + esc(bill ? bill.bill_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Reference<input type="text" id="bill-reference" class="organizational-input" value="' + esc(bill ? bill.reference : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
       + '</div>'
       + rationaleHtml

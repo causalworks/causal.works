@@ -385,7 +385,7 @@
       return '<div class="ledger-edit-line" data-line="' + l.id + '" style="border-top:1px solid var(--border-subtle);padding:8px 0;">'
         + '<div style="display:flex;justify-content:space-between;font-size:0.8125rem;color:var(--text-secondary);margin-bottom:4px;"><span>Line ' + (i + 1) + (fixedLine ? ' (set by the ' + esc(ed.source_label || 'source record') + ', not changed here)' : bankSide ? ' (bank side, account fixed while reconciled)' : '') + '</span><span>' + esc(amt) + '</span></div>'
         + '<div class="organizational-alloc-line-row">'
-        + '<select class="organizational-select ledger-edit-account"' + (bankSide ? ' disabled' : '') + ' aria-label="Account">' + accountOptions(l.account_id, limited && !fixedLine ? l.account_type : null) + '</select>'
+        + '<select class="organizational-select ledger-edit-account"' + (bankSide ? ' disabled' : '') + ' aria-label="Account">' + accountOptions(l.account_id, limited && !fixedLine ? (t.source === 'gift_in_kind' && Number(l.debit_cents) > 0 ? ['expense', 'asset'] : l.account_type) : null) + '</select>'
         + '<select class="organizational-select ledger-edit-program"' + (fixedLine ? ' disabled' : '') + ' aria-label="Program">' + programOptions(l.program_id) + '</select>'
         + '<select class="organizational-select ledger-edit-grant"' + (fixedLine ? ' disabled' : '') + ' aria-label="Grant">' + grantOptions(l.grant_id) + '</select>'
         + (canEditAmounts ? '<label class="organizational-label" style="flex:1 1 100%;">' + (Number(l.debit_cents) > 0 ? 'Debit' : 'Credit') + ' amount<input type="number" step="0.01" min="0.01" class="organizational-input ledger-edit-amount" data-side="' + (Number(l.debit_cents) > 0 ? 'debit' : 'credit') + '" value="' + (Number(Number(l.debit_cents) > 0 ? l.debit_cents : l.credit_cents) / 100).toFixed(2) + '"></label>' : '')
@@ -543,7 +543,7 @@
   function accountOptions(selectedId, onlyType) {
     return '<option value="">— Account —</option>' + accountsCache.filter((a) => !onlyType
       || Number(a.id) === Number(selectedId)
-      || (a.type === onlyType && a.is_posting !== false && !a.is_cash_account && !a.is_system_clearing_account && !a.is_system_ar_account && !a.is_system_ap_account)
+      || ([].concat(onlyType).includes(a.type) && a.is_posting !== false && !a.is_cash_account && !a.is_system_clearing_account && !a.is_system_ar_account && !a.is_system_ap_account)
     ).map((a) =>
       '<option value="' + a.id + '"' + (Number(a.id) === Number(selectedId) ? ' selected' : '') + '>'
       + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>'

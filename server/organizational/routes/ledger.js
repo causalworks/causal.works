@@ -371,6 +371,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
   const isSystemAccount = (a) => a.is_cash_account || a.is_system_ap_account || a.is_system_ar_account || a.is_system_clearing_account
     || a.is_system_expense_claims_payable_account || a.is_system_unallocated_receipts_account;
   const isClassificationLine = (a) => !!a && (a.type === 'income' || a.type === 'expense') && !isSystemAccount(a);
+  const isGiftAssetSide = (source, a, debitCents) => source === 'gift_in_kind' && !!a && a.type === 'asset' && !isSystemAccount(a) && Number(debitCents) > 0;
 
   async function loadEditHistory(orgId, txnId) {
     const r = await pool.query(
@@ -454,7 +455,10 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         edits: await loadEditHistory(orgId, row.id),
         lines: lines.rows.map((l) => ({
           id: l.id, account_id: l.account_id, program_id: l.program_id, grant_id: l.grant_id, account_type: l.account_type,
-          limited_editable: isClassificationLine({ type: l.account_type, is_cash_account: l.is_cash_account, is_system_ap_account: l.is_system_ap_account,
+          limited_editable: isGiftAssetSide(row.source, { type: l.account_type, is_cash_account: l.is_cash_account, is_system_ap_account: l.is_system_ap_account,
+            is_system_ar_account: l.is_system_ar_account, is_system_clearing_account: l.is_system_clearing_account,
+            is_system_expense_claims_payable_account: l.is_system_expense_claims_payable_account, is_system_unallocated_receipts_account: l.is_system_unallocated_receipts_account }, l.debit_cents)
+            || isClassificationLine({ type: l.account_type, is_cash_account: l.is_cash_account, is_system_ap_account: l.is_system_ap_account,
             is_system_ar_account: l.is_system_ar_account, is_system_clearing_account: l.is_system_clearing_account,
             is_system_expense_claims_payable_account: l.is_system_expense_claims_payable_account, is_system_unallocated_receipts_account: l.is_system_unallocated_receipts_account }),
           account_code: l.account_code, account_name: l.account_name, program: l.program_name, grant: l.grant_name,
@@ -686,18 +690,20 @@ function registerOrganizationalLedgerRoutes(app, pool) {
           const newFacts = acctFacts.get(accountId);
           const changesLine = accountId !== old.account_id || programId !== old.program_id || grantId !== old.grant_id
             || (raw.donor_restriction_class !== undefined && raw.donor_restriction_class !== '' && raw.donor_restriction_class !== old.restriction);
-          if (changesLine && !isClassificationLine(oldFacts)) {
+          if (changesLine && !isClassificationLine(oldFacts) && !isGiftAssetSide(t.source, oldFacts, old.debit_cents)) {
             return res.status(409).json({ error: 'Line ' + (linesR.rows.findIndex((l) => l.id === lineId) + 1) + ' is a receivable, payable or bank line set by ' + elig.source_label + ' and cannot be changed here.', code: 'limited_edit' });
           }
           if (changesLine && LINKED_SOURCES[t.source] && !old.source_line_id) {
             return res.status(409).json({ error: 'This line is not linked to its record on the ' + LINKED_SOURCES[t.source] + '. Change it there.', code: 'limited_edit' });
           }
-          if (accountId !== old.account_id && old.source_line_type === 'org_gifts') {
+          if (accountId !== old.account_id && old.source_line_type === 'org_gifts' && t.source !== 'gift_in_kind') {
             return res.status(409).json({ error: 'The accounts on a gift entry are set on the gift. Program and grant can change here.', code: 'limited_edit' });
           }
           if (accountId !== old.account_id) {
-            if (!newFacts || !newFacts.is_posting || isSystemAccount(newFacts) || newFacts.type !== oldFacts.type) {
-              return res.status(409).json({ error: 'An income line can change to another income account and an expense line to another expense account.', code: 'limited_edit' });
+            const giftCostSide = t.source === 'gift_in_kind' && Number(old.debit_cents) > 0;
+            const typeOk = newFacts && (giftCostSide ? (newFacts.type === 'expense' || newFacts.type === 'asset') : newFacts.type === oldFacts.type);
+            if (!newFacts || !newFacts.is_posting || isSystemAccount(newFacts) || !typeOk) {
+              return res.status(409).json({ error: giftCostSide ? 'An in-kind gift can be recorded as an expense or an asset (not cash, receivable or payable).' : 'An income line can change to another income account and an expense line to another expense account.', code: 'limited_edit' });
             }
           }
         }
@@ -800,6 +806,11 @@ function registerOrganizationalLedgerRoutes(app, pool) {
             const w = await client.query(
               'UPDATE org_gifts SET program_id = $1, grant_id = $2 WHERE id = $3 AND org_id = $4 RETURNING id',
               [e.programId, e.grantId, e.old.source_line_id, orgId]);
+            if (t.source === 'gift_in_kind' && e.accountId !== e.old.account_id) {
+              await client.query(
+                `UPDATE org_gifts SET ${Number(e.old.debit_cents) > 0 ? 'in_kind_expense_account_id' : 'in_kind_revenue_account_id'} = $1 WHERE id = $2 AND org_id = $3`,
+                [e.accountId, e.old.source_line_id, orgId]);
+            }
             await client.query(
               'UPDATE org_ledger_lines SET program_id = $1, grant_id = $2 WHERE transaction_id = $3 AND source_line_type = $4 AND source_line_id = $5',
               [e.programId, e.grantId, id, 'org_gifts', e.old.source_line_id]);

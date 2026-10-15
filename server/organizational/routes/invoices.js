@@ -313,7 +313,7 @@ function registerInvoicesRoutes(app, pool) {
       await client.query('BEGIN');
       const r = await client.query(
         `INSERT INTO org_invoices (org_id, invoice_number, constituent_id, invoice_date, due_date, reference, fiscal_year, created_by)
-         VALUES ($1, COALESCE($2, org_take_document_number($1, 'invoice')), $3, $4, $5, $6, $7, $8) RETURNING id, invoice_number`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, invoice_number`,
         [orgId, String(body.invoice_number || '').trim() || null, constituentId, invoiceDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
       );
       const invoiceId = r.rows[0].id;
@@ -488,6 +488,17 @@ function registerInvoicesRoutes(app, pool) {
     }
   });
 
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  async function saveCustomerEmail(pool, { orgId, userId, req, constituentId, email }) {
+    const r = await pool.query('SELECT email FROM org_constituents WHERE id = $1 AND org_id = $2', [constituentId, orgId]);
+    if (!r.rows.length || r.rows[0].email) return;
+    await pool.query('UPDATE org_constituents SET email = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3', [email, constituentId, orgId]);
+    logAudit(pool, {
+      orgId, userId, action: 'update', tableName: 'org_constituents', recordId: constituentId,
+      fields: [{ fieldName: 'email', oldValue: null, newValue: email }], metadata: reqMeta(req),
+    }).catch(() => {});
+  }
+
   app.post('/api/organizational/orgs/:slug/invoices/:id/send', ...orgAuth, financeWriter, async (req, res) => {
     const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
@@ -507,6 +518,13 @@ function registerInvoicesRoutes(app, pool) {
 
       const linesR = await pool.query(LINES_SELECT, [invoiceId]);
       if (!linesR.rows.length) return res.status(400).json({ error: 'Invoice has no lines' });
+      if (!invoice.invoice_number) {
+        invoice.invoice_number = (await pool.query(
+          `UPDATE org_invoices SET invoice_number = org_take_document_number($2, 'invoice') WHERE id = $1 AND org_id = $2 AND invoice_number IS NULL RETURNING invoice_number`, [invoiceId, orgId])).rows[0].invoice_number;
+      }
+      const newEmail = req.body && typeof req.body.customer_email === 'string' ? req.body.customer_email.trim() : '';
+      if (newEmail && !EMAIL_RE.test(newEmail)) return res.status(400).json({ error: 'That email address is not valid.' });
+      if (newEmail) await saveCustomerEmail(pool, { orgId, userId, req, constituentId: invoice.constituent_id, email: newEmail });
       const customerR = await pool.query('SELECT display_name, email FROM org_constituents WHERE id = $1', [invoice.constituent_id]);
       const arAccountR = await pool.query('SELECT org_get_or_create_ar_account($1) AS id', [orgId]);
       const arAccountId = arAccountR.rows[0].id;
@@ -702,6 +720,32 @@ function registerInvoicesRoutes(app, pool) {
   }
 
   app.post('/api/organizational/orgs/:slug/invoices/:id/revert-to-draft', ...orgAuth, financeWriter, (req, res) => reverseSent(req, res, 'draft'));
+
+  app.post('/api/organizational/orgs/:slug/invoices/:id/email', ...orgAuth, financeWriter, async (req, res) => {
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const invoiceId = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(invoiceId) || invoiceId < 1) return res.status(400).json({ error: 'Invalid id' });
+    try {
+      const r = await pool.query('SELECT * FROM org_invoices WHERE id = $1 AND org_id = $2 LIMIT 1', [invoiceId, orgId]);
+      if (!r.rows.length) return res.status(404).json({ error: 'Invoice not found' });
+      const invoice = r.rows[0];
+      if (!headerProgramsInScope(req, await invoiceLinePrograms(pool, invoiceId))) return res.status(404).json({ error: 'Invoice not found' });
+      if (!['sent', 'partially_paid', 'overdue'].includes(invoice.status)) return res.status(409).json({ error: 'Only a sent invoice can be emailed.' });
+      const newEmail = req.body && typeof req.body.customer_email === 'string' ? req.body.customer_email.trim() : '';
+      if (newEmail && !EMAIL_RE.test(newEmail)) return res.status(400).json({ error: 'That email address is not valid.' });
+      if (newEmail) await saveCustomerEmail(pool, { orgId, userId, req, constituentId: invoice.constituent_id, email: newEmail });
+      const linesR = await pool.query(LINES_SELECT, [invoiceId]);
+      const customerR = await pool.query('SELECT display_name, email FROM org_constituents WHERE id = $1', [invoice.constituent_id]);
+      const totalCents = linesR.rows.reduce((t, l) => t + Math.round(Number(l.quantity) * Number(l.unit_amount_cents)), 0);
+      const emailed = await sendInvoiceEmail(pool, { orgId, invoice, customerName: customerR.rows[0] && customerR.rows[0].display_name,
+        customerEmail: customerR.rows[0] && customerR.rows[0].email, lines: linesR.rows, totalCents });
+      return res.json({ id: invoiceId, emailed });
+    } catch (e) {
+      console.error('POST invoice email:', e.message);
+      return res.status(500).json({ error: 'Could not email invoice' });
+    }
+  });
 
   app.post('/api/organizational/orgs/:slug/invoices/:id/void', ...orgAuth, financeWriter, async (req, res) => {
     const orgId = req.orgId;

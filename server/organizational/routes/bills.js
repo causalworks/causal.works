@@ -317,7 +317,7 @@ function registerBillsRoutes(app, pool) {
       await client.query('BEGIN');
       const r = await client.query(
         `INSERT INTO org_bills (org_id, bill_number, constituent_id, bill_date, due_date, reference, fiscal_year, created_by)
-         VALUES ($1, COALESCE($2, org_take_document_number($1, 'bill')), $3, $4, $5, $6, $7, $8) RETURNING id, bill_number`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, bill_number`,
         [orgId, String(body.bill_number || '').trim() || null, constituentId, billDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
       );
       const billId = r.rows[0].id;
@@ -601,6 +601,11 @@ function registerBillsRoutes(app, pool) {
       }
       if (bill.status !== 'pending_approval') {
         return res.status(409).json({ error: `Bill is not awaiting approval (status: ${bill.status})`, code: 'not_pending_approval' });
+      }
+
+      if (!bill.bill_number) {
+        bill.bill_number = (await pool.query(
+          `UPDATE org_bills SET bill_number = org_take_document_number($2, 'bill') WHERE id = $1 AND org_id = $2 AND bill_number IS NULL RETURNING bill_number`, [billId, orgId])).rows[0].bill_number;
       }
 
       const approveR = await pool.query(

@@ -101,7 +101,7 @@ function registerOrganizationalAccountRoutes(app, pool) {
       }
 
       const r = await pool.query(sql, params);
-      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id, default_individual_gift_account_id, invoice_number_prefix, invoice_next_number, bill_number_prefix, bill_next_number, default_invoice_terms_days, default_bill_terms_days FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
+      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id, default_individual_gift_account_id, invoice_number_prefix, invoice_next_number, bill_number_prefix, bill_next_number, default_invoice_terms_days, default_bill_terms_days, mileage_rate_cents_per_mile FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
       return res.json({
         accounts: r.rows.map(rowToAccount),
         defaults: {
@@ -113,6 +113,7 @@ function registerOrganizationalAccountRoutes(app, pool) {
           invoice_number_prefix: d.invoice_number_prefix, invoice_next_number: d.invoice_next_number,
           bill_number_prefix: d.bill_number_prefix, bill_next_number: d.bill_next_number,
           default_invoice_terms_days: d.default_invoice_terms_days, default_bill_terms_days: d.default_bill_terms_days,
+          mileage_rate_cents_per_mile: d.mileage_rate_cents_per_mile == null ? null : Number(d.mileage_rate_cents_per_mile),
         } : null,
       });
     } catch (e) {
@@ -164,6 +165,12 @@ function registerOrganizationalAccountRoutes(app, pool) {
       const n = raw === null || raw === '' ? null : Number(raw);
       if (n !== null && (!Number.isInteger(n) || n < 0 || n > 365)) return res.status(400).json({ error: 'Payment terms are a whole number of days, 0 to 365.' });
       add(col, n);
+    }
+    if ('mileage_rate_cents_per_mile' in body) {
+      const raw = body.mileage_rate_cents_per_mile;
+      const n = raw === null || raw === '' ? null : Number(raw);
+      if (n !== null && (!Number.isFinite(n) || n <= 0 || n > 9999)) return res.status(400).json({ error: 'The mileage rate is cents per mile, more than 0 and up to 9999.' });
+      add('mileage_rate_cents_per_mile', n);
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to save' });
     try {

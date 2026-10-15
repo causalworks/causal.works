@@ -163,7 +163,7 @@
   }
 
   async function loadNumbering() {
-    const ids = { invoice_number_prefix: 'inv-prefix', invoice_next_number: 'inv-next', default_invoice_terms_days: 'inv-terms', bill_number_prefix: 'bill-prefix', bill_next_number: 'bill-next', default_bill_terms_days: 'bill-terms' };
+    const ids = { invoice_number_prefix: 'inv-prefix', invoice_next_number: 'inv-next', default_invoice_terms_days: 'inv-terms', bill_number_prefix: 'bill-prefix', bill_next_number: 'bill-next', default_bill_terms_days: 'bill-terms', mileage_rate_cents_per_mile: 'mileage-rate' };
     const save = $('organizational-acctset-numbering-save');
     const note = $('organizational-acctset-numbering-note');
     if (!save) return;
@@ -179,7 +179,7 @@
     save.dataset.wired = '1';
     save.addEventListener('click', async () => {
       const body = {};
-      Object.keys(ids).forEach((k) => { const v = $('organizational-acctset-' + ids[k]).value.trim(); body[k] = /terms/.test(k) ? (v === '' ? null : Number(v)) : (/next/.test(k) ? Number(v) : v); });
+      Object.keys(ids).forEach((k) => { const v = $('organizational-acctset-' + ids[k]).value.trim(); body[k] = /terms|mileage/.test(k) ? (v === '' ? null : Number(v)) : (/next/.test(k) ? Number(v) : v); });
       const res = await apiJson(base() + '/document-numbering', { method: 'PUT', body: JSON.stringify(body) });
       note.hidden = false;
       note.textContent = res && res.res.ok ? 'Saved.' : ((res && res.data && res.data.error) || 'Could not save.');

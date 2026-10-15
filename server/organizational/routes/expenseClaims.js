@@ -59,7 +59,7 @@ function rowToLine(row) {
     expense_date: row.expense_date,
     description: row.description,
     miles: row.miles != null ? String(row.miles) : null,
-    rate_cents_per_mile: row.rate_cents_per_mile,
+    rate_cents_per_mile: row.rate_cents_per_mile != null ? Number(row.rate_cents_per_mile) : null,
     amount_cents: String(row.amount_cents),
     line_memo: row.line_memo,
   };
@@ -84,8 +84,8 @@ function parseLineBody(body, i) {
   if (body.miles != null && body.miles !== '') {
     miles = Number.parseFloat(String(body.miles));
     if (!Number.isFinite(miles) || miles <= 0) return { error: `line ${i + 1}: miles must be a positive number if provided` };
-    rate = Number.parseInt(String(body.rate_cents_per_mile), 10);
-    if (!Number.isInteger(rate) || rate <= 0) return { error: `line ${i + 1}: rate_cents_per_mile is required when miles is set` };
+    rate = Number.parseFloat(String(body.rate_cents_per_mile));
+    if (!Number.isFinite(rate) || rate <= 0) return { error: `line ${i + 1}: rate_cents_per_mile is required when miles is set` };
   }
   return {
     fields: {

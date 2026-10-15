@@ -21,6 +21,7 @@
   let receiptThresholdCents = 0;
   let expenseAccountsCache = [];
   let programsCache = [];
+  let mileageRate = null;
   let grantsCache = [];
   let cashAccountsCache = [];
   let claimsCache = [];
@@ -41,6 +42,7 @@
     ]);
     const all = (acctOut && acctOut.data && acctOut.data.accounts) || [];
     expenseAccountsCache = all.filter((a) => a.type === 'expense' && a.is_posting);
+    mileageRate = acctOut && acctOut.data && acctOut.data.numbering && acctOut.data.numbering.mileage_rate_cents_per_mile != null ? Number(acctOut.data.numbering.mileage_rate_cents_per_mile) : null;
     cashAccountsCache = all.filter((a) => a.is_cash_account);
     programsCache = (progOut && progOut.data && progOut.data.programs) || [];
     grantsCache = (grantOut && grantOut.data && grantOut.data.grants) || [];
@@ -170,6 +172,7 @@
       + '<select class="organizational-select expenseclaims-line-account" style="width:170px;">' + accountOptions(expenseAccountsCache, l.account_id) + '</select>'
       + '<select class="organizational-select expenseclaims-line-program" style="width:120px;">' + programOptions(l.program_id) + '</select>'
       + '<select class="organizational-select expenseclaims-line-grant" style="width:110px;">' + grantOptions(l.grant_id) + '</select>'
+      + '<input type="number" min="0" step="0.1" class="organizational-input expenseclaims-line-miles" placeholder="Miles" style="width:70px;" data-rate="' + esc(l.rate_cents_per_mile != null ? l.rate_cents_per_mile : (mileageRate != null ? mileageRate : '')) + '" value="' + esc(l.miles || '') + '"' + (mileageRate == null && !l.miles ? ' disabled title="Set a mileage rate in Accounting settings to claim by miles."' : ' title="Miles driven. The amount is filled at ' + (mileageRate != null ? mileageRate : '') + ' cents per mile."') + '>'
       + '<input type="text" inputmode="decimal" class="organizational-input organizational-formula-amount expenseclaims-line-amount" placeholder="Amount" style="width:90px;" value="' + (l.amount_cents != null ? Number(l.amount_cents) / 100 : '') + '">'
       + '<button type="button" class="organizational-btn-icon expenseclaims-line-remove" title="Remove line" style="font-size:0.75rem;">✕</button>'
       + '</div>';
@@ -222,6 +225,13 @@
       const wrap = document.getElementById('expenseclaims-lines-wrap');
       const idx = wrap.querySelectorAll('.expenseclaims-line-row').length;
       wrap.insertAdjacentHTML('beforeend', lineRowHtml(idx));
+    });
+    document.getElementById('expenseclaims-lines-wrap').addEventListener('input', (e) => {
+      const m = e.target.closest('.expenseclaims-line-miles');
+      if (!m) return;
+      const rate = Number(m.dataset.rate);
+      const amt = m.closest('.expenseclaims-line-row').querySelector('.expenseclaims-line-amount');
+      if (m.value && rate > 0) amt.value = (Math.round(Number(m.value) * rate) / 100).toFixed(2);
     });
     document.getElementById('expenseclaims-lines-wrap').addEventListener('click', (e) => {
       const btn = e.target.closest('.expenseclaims-line-remove');
@@ -291,6 +301,7 @@
         program_id: row.querySelector('.expenseclaims-line-program').value || null,
         grant_id: row.querySelector('.expenseclaims-line-grant').value || null,
         amount_cents: inputToCents(row.querySelector('.expenseclaims-line-amount').value),
+        ...(row.querySelector('.expenseclaims-line-miles').value ? { miles: Number(row.querySelector('.expenseclaims-line-miles').value), rate_cents_per_mile: Number(row.querySelector('.expenseclaims-line-miles').dataset.rate) } : {}),
       }));
       if (lines.some((l) => !l.account_id || !l.program_id || !l.description || !l.amount_cents)) {
         errEl2.textContent = 'Every line needs a description, account, program, and a positive amount.';

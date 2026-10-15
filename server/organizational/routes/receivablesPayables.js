@@ -1,5 +1,6 @@
 'use strict';
 
+const { loadOrgDocInfo, oneLine } = require('../lib/orgLetterhead');
 // Receivables and payables schedules: what is owed to the organization and what it owes, item by item, aged, with a check
 // against the ledger balance of the matching accounts.
 
@@ -133,8 +134,7 @@ function registerReceivablesPayablesRoutes(app, pool) {
       try {
         const cfg = KINDS[kind];
         const out = await buildSchedule(orgId, kind, asOf);
-        const orgR = await pool.query('SELECT display_name AS name FROM coop_members WHERE id = $1', [orgId]);
-        const html = scheduleReportHtml({ title: cfg.title, orgName: orgR.rows[0] ? orgR.rows[0].name : '', asOf, out, labels: cfg.labels, ledgerLabel: cfg.ledgerLabel });
+        const html = scheduleReportHtml({ title: cfg.title, orgName: oneLine(await loadOrgDocInfo(pool, orgId)), asOf, out, labels: cfg.labels, ledgerLabel: cfg.ledgerLabel });
         const pdf = await htmlToPdfBuffer(html);
         const dir = path.join(UPLOADS_ROOT, 'documents', String(orgId), String(new Date().getUTCFullYear()));
         fs.mkdirSync(dir, { recursive: true });

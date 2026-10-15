@@ -1,5 +1,6 @@
 'use strict';
 
+const { loadOrgDocInfo, oneLine } = require('./orgLetterhead');
 const { runwayFromProfile } = require('./OrganizationalFinanceSnapshot');
 
 function fmtUsd(cents) {
@@ -15,6 +16,7 @@ async function fetchBoardReportData(pool, orgId, fiscalYear) {
     [orgId]
   );
   const org = orgR.rows[0] || {};
+  const docInfo = await loadOrgDocInfo(pool, orgId);
   const profile = org.org_profile_data && typeof org.org_profile_data === 'object' ? org.org_profile_data : {};
   const runway = runwayFromProfile(profile);
 
@@ -100,7 +102,8 @@ async function fetchBoardReportData(pool, orgId, fiscalYear) {
   );
 
   return {
-    orgName: org.display_name || 'Organization',
+    orgName: docInfo.name,
+    orgDetails: oneLine(docInfo),
     fiscalYear,
     generatedAt: new Date().toISOString(),
     metrics: {
@@ -142,7 +145,8 @@ async function fetchGrantReportData(pool, orgId, grantId, fiscalYear) {
 
   const g = gR.rows[0];
   const orgR = await pool.query(`SELECT display_name FROM coop_members WHERE id = $1`, [orgId]);
-  const orgName = orgR.rows[0]?.display_name || 'Organization';
+  const docInfo = await loadOrgDocInfo(pool, orgId);
+  const orgName = docInfo.name;
 
   const budR = await pool.query(
     `SELECT COALESCE(SUM(bl.amount_cents), 0)::bigint AS cents
@@ -156,6 +160,7 @@ async function fetchGrantReportData(pool, orgId, grantId, fiscalYear) {
 
   return {
     orgName,
+    orgDetails: oneLine(docInfo),
     fiscalYear,
     grant: {
       id: g.id,

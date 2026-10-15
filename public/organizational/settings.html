@@ -201,9 +201,41 @@
               <label for="organizational-org-website">Website</label>
               <input id="organizational-org-website" type="text" maxlength="500" autocomplete="url">
 
+              <h3 class="organizational-subheading" style="margin-top:20px;">Shown on invoices, bills, receipts and reports</h3>
+              <label for="organizational-org-legal-name">Legal name <span class="organizational-hint">(if different from the display name)</span></label>
+              <input id="organizational-org-legal-name" type="text" maxlength="200" autocomplete="organization">
+
+              <label for="organizational-org-address">Mailing address</label>
+              <textarea id="organizational-org-address" rows="3" maxlength="500" autocomplete="street-address" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+              <label for="organizational-org-phone">Phone</label>
+              <input id="organizational-org-phone" type="text" maxlength="50" autocomplete="tel">
+
+              <label for="organizational-org-contact-email">Contact email</label>
+              <input id="organizational-org-contact-email" type="email" maxlength="200" autocomplete="email">
+
+              <label for="organizational-org-payment-instructions">Payment instructions <span class="organizational-hint">(printed at the top of invoices: how to pay, where to send checks)</span></label>
+              <textarea id="organizational-org-payment-instructions" rows="4" maxlength="2000" style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
               <div class="organizational-actions">
                 <button type="button" class="organizational-btn" id="organizational-org-save">Save basics</button>
               </div>
+            </section>
+
+            <h2 class="organizational-subheading">Document design</h2>
+            <section class="organizational-card" aria-disabled="true">
+              <p class="organizational-hint" style="margin:0 0 10px;">Planned: choose how your invoices, bills, receipts and reports look. Not available yet; documents use the standard layout with the details above.</p>
+              <label for="organizational-doc-logo">Logo</label>
+              <input id="organizational-doc-logo" type="file" disabled>
+              <label for="organizational-doc-accent">Accent color</label>
+              <input id="organizational-doc-accent" type="text" placeholder="For example #2a5d4f" disabled>
+              <label for="organizational-doc-layout">Layout</label>
+              <select id="organizational-doc-layout" disabled>
+                <option>Standard (logo left, details right)</option>
+                <option>Centered header</option>
+              </select>
+              <label for="organizational-doc-css">Custom styling</label>
+              <textarea id="organizational-doc-css" rows="3" placeholder="Advanced: your own style rules for printed documents" disabled style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
             </section>
 
             <div id="organizational-workspace-users-demo-note-wrap" hidden>

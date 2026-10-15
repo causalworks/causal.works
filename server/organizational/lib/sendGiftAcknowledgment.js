@@ -1,5 +1,7 @@
 'use strict';
 
+const { loadOrgDocInfo, detailLines } = require('./orgLetterhead');
+
 function formatDollars(amountCents) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountCents / 100);
 }
@@ -9,14 +11,16 @@ function formatDate(dt) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function buildAcknowledgmentHtml({ gift, constituent, org }) {
+function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
   const donorName = constituent.display_name ||
     [constituent.first_name, constituent.last_name].filter(Boolean).join(' ') ||
     constituent.email;
   const amount = formatDollars(Number(gift.amount_cents));
   const date = formatDate(gift.received_at);
   const orgName = org.display_name;
-  const ein = org.ein ? `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">EIN: ${org.ein}</p>` : '';
+  const detail = info ? detailLines(info) : (org.ein ? ['EIN ' + org.ein] : []);
+  const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const ein = detail.length ? `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">${detail.map(esc).join('<br>')}</p>` : '';
 
   return `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#111827;">
@@ -42,7 +46,8 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
   if (!process.env.POSTMARK_API_KEY) throw new Error('POSTMARK_API_KEY not set');
 
   const orgName = org.display_name;
-  const html = buildAcknowledgmentHtml({ gift, constituent, org });
+  const info = await loadOrgDocInfo(pool, gift.org_id);
+  const html = buildAcknowledgmentHtml({ gift, constituent, org, info });
   const text = [
     `Dear ${constituent.display_name || constituent.email},`,
     '',

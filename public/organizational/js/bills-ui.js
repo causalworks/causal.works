@@ -266,26 +266,32 @@
   function printBill() {
     if (!billData || !billData.bill) return;
     const { bill, lines, payments } = billData;
+    const P = window.OrganizationalDocPrint;
     const org = window.OrganizationalAccounting.getOrg && window.OrganizationalAccounting.getOrg();
     const vendorInput = document.getElementById('bill-vendor-input');
     const vendor = bill.vendor_name || (vendorInput && vendorInput.value) || '';
     const total = (lines || []).reduce((n, l) => n + Number(l.amount_cents), 0);
     const paid = (payments || []).filter((p) => p.status === 'posted').reduce((n, p) => n + Number(p.amount_cents), 0);
+    const credited = Number(bill.credited_cents || 0);
+    const due = total - paid - credited;
     const d = (v) => (v ? esc(String(v).slice(0, 10)) : '');
     const rows = (lines || []).map((l) => '<tr><td>' + esc(l.account_code ? l.account_code + ' ' + l.account_name : l.account_name) + '</td><td>' + esc(l.program_name || '') + '</td><td>' + esc(l.grant_name || '') + '</td><td>' + esc(l.line_memo || '') + '</td><td class="r">' + fmtMoney(l.amount_cents) + '</td></tr>').join('');
-    const payRows = (payments || []).filter((p) => p.status === 'posted').map((p) => '<tr><td>' + d(p.payment_date) + '</td><td>' + esc(p.bank_account_name || '') + '</td><td>' + esc(p.reference || '') + '</td><td></td><td class="r">' + fmtMoney(p.amount_cents) + '</td></tr>').join('');
-    const w = window.open('', '_blank');
-    if (!w) { showPanelError('Allow pop-ups to print the bill.'); return; }
-    w.document.write('<!doctype html><title>Bill #' + esc(bill.id) + '</title><style>body{font:13px system-ui,sans-serif;margin:32px;color:#111}h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:16px}th{text-align:left;font-size:11px;text-transform:uppercase;color:#555;border-bottom:1px solid #999;padding:4px 8px 4px 0}td{padding:4px 8px 4px 0;border-bottom:1px solid #ddd;vertical-align:top}.r{text-align:right}.meta td{border:0;padding:2px 24px 2px 0}</style>'
-      + '<p style="margin:0;color:#555">' + esc(org && org.display_name || '') + '</p><h1>Bill #' + esc(bill.id) + (bill.reference ? ' · ' + esc(bill.reference) : '') + '</h1>'
-      + '<table class="meta"><tr><td><b>Vendor</b><br>' + esc(vendor) + '</td><td><b>Bill date</b><br>' + d(bill.bill_date) + '</td><td><b>Due date</b><br>' + d(bill.due_date) + '</td><td><b>Status</b><br>' + esc(String(bill.status).replace('_', ' ')) + '</td></tr></table>'
+    const payRows = (payments || []).filter((p) => p.status === 'posted').map((p) => '<tr><td colspan="4">Payment ' + d(p.payment_date) + (p.bank_account_name ? ' · ' + esc(p.bank_account_name) : '') + (p.reference ? ' · ' + esc(p.reference) : '') + '</td><td class="r">-' + fmtMoney(p.amount_cents) + '</td></tr>').join('');
+    P.open('Bill #' + bill.id,
+      '<div class="top"><div><h2>Bill to</h2>' + P.letterheadHtml(org) + '</div>'
+      + '<div style="text-align:right"><h1>BILL</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Bill no.</td><td>' + esc(bill.id) + '</td></tr>'
+      + (bill.reference ? '<tr><td>Vendor reference</td><td>' + esc(bill.reference) + '</td></tr>' : '')
+      + '<tr><td>Bill date</td><td>' + d(bill.bill_date) + '</td></tr><tr><td>Status</td><td>' + esc(String(bill.status).replace('_', ' ')) + '</td></tr></table></div></div>'
+      + '<div class="band"><div>' + P.contactHtml('From (vendor)', vendor, bill) + '</div>'
+      + '<div><h2>Due date</h2><div class="due" style="font-size:18px">' + (d(bill.due_date) || 'Not set') + '</div></div>'
+      + '<div style="text-align:right"><h2>Amount due</h2><div class="due">' + fmtMoney(due) + '</div></div></div>'
       + '<table><tr><th>Account</th><th>Program</th><th>Grant</th><th>Description</th><th class="r">Amount</th></tr>' + rows
-      + '<tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>' + fmtMoney(total) + '</b></td></tr></table>'
-      + (payRows ? '<table><tr><th>Payment date</th><th>Bank account</th><th>Reference</th><th></th><th class="r">Paid</th></tr>' + payRows
-        + '<tr><td colspan="4" class="r"><b>Amount due</b></td><td class="r"><b>' + fmtMoney(total - paid) + '</b></td></tr></table>' : '')
-      + '<p style="margin-top:32px;color:#555">Printed ' + d(todayLocal()) + '</p>');
-    w.document.close();
-    w.focus(); w.print();
+      + '<tr><td colspan="4" class="r"><b>Total</b></td><td class="r"><b>' + fmtMoney(total) + '</b></td></tr>'
+      + (credited ? '<tr><td colspan="4">Credit notes applied</td><td class="r">-' + fmtMoney(credited) + '</td></tr>' : '')
+      + payRows
+      + '<tr><td colspan="4" class="r"><b>Amount due</b></td><td class="r"><b>' + fmtMoney(due) + '</b></td></tr></table>'
+      + '<p class="small" style="margin-top:24px">Printed ' + d(todayLocal()) + '</p>',
+      () => showPanelError('Allow pop-ups to print the bill.'));
   }
 
   function renderPanelBody(bill, lines, payments) {

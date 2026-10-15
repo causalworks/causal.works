@@ -1,5 +1,6 @@
 'use strict';
 
+const { loadOrgDocInfo, detailLines, oneLine } = require('../lib/orgLetterhead');
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
@@ -55,6 +56,7 @@ function boardReportHtml(data, executiveSummary) {
   .footer { margin-top: 20px; font-size: 8pt; color: #888; }
 </style></head><body>
 <h1>${escapeHtml(data.orgName)}</h1>
+<div class="sub">${escapeHtml((data.orgDetails || '').replace(data.orgName + ' · ', ''))}</div>
 <div class="sub">Board finance report · Fiscal year ${data.fiscalYear} · Generated ${escapeHtml(data.generatedAt.slice(0, 10))}</div>
 <div class="metrics">
   <div class="card"><div class="v">${escapeHtml(m.runway_label)}</div><div class="l">Months of cash</div></div>
@@ -109,7 +111,7 @@ function grantReportHtml(data, narrative) {
   .footer { margin-top: 18px; font-size: 8pt; color: #888; }
 </style></head><body>
 <h1>${escapeHtml(g.name)}</h1>
-<div class="sub">${escapeHtml(data.orgName)} · FY ${data.fiscalYear}</div>
+<div class="sub">${escapeHtml(data.orgDetails || data.orgName)} · FY ${data.fiscalYear}</div>
 <h2>Grant facts</h2>
 <table>
 <tr><th>Funder</th><td>${escapeHtml(g.funder || '—')}</td></tr>
@@ -156,10 +158,10 @@ function giftReceiptHtml(gift, constituent, org) {
   .footer { margin-top: 18px; font-size: 8pt; color: #888; }
 </style></head><body>
 <h1>Official Gift Receipt</h1>
-<div class="sub">${escapeHtml(org.display_name)}${org.ein ? ` · EIN: ${escapeHtml(org.ein)}` : ''}</div>
+<div class="sub"><strong>${escapeHtml(org.display_name)}</strong>${(org.details || []).map((l) => `<br>${escapeHtml(l)}`).join('')}</div>
 <h2>Gift details</h2>
 <table>
-<tr><th>Donor</th><td>${escapeHtml(donorName)}</td></tr>
+<tr><th>Donor</th><td>${escapeHtml(donorName)}${constituent.mailing_address ? String(constituent.mailing_address).split(/\r?\n/).map((l) => `<br>${escapeHtml(l)}`).join('') : ''}</td></tr>
 <tr><th>Amount</th><td>${escapeHtml(fmtUsd(gift.amount_cents))}</td></tr>
 <tr><th>Date received</th><td>${escapeHtml(fmtDate(gift.received_at))}</td></tr>
 <tr><th>Gift type</th><td>${escapeHtml(typeLabel)}</td></tr>
@@ -340,19 +342,14 @@ function registerOrganizationalReportRoutes(app, pool) {
       let constituent = { display_name: 'Donor', email: null, first_name: null, last_name: null };
       if (gift.constituent_id) {
         const cR = await pool.query(
-          'SELECT display_name, first_name, last_name, email FROM org_constituents WHERE id = $1 LIMIT 1',
+          'SELECT display_name, first_name, last_name, email, mailing_address FROM org_constituents WHERE id = $1 LIMIT 1',
           [gift.constituent_id]
         );
         if (cR.rows.length) constituent = cR.rows[0];
       }
 
-      const orgR = await pool.query(
-        `SELECT o.display_name, s.ein
-         FROM coop_members o LEFT JOIN org_settings s ON s.org_id = o.id
-         WHERE o.id = $1 LIMIT 1`,
-        [orgId]
-      );
-      const org = orgR.rows[0] || { display_name: 'Organization', ein: null };
+      const info = await loadOrgDocInfo(pool, orgId);
+      const org = { display_name: info.name, ein: null, details: detailLines(info) };
 
       const html = giftReceiptHtml(gift, constituent, org);
       const pdf  = await htmlToPdfBuffer(html);

@@ -13,6 +13,11 @@
   const orgFyEndMonth = document.getElementById('organizational-org-fy-end-month');
   const orgMission = document.getElementById('organizational-org-mission');
   const orgWebsite = document.getElementById('organizational-org-website');
+  const orgLegalName = document.getElementById('organizational-org-legal-name');
+  const orgAddress = document.getElementById('organizational-org-address');
+  const orgPhone = document.getElementById('organizational-org-phone');
+  const orgContactEmail = document.getElementById('organizational-org-contact-email');
+  const orgPaymentInstructions = document.getElementById('organizational-org-payment-instructions');
   const orgSaveBtn = document.getElementById('organizational-org-save');
 
   const orgDangerZoneEl = document.getElementById('organizational-org-danger-zone');
@@ -160,6 +165,7 @@
 
     [
       orgDisplayName, orgEin, orgState, orgFyEndMonth, orgMission, orgWebsite, orgSaveBtn,
+      orgLegalName, orgAddress, orgPhone, orgContactEmail, orgPaymentInstructions,
       fiscalSponsorshipMode, sponsorshipModel, defaultAdminRate, fiscalSponsorshipSave,
       membershipEnabledCheckbox, membershipSave,
       sessionTimeoutSelect, sessionTimeoutSave,
@@ -185,6 +191,11 @@
         ein: String((orgEin && orgEin.value) || '').trim(),
         state: String((orgState && orgState.value) || '').trim() || null,
         fiscal_year_end_month: Number((orgFyEndMonth && orgFyEndMonth.value) || 12),
+        legal_name: String((orgLegalName && orgLegalName.value) || '').trim(),
+        mailing_address: String((orgAddress && orgAddress.value) || '').trim(),
+        phone: String((orgPhone && orgPhone.value) || '').trim(),
+        contact_email: String((orgContactEmail && orgContactEmail.value) || '').trim(),
+        payment_instructions: String((orgPaymentInstructions && orgPaymentInstructions.value) || '').trim(),
         cooperative_profile: {
           mission: String((orgMission && orgMission.value) || '').trim(),
           website: String((orgWebsite && orgWebsite.value) || '').trim(),
@@ -953,6 +964,11 @@
     if (orgFyEndMonth) orgFyEndMonth.value = String(org.fiscal_year_end_month || 12);
     if (orgMission) orgMission.value = profile.mission || '';
     if (orgWebsite) orgWebsite.value = profile.website || '';
+    if (orgLegalName) orgLegalName.value = org.legal_name || '';
+    if (orgAddress) orgAddress.value = org.mailing_address || '';
+    if (orgPhone) orgPhone.value = org.phone || '';
+    if (orgContactEmail) orgContactEmail.value = org.contact_email || '';
+    if (orgPaymentInstructions) orgPaymentInstructions.value = org.payment_instructions || '';
 
     applyPermissionGating(org);
     currentOrgIsDemo = !!org.is_platform_demo;

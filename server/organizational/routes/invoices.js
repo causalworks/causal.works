@@ -257,7 +257,7 @@ function registerInvoicesRoutes(app, pool) {
     if (!Number.isInteger(invoiceId) || invoiceId < 1) return res.status(400).json({ error: 'Invalid id' });
     try {
       const r = await pool.query(
-        `SELECT i.*, c.display_name AS customer_name,
+        `SELECT i.*, c.display_name AS customer_name, c.email AS contact_email, c.phone AS contact_phone, c.mailing_address AS contact_address,
                 COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0) AS total_cents,
                 ${invoiceCreditSql('i')} AS credited_cents
          FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
@@ -269,7 +269,7 @@ function registerInvoicesRoutes(app, pool) {
       if (linesR.rows.length === 0 && programScopeFor(req) !== null) {
         return res.status(404).json({ error: 'Invoice not found' });
       }
-      return res.json({ invoice: { ...rowToInvoice(r.rows[0]), credited_cents: String(r.rows[0].credited_cents) }, lines: linesR.rows.map(rowToInvoiceLine) });
+      return res.json({ invoice: { ...rowToInvoice(r.rows[0]), credited_cents: String(r.rows[0].credited_cents), contact_email: r.rows[0].contact_email || null, contact_phone: r.rows[0].contact_phone || null, contact_address: r.rows[0].contact_address || null }, lines: linesR.rows.map(rowToInvoiceLine) });
     } catch (e) {
       console.error('GET invoice detail:', e.message);
       return res.status(500).json({ error: 'Could not load invoice' });

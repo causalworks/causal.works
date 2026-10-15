@@ -48,6 +48,11 @@ const ORG_SELECT_FIELDS = `o.id,
            s.has_political_electoral_activity,
            s.membership_enabled,
            s.reply_to_email,
+           s.legal_name,
+           s.mailing_address,
+           s.phone,
+           s.contact_email,
+           s.payment_instructions,
            s.session_timeout_minutes,
            o.is_platform_demo,
            o.created_at,
@@ -187,7 +192,8 @@ function registerOrganizationalOrgRoutes(app, pool) {
                 s.entity_classification, s.federal_grant_recipient, s.state_charitable_solicitation_registrations,
                 s.has_lobbying_activity, s.has_political_electoral_activity, s.membership_enabled,
                 s.reply_to_email, s.onboarding_target_fiscal_year, s.onboarding_conversion_date,
-                s.onboarding_has_prior_data, s.session_timeout_minutes
+                s.onboarding_has_prior_data, s.session_timeout_minutes,
+                s.legal_name, s.mailing_address, s.phone, s.contact_email, s.payment_instructions
          FROM org_users m
          INNER JOIN coop_members o ON o.id = m.org_id
          LEFT JOIN org_settings s ON s.org_id = o.id
@@ -340,6 +346,17 @@ function registerOrganizationalOrgRoutes(app, pool) {
           : String(body.reply_to_email).trim();
       }
 
+      const DOC_FIELDS = { legal_name: 200, mailing_address: 500, phone: 50, contact_email: 200, payment_instructions: 2000 };
+      const docDetails = {};
+      for (const [k, max] of Object.entries(DOC_FIELDS)) {
+        let v = row[k] == null ? null : row[k];
+        if (body[k] !== undefined) {
+          v = body[k] === null || String(body[k]).trim() === '' ? null : String(body[k]).trim();
+          if (v && v.length > max) return res.status(400).json({ error: k.replace(/_/g, ' ') + ' is too long (limit ' + max + ' characters)' });
+        }
+        docDetails[k] = v;
+      }
+
       let onboardingTargetFY = row.onboarding_target_fiscal_year;
       if (body.onboarding_target_fiscal_year !== undefined) {
         if (body.onboarding_target_fiscal_year === null) {
@@ -409,6 +426,10 @@ function registerOrganizationalOrgRoutes(app, pool) {
                updated_at = NOW()
            WHERE org_id = $1`,
           [row.id, ein, fiscalMonth, JSON.stringify(profile), fiscalSponsorshipMode, sponsorshipModel, defaultAdminRate, entityClassification, federalGrantRecipient, stateRegistrations, lobbyingActivity, politicalActivity, membershipEnabled, replyToEmail, onboardingTargetFY, onboardingConversionDate, onboardingHasPriorData, sessionTimeoutMinutes, state]
+        );
+        await client.query(
+          `UPDATE org_settings SET legal_name = $2, mailing_address = $3, phone = $4, contact_email = $5, payment_instructions = $6 WHERE org_id = $1`,
+          [row.id, docDetails.legal_name, docDetails.mailing_address, docDetails.phone, docDetails.contact_email, docDetails.payment_instructions]
         );
         await client.query('COMMIT');
       } catch (e) {

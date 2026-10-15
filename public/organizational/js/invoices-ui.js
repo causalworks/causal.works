@@ -241,26 +241,38 @@
   function printInvoice() {
     if (!invoiceData || !invoiceData.invoice) return;
     const { invoice, lines, payments } = invoiceData;
+    const P = window.OrganizationalDocPrint;
     const org = window.OrganizationalAccounting.getOrg && window.OrganizationalAccounting.getOrg();
     const customerInput = document.getElementById('invoice-customer-input');
     const customer = invoice.customer_name || (customerInput && customerInput.value) || '';
     const total = (lines || []).reduce((n, l) => n + Number(l.line_total_cents), 0);
     const paid = (payments || []).filter((p) => p.status === 'posted').reduce((n, p) => n + Number(p.amount_cents), 0);
+    const credited = Number(invoice.credited_cents || 0);
+    const due = total - paid - credited;
     const d = (v) => (v ? esc(String(v).slice(0, 10)) : '');
-    const rows = (lines || []).map((l) => '<tr><td>' + esc(l.account_code ? l.account_code + ' ' + l.account_name : l.account_name) + '</td><td>' + esc(l.program_name || '') + '</td><td>' + esc(l.description || '') + '</td><td class="r">' + fmtMoney(l.line_total_cents) + '</td></tr>').join('');
-    const payRows = (payments || []).filter((p) => p.status === 'posted').map((p) => '<tr><td>' + d(p.payment_date) + '</td><td>' + esc(p.bank_account_name || '') + '</td><td>' + esc(p.reference || '') + '</td><td class="r">' + fmtMoney(p.amount_cents) + '</td></tr>').join('');
-    const w = window.open('', '_blank');
-    if (!w) { showPanelError('Allow pop-ups to print the invoice.'); return; }
-    w.document.write('<!doctype html><title>Invoice #' + esc(invoice.id) + '</title><style>body{font:13px system-ui,sans-serif;margin:32px;color:#111}h1{font-size:20px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:16px}th{text-align:left;font-size:11px;text-transform:uppercase;color:#555;border-bottom:1px solid #999;padding:4px 8px 4px 0}td{padding:4px 8px 4px 0;border-bottom:1px solid #ddd;vertical-align:top}.r{text-align:right}.meta td{border:0;padding:2px 24px 2px 0}</style>'
-      + '<p style="margin:0;color:#555">' + esc(org && org.display_name || '') + '</p><h1>Invoice #' + esc(invoice.id) + (invoice.reference ? ' · ' + esc(invoice.reference) : '') + '</h1>'
-      + '<table class="meta"><tr><td><b>Customer</b><br>' + esc(customer) + '</td><td><b>Invoice date</b><br>' + d(invoice.invoice_date) + '</td><td><b>Due date</b><br>' + d(invoice.due_date) + '</td><td><b>Status</b><br>' + esc(String(invoice.status).replace('_', ' ')) + '</td></tr></table>'
-      + '<table><tr><th>Account</th><th>Program</th><th>Description</th><th class="r">Amount</th></tr>' + rows
-      + '<tr><td colspan="3" class="r"><b>Total</b></td><td class="r"><b>' + fmtMoney(total) + '</b></td></tr></table>'
-      + (payRows ? '<table><tr><th>Payment date</th><th>Bank account</th><th>Reference</th><th class="r">Received</th></tr>' + payRows
-        + '<tr><td colspan="3" class="r"><b>Amount due</b></td><td class="r"><b>' + fmtMoney(total - paid) + '</b></td></tr></table>' : '')
-      + '<p style="margin-top:32px;color:#555">Printed ' + d(todayLocal()) + '</p>');
-    w.document.close();
-    w.focus(); w.print();
+    const rows = (lines || []).map((l) => '<tr><td>' + esc(l.description || l.line_memo || l.account_name || '') + '</td><td class="r">' + esc(l.quantity) + '</td><td class="r">' + fmtMoney(l.unit_amount_cents) + '</td><td class="r">' + fmtMoney(l.line_total_cents) + '</td></tr>').join('');
+    const payRows = (payments || []).filter((p) => p.status === 'posted').map((p) => '<tr><td colspan="3">Payment received ' + d(p.payment_date) + (p.reference ? ' · ' + esc(p.reference) : '') + '</td><td class="r">-' + fmtMoney(p.amount_cents) + '</td></tr>').join('');
+    const statusWord = invoice.status === 'void' ? 'VOID' : invoice.status === 'paid' ? 'PAID' : '';
+    const contactLine = [org && org.contact_email, org && org.phone].filter(Boolean).map(esc).join(' · ');
+    const howToPay = (org && org.payment_instructions)
+      ? '<div class="pay"><h2>How to pay</h2>' + esc(org.payment_instructions) + (invoice.reference ? '\nPlease quote ' + esc(invoice.reference) + ' with your payment.' : '') + '</div>'
+      : '';
+    P.open('Invoice #' + invoice.id,
+      '<div class="top">' + P.letterheadHtml(org)
+      + '<div style="text-align:right"><h1>INVOICE' + (statusWord ? ' · ' + statusWord : '') + '</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Invoice no.</td><td>' + esc(invoice.id) + '</td></tr>'
+      + (invoice.reference ? '<tr><td>Reference / PO</td><td>' + esc(invoice.reference) + '</td></tr>' : '')
+      + '<tr><td>Invoice date</td><td>' + d(invoice.invoice_date) + '</td></tr></table></div></div>'
+      + '<div class="band"><div>' + P.contactHtml('Bill to', customer, invoice) + '</div>'
+      + '<div><h2>Due date</h2><div class="due" style="font-size:18px">' + (d(invoice.due_date) || 'On receipt') + '</div></div>'
+      + '<div style="text-align:right"><h2>Amount due</h2><div class="due">' + fmtMoney(due) + '</div></div></div>'
+      + howToPay
+      + '<table><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit price</th><th class="r">Amount</th></tr>' + rows
+      + '<tr><td colspan="3" class="r"><b>Total</b></td><td class="r"><b>' + fmtMoney(total) + '</b></td></tr>'
+      + (credited ? '<tr><td colspan="3">Credit notes applied</td><td class="r">-' + fmtMoney(credited) + '</td></tr>' : '')
+      + payRows
+      + '<tr><td colspan="3" class="r"><b>Amount due</b></td><td class="r"><b>' + fmtMoney(due) + '</b></td></tr></table>'
+      + (contactLine ? '<p class="small" style="margin-top:24px">Questions about this invoice: ' + contactLine + '</p>' : ''),
+      () => showPanelError('Allow pop-ups to print the invoice.'));
   }
 
   function renderPanelBody(invoice, lines, payments) {

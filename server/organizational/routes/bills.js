@@ -262,7 +262,7 @@ function registerBillsRoutes(app, pool) {
     if (!Number.isInteger(billId) || billId < 1) return res.status(400).json({ error: 'Invalid id' });
     try {
       const r = await pool.query(
-        `SELECT b.*, c.display_name AS vendor_name,
+        `SELECT b.*, c.display_name AS vendor_name, c.email AS contact_email, c.phone AS contact_phone, c.mailing_address AS contact_address,
                 COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0) AS total_cents,
                 ${billCreditSql('b')} AS credited_cents
          FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
@@ -274,7 +274,7 @@ function registerBillsRoutes(app, pool) {
       if (linesR.rows.length === 0 && programScopeFor(req) !== null) {
         return res.status(404).json({ error: 'Bill not found' });
       }
-      return res.json({ bill: { ...rowToBill(r.rows[0]), credited_cents: String(r.rows[0].credited_cents) }, lines: linesR.rows.map(rowToBillLine) });
+      return res.json({ bill: { ...rowToBill(r.rows[0]), credited_cents: String(r.rows[0].credited_cents), contact_email: r.rows[0].contact_email || null, contact_phone: r.rows[0].contact_phone || null, contact_address: r.rows[0].contact_address || null }, lines: linesR.rows.map(rowToBillLine) });
     } catch (e) {
       console.error('GET bill detail:', e.message);
       return res.status(500).json({ error: 'Could not load bill' });

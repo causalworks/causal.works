@@ -18,7 +18,7 @@ const PAGE_PATH = path.join(__dirname, 'accounting-review.html');
 const DECIDER_EMAIL = 'loopy@causal.works';
 const SHARED = 'shared';
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,120}$/;
-const ITEM_ID_RE = /^[FUSMC]?(?:[BPIQ]\d{2}|[AL]-\d{10,16})$/;
+const ITEM_ID_RE = /^[FUSMC]?(?:[BPIQR]\d{2}|[AL]-\d{10,16})$/;
 const MINE_FIELDS = new Set([
   'works', 'priority', 'comments', 'answer', 'reasoning',
   'area', 'issue', 'example', 'frequency'
@@ -52,7 +52,7 @@ function registerAccountingReview(app, { pool, requireAdmin }) {
     if (!mod) return res.status(400).json({ error: 'Unknown module' });
     try {
       const content = JSON.parse(fs.readFileSync(path.join(DATA_DIR, MODULES[mod].file), 'utf8'));
-      const mine = MODULES[mod].prefix ? '^' + MODULES[mod].prefix : '^[BPIQAL]';
+      const mine = MODULES[mod].prefix ? '^' + MODULES[mod].prefix : '^[BPIQRAL]';
       const r = await pool.query(
         'SELECT item_id, reviewer, data, updated_at, updated_by FROM accounting_review_entry WHERE item_id ~ $1 ORDER BY item_id, reviewer', [mine]);
       return res.json({ content, module: mod, me: me(req), can_decide: canDecide(req), entries: r.rows });

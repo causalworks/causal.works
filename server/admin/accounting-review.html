@@ -118,6 +118,9 @@
       { k: 'works', l: 'Does it work?', t: 's', o: WORKS },
       { k: 'comments', l: 'Comments / what you would change', t: 't', wide: 1 },
       { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
+    { key: 'qa', label: 'Review Q&A', hint: 'What was checked on the Built cards, and what needs your answer.', fixed: 1, fields: [
+      { k: 'answer', l: 'Your answer', t: 't', wide: 1 },
+      { k: 'decision', l: 'Decision', t: 't', wide: 1, sh: 1 } ] },
     { key: 'planned', label: 'Planned, unbuilt', hint: 'Planned and unbuilt.', fixed: 1, fields: [
       { k: 'priority', l: 'How much does this matter?', t: 's', o: NEED },
       { k: 'comments', l: 'Comments', t: 't', wide: 1 },
@@ -195,7 +198,7 @@
     var out = [];
     TABS.forEach(function (def) {
       if (!def.fixed) return;
-      content[def.key].forEach(function (it) {
+      (content[def.key] || []).forEach(function (it) {
         var mineDone = isDone(it.id), oth = othersOf(it.id);
         if (!mineDone && !oth.length) return;
         out.push({ def: def, it: it, mineDone: mineDone, oth: oth, differ: differs(def, it.id) });
@@ -534,7 +537,7 @@
     var rows = [['Tab', 'ID', 'Area/Topic', 'Item', 'Person', 'Field', 'Value']];
     TABS.forEach(function (def) {
       if (!def.fields) return;
-      var ids = def.fixed ? content[def.key] : Object.keys(entries).filter(function (id) { return id.indexOf(PFX + def.add + '-') === 0; }).sort().map(function (id) { return { id: id }; });
+      var ids = def.fixed ? (content[def.key] || []) : Object.keys(entries).filter(function (id) { return id.indexOf(PFX + def.add + '-') === 0; }).sort().map(function (id) { return { id: id }; });
       ids.forEach(function (it) {
         Object.keys(entries[it.id] || {}).forEach(function (r) {
           var d = entries[it.id][r];

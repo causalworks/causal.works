@@ -236,6 +236,7 @@
       if (['draft', 'sent', 'overdue'].includes(invoice.status)) add('invoice-void', 'Void invoice');
     }
     return '<div class="organizational-panel-field-full" style="display:flex;align-items:center;gap:8px;">' + statusBadge(invoice.status) + '<span style="flex:1;"></span>'
+      + (canWrite && !postedEditing && ['sent', 'partially_paid', 'overdue', 'paid'].includes(invoice.status) ? '<button type="button" id="invoice-email" class="organizational-btn organizational-btn-outline" style="height:30px;font-size:0.8125rem;padding:0 12px;" title="Emails the invoice to the customer again with the PDF attached.">Send again</button>' : '')
       + '<button type="button" id="invoice-print" class="organizational-btn organizational-btn-outline" style="height:30px;font-size:0.8125rem;padding:0 12px;">Print PDF</button>'
       + (items.length && !postedEditing
         ? '<span style="position:relative;display:inline-block;"><button type="button" id="invoice-menu-btn" class="organizational-btn organizational-btn-outline" aria-haspopup="true" aria-expanded="false" style="height:30px;font-size:0.8125rem;padding:0 12px;">Invoice options ▾</button>'
@@ -317,9 +318,6 @@
       actions.push('<button type="button" id="invoice-send" class="organizational-btn organizational-btn-outline" title="Saves the invoice, posts it to the ledger as money owed to you, and emails it to the customer when the customer has an email address.">Send</button>');
     } else if (['sent', 'partially_paid', 'overdue'].includes(invoice.status)) {
       actions.push('<button type="button" id="invoice-record-payment" class="organizational-btn organizational-btn-primary">Record payment</button>');
-    }
-    if (invoice && ['sent', 'partially_paid', 'overdue', 'paid'].includes(invoice.status)) {
-      actions.push('<button type="button" id="invoice-email" class="organizational-btn organizational-btn-outline" title="Emails the invoice to the customer again with the PDF attached.">Send again</button>');
     }
 
     let paymentSection = '';

@@ -806,6 +806,7 @@
               <div style="margin-left:auto;display:flex;gap:4px;align-items:center;">
                 ${receiptLink}
                 <button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-edit-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">Edit</button>
+                <button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-copy-gift" data-id="${g.id}" title="Starts a new entry in Log a gift with these details" style="padding:2px 6px;font-size:var(--text-xs);">Copy</button>
                 ${g.not_gift_flagged_at ? `<span class="organizational-badge" title="${esc(g.not_gift_note || '')}" style="font-size:var(--text-xs);">Flagged: not a gift, with Accounting</span>` : (g.gift_source !== 'accounting' && (g.posting_status === 'unposted' || g.posting_status === 'held') ? `<button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-delete-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">✕</button>` : `<button class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-notgift-gift" data-id="${g.id}" style="padding:2px 6px;font-size:var(--text-xs);">Not a gift?</button>`)}
               </div>
             </div>
@@ -968,6 +969,41 @@
         } catch (err) {
           showPanelError(err.message);
         }
+      });
+    });
+
+    section.querySelectorAll('.organizational-copy-gift').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const g = gifts.find(x => x.id === Number(btn.dataset.id));
+        if (!g) return;
+        const setNow = (id, v) => { const el = section.querySelector('#' + id); if (el && v != null) el.value = String(v); return el; };
+        const setWhenReady = (id, v, tries) => {
+          const el = section.querySelector('#' + id);
+          if (!el || v == null || v === '') return;
+          el.value = String(v);
+          if (el.value !== String(v) && (tries || 0) < 25) setTimeout(() => setWhenReady(id, v, (tries || 0) + 1), 200);
+        };
+        const typeSel = setNow('gift-type', g.gift_type);
+        if (typeSel) typeSel.dispatchEvent(new Event('change'));
+        setNow('gift-amount', (Number(g.amount_cents) / 100).toFixed(2));
+        setNow('gift-date', new Date().toISOString().slice(0, 10));
+        setNow('gift-method', g.payment_method || '');
+        const methodSel = section.querySelector('#gift-method');
+        if (methodSel) methodSel.dispatchEvent(new Event('change'));
+        setNow('gift-campaign', g.campaign || '');
+        setNow('gift-notes', g.notes || '');
+        setNow('gift-ik-description', g.in_kind_description);
+        setNow('gift-ik-valuation', g.in_kind_valuation_method || '');
+        setNow('gift-ik-notes', g.in_kind_fair_value_notes || '');
+        setNow('gift-pl-status', g.pledge_status || 'unconditional');
+        setWhenReady('gift-grant-id', g.grant_id);
+        setWhenReady('gift-program-id', g.program_id);
+        setWhenReady('gift-sponsored-project-id', g.sponsored_project_id);
+        setWhenReady('gift-ik-revenue-account', g.in_kind_revenue_account_id);
+        setWhenReady('gift-ik-expense-account', g.in_kind_expense_account_id);
+        setWhenReady('gift-pl-receivable-account', g.receivable_account_id);
+        const form = section.querySelector('#gift-log-form');
+        if (form) form.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       });
     });
 

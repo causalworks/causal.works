@@ -49,6 +49,7 @@
   .fields select, .fields textarea, .fields input { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong, #d1cfc9); border-radius: var(--radius-sm, 6px); font: inherit; background: #fffdf3; }
   .fields .sh select, .fields .sh textarea, .fields .sh input { background: var(--surface-card, #fff); }
   .fields textarea { min-height: 54px; resize: vertical; }
+  .fields .sh textarea { min-height: 9.5em; }
   .fields [disabled] { background: var(--surface-active, #f0eee8) !important; color: var(--text-muted, #9ca3af); cursor: not-allowed; }
   .oth { margin-top: 10px; padding: 8px 10px; background: var(--surface-page, #f7f7f5); border-radius: var(--radius-sm, 6px); font-size: 13px; }
   .oth + .oth { margin-top: 6px; }
@@ -234,7 +235,7 @@
     } else if (f.t === 'i') {
       inner = '<input' + attrs + ' value="' + esc(val) + '" maxlength="4000"' + (off ? ' disabled' : '') + '>';
     } else {
-      inner = '<textarea' + attrs + ' maxlength="4000"' + (off ? ' disabled placeholder="' + (off === 'decision' ? 'Only the admin enters decisions' : 'Write your answer first') + '"' : '') + '>' + esc(val) + '</textarea>';
+      inner = '<textarea' + attrs + (f.sh ? ' rows="6"' : '') + ' maxlength="4000"' + (off ? ' disabled placeholder="' + (off === 'decision' ? 'Only the admin enters decisions' : 'Write your answer first') + '"' : '') + '>' + esc(val) + '</textarea>';
     }
     return '<div class="' + cls + '"><label for="' + dom + '">' + esc(f.l) + '</label>' + inner + '</div>';
   }

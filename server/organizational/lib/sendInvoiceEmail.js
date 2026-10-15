@@ -1,9 +1,10 @@
 'use strict';
 
-// Emails a sent invoice to the customer as plain text, from the organization's name with its contact email as the reply address.
+// Emails a sent invoice to the customer with a PDF attached, from the organization's name with its contact email as the reply address.
 
 const { sendPlainEmail } = require('./sendPlainEmail');
-const { loadOrgDocInfo, detailLines } = require('./orgLetterhead');
+const { loadOrgDocInfo } = require('./orgLetterhead');
+const { buildInvoicePdf } = require('./invoicePdf');
 
 const money = (cents) => '$' + (Number(cents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -11,23 +12,18 @@ async function sendInvoiceEmail(pool, { orgId, invoice, customerName, customerEm
   if (!customerEmail) return 'no_email';
   const info = await loadOrgDocInfo(pool, orgId);
   if (!info.email) return 'no_org_email';
-  const s = (await pool.query('SELECT payment_instructions FROM org_settings WHERE org_id = $1', [orgId])).rows[0] || {};
   const number = invoice.invoice_number || ('#' + invoice.id);
+  let built = null;
+  try {
+    const customer = (await pool.query('SELECT display_name, mailing_address FROM org_constituents WHERE id = $1 AND org_id = $2', [invoice.constituent_id, orgId])).rows[0] || { display_name: customerName };
+    built = await buildInvoicePdf(pool, { orgId, invoice, customer, lines });
+  } catch (e) { console.error('invoice pdf:', e.message); return 'failed'; }
   const out = [];
   out.push('Hello ' + (customerName || '') + ',', '');
-  out.push(info.name + ' sent you invoice ' + number + '.', '');
-  out.push('Amount due: ' + money(totalCents));
-  if (invoice.due_date) out.push('Due: ' + String(invoice.due_date).slice(0, 10));
-  out.push('Invoice date: ' + String(invoice.invoice_date).slice(0, 10));
-  if (invoice.reference) out.push('Reference: ' + invoice.reference);
-  out.push('');
-  for (const l of lines) {
-    out.push('- ' + (l.description || l.line_memo || 'Item') + ': ' + money(Math.round(Number(l.quantity) * Number(l.unit_amount_cents))));
-  }
-  if (s.payment_instructions) out.push('', 'How to pay', s.payment_instructions);
-  out.push('', 'Questions? Reply to this email.', '', info.name, ...detailLines(info));
+  out.push(info.name + ' sent you invoice ' + number + ' for ' + money(built.remainingCents) + (invoice.due_date ? ', due ' + String(invoice.due_date).slice(0, 10) : '') + '.');
+  out.push('The invoice is attached as a PDF.', '', 'Questions? Reply to this email.', '', info.name);
   const ok = await sendPlainEmail({
-    to: customerEmail, subject: 'Invoice ' + number + ' from ' + info.name, text: out.join('\n'), fromName: info.name, replyTo: info.email,
+    to: customerEmail, subject: 'Invoice ' + number + ' from ' + info.name, text: out.join('\n'), attachments: [{ name: 'Invoice-' + number.replace(/[^A-Za-z0-9._-]/g, '') + '.pdf', content: built.pdf, contentType: 'application/pdf' }], fromName: info.name, replyTo: info.email,
   });
   return ok ? 'sent' : 'failed';
 }

@@ -16,6 +16,7 @@ const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments'
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
+const { sendInvoiceEmail } = require('../lib/sendInvoiceEmail');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -506,7 +507,7 @@ function registerInvoicesRoutes(app, pool) {
 
       const linesR = await pool.query(LINES_SELECT, [invoiceId]);
       if (!linesR.rows.length) return res.status(400).json({ error: 'Invoice has no lines' });
-      const customerR = await pool.query('SELECT display_name FROM org_constituents WHERE id = $1', [invoice.constituent_id]);
+      const customerR = await pool.query('SELECT display_name, email FROM org_constituents WHERE id = $1', [invoice.constituent_id]);
       const arAccountR = await pool.query('SELECT org_get_or_create_ar_account($1) AS id', [orgId]);
       const arAccountId = arAccountR.rows[0].id;
 
@@ -557,7 +558,14 @@ function registerInvoicesRoutes(app, pool) {
         fields: [{ fieldName: 'status', oldValue: invoice.status, newValue: 'sent' }],
         metadata: { ...reqMeta(req), ledger_transaction_id: postResult.body.id },
       }).catch(() => {});
-      return res.json({ id: invoiceId, status: 'sent', ledger_transaction_id: postResult.body.id });
+      let emailed = 'skipped';
+      if (!(req.body && req.body.email === false)) {
+        try {
+          emailed = await sendInvoiceEmail(pool, { orgId, invoice, customerName: customerR.rows[0] && customerR.rows[0].display_name,
+            customerEmail: customerR.rows[0] && customerR.rows[0].email, lines: linesR.rows, totalCents });
+        } catch (mailErr) { console.error('invoice email:', mailErr.message); emailed = 'failed'; }
+      }
+      return res.json({ id: invoiceId, status: 'sent', ledger_transaction_id: postResult.body.id, emailed });
     } catch (e) {
       const translated = translateInvoiceWriteError(e);
       if (translated) return res.status(translated.status).json(translated.body);

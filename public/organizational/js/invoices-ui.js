@@ -66,7 +66,7 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function showError(msg) { if (errEl) { errEl.textContent = msg || ''; errEl.hidden = !msg; } }
-  function showPanelError(msg) { if (panelErrEl) { panelErrEl.textContent = msg || ''; panelErrEl.hidden = !msg; } }
+  function showPanelError(msg, isNote) { if (panelErrEl) { panelErrEl.textContent = msg || ''; panelErrEl.hidden = !msg; panelErrEl.style.color = isNote ? 'var(--text-primary)' : ''; } }
 
   function inputToCents(raw) {
     const t = String(raw || '').trim().replace(/[$,\s]/g, '');
@@ -311,13 +311,10 @@
     if (postedEditing) {
       actions.push('<button type="button" id="invoice-edit-cancel" class="organizational-btn organizational-btn-outline">Cancel</button>');
       actions.push('<button type="button" id="invoice-edit-save" class="organizational-btn organizational-btn-primary">Save changes</button>');
-    } else if (!invoice) {
-      actions.push('<button type="button" id="invoice-save-close" class="organizational-btn organizational-btn-primary">Save draft &amp; close</button>');
-      actions.push('<button type="button" id="invoice-save" class="organizational-btn organizational-btn-outline">Save draft</button>');
-    } else if (invoice.status === 'draft') {
+    } else if (!invoice || invoice.status === 'draft') {
       actions.push('<button type="button" id="invoice-save-close" class="organizational-btn organizational-btn-primary">Save &amp; close</button>');
-      actions.push('<button type="button" id="invoice-save" class="organizational-btn organizational-btn-outline">Save changes</button>');
-      actions.push('<button type="button" id="invoice-send" class="organizational-btn organizational-btn-outline" title="Posts the invoice to the ledger as money owed to you. Save a draft instead if it is not ready.">Send</button>');
+      actions.push('<button type="button" id="invoice-save" class="organizational-btn organizational-btn-outline">Save</button>');
+      actions.push('<button type="button" id="invoice-send" class="organizational-btn organizational-btn-outline" title="Saves the invoice, posts it to the ledger as money owed to you, and emails it to the customer when the customer has an email address.">Send</button>');
     } else if (['sent', 'partially_paid', 'overdue'].includes(invoice.status)) {
       actions.push('<button type="button" id="invoice-record-payment" class="organizational-btn organizational-btn-primary">Record payment</button>');
     }
@@ -506,7 +503,7 @@
     const saveCloseBtn = document.getElementById('invoice-save-close');
     if (saveCloseBtn) saveCloseBtn.addEventListener('click', () => saveInvoice(true));
     const sendBtn = document.getElementById('invoice-send');
-    if (sendBtn) sendBtn.addEventListener('click', () => transitionInvoice(currentInvoiceId, 'send'));
+    if (sendBtn) sendBtn.addEventListener('click', () => saveInvoice(false, true));
     const voidBtn = document.getElementById('invoice-void');
     if (voidBtn) voidBtn.addEventListener('click', () => {
       const posted = invoice && ['sent', 'overdue'].includes(invoice.status);
@@ -595,7 +592,7 @@
     }
   }
 
-  async function saveInvoice(closeAfter) {
+  async function saveInvoice(closeAfter, sendAfter) {
     showPanelError('');
     const customerId = document.getElementById('invoice-customer').value;
     const invoiceDate = document.getElementById('invoice-date').value;
@@ -633,6 +630,7 @@
           method: 'POST', body: uploadForm, credentials: 'same-origin',
         }).catch(() => {});
       }
+      if (sendAfter) { await sendSavedInvoice(out.data.id); return; }
       await loadInvoices();
       if (closeAfter === true) { closeInvoicePanel(); return; }
       await openInvoicePanel(out.data.id);
@@ -666,6 +664,19 @@
     bar.querySelector('#invoice-reason-ok').addEventListener('click', submit);
     bar.querySelector('#invoice-reason-cancel').addEventListener('click', () => { bar.remove(); showPanelError(''); });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  }
+
+  async function sendSavedInvoice(id) {
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + id + '/send', { method: 'POST' });
+    await loadInvoices();
+    if (!out || !out.res.ok) {
+      await openInvoicePanel(id);
+      showPanelError((out && out.data && (out.data.message || out.data.error)) || 'The invoice was saved but could not be sent.');
+      return;
+    }
+    await openInvoicePanel(id);
+    const how = { sent: '', no_email: 'It was not emailed: the customer has no email address. Add one on the contact and send it yourself.', no_org_email: 'It was not emailed: set a contact email in organization settings first.', failed: 'It was posted but the email did not go through.', skipped: '' }[out.data.emailed] || '';
+    showPanelError(out.data.emailed === 'sent' ? 'Sent and emailed to the customer.' : ('Sent. ' + how), true);
   }
 
   async function transitionInvoice(id, action, reason) {

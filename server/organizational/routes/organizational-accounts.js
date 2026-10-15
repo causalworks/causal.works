@@ -123,18 +123,29 @@ function registerOrganizationalAccountRoutes(app, pool) {
   });
 
   app.put('/api/organizational/orgs/:slug/display-settings', ...orgAuth, requireWriteAccess('structure'), async (req, res) => {
-    const want = req.body && req.body.show_number_colors;
-    if (typeof want !== 'boolean') return res.status(400).json({ error: 'show_number_colors must be true or false' });
+    const body = req.body || {};
+    const REPORT_KEYS = ['show_account_codes', 'show_cents', 'hide_zero_balances'];
+    const hasColors = 'show_number_colors' in body;
+    const reportKeys = REPORT_KEYS.filter((k) => k in body);
+    if (!hasColors && !reportKeys.length) return res.status(400).json({ error: 'Nothing to save' });
+    if ((hasColors && typeof body.show_number_colors !== 'boolean') || reportKeys.some((k) => typeof body[k] !== 'boolean')) {
+      return res.status(400).json({ error: 'Each display setting must be true or false' });
+    }
     try {
-      const before = (await pool.query('SELECT show_number_colors FROM org_settings WHERE org_id = $1', [req.orgId])).rows[0];
+      const before = (await pool.query('SELECT show_number_colors, report_display FROM org_settings WHERE org_id = $1', [req.orgId])).rows[0];
       if (!before) return res.status(404).json({ error: 'Settings not found' });
-      await pool.query('UPDATE org_settings SET show_number_colors = $2, updated_at = NOW() WHERE org_id = $1', [req.orgId, want]);
+      const display = { ...(before.report_display || {}) };
+      reportKeys.forEach((k) => { display[k] = body[k]; });
+      const colors = hasColors ? body.show_number_colors : before.show_number_colors;
+      await pool.query('UPDATE org_settings SET show_number_colors = $2, report_display = $3::jsonb, updated_at = NOW() WHERE org_id = $1', [req.orgId, colors, JSON.stringify(display)]);
+      const oldFlat = { show_number_colors: before.show_number_colors, ...(before.report_display || {}) };
+      const newFlat = { show_number_colors: colors, ...display };
       await logAudit(pool, {
         orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_settings', recordId: req.orgId,
-        fields: diffFields({ show_number_colors: before.show_number_colors }, { show_number_colors: want }, ['show_number_colors']),
+        fields: diffFields(oldFlat, newFlat, ['show_number_colors', ...REPORT_KEYS]),
         metadata: reqMeta(req),
       });
-      return res.json({ show_number_colors: want });
+      return res.json({ show_number_colors: colors, report_display: display });
     } catch (e) {
       console.error('PUT /display-settings:', e.message);
       return res.status(500).json({ error: 'Could not save this setting' });

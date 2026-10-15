@@ -190,6 +190,22 @@
       }
       if (window.OrganizationalApplyNumberColors) window.OrganizationalApplyNumberColors(want);
     });
+    const rd = (orgOut && orgOut.res.ok && orgOut.data.org && orgOut.data.org.report_display) || {};
+    [['structure-report-codes', 'show_account_codes', rd.show_account_codes !== false], ['structure-report-cents', 'show_cents', !!rd.show_cents], ['structure-report-zeros', 'hide_zero_balances', !!rd.hide_zero_balances]].forEach(([id, key, on]) => {
+      const box = $(id);
+      box.checked = on;
+      box.disabled = !canEdit;
+      box.addEventListener('change', async () => {
+        const want = box.checked;
+        box.disabled = true; $('structure-report-error').hidden = true;
+        const out = await apiJson(base + '/display-settings', { method: 'PUT', body: JSON.stringify({ [key]: want }) });
+        box.disabled = !canEdit;
+        if (!out || !out.res.ok) {
+          box.checked = !want;
+          const er = $('structure-report-error'); er.textContent = (out && out.data && out.data.error) || 'Could not save this setting.'; er.hidden = false;
+        }
+      });
+    });
     document.querySelector('.organizational-subnav').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.getAttribute('data-tab')); });
     $('structure-accounts-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type-tab]'); if (b) { typeTab = b.getAttribute('data-type-tab'); renderTypeTabs(); renderAccounts(); } });
     $('structure-accounts-q').addEventListener('input', renderAccounts);

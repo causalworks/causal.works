@@ -79,7 +79,7 @@
       const below = window.innerHeight - r.bottom - 12;
       const up = below < 200 && r.top > below;
       pop.style.cssText = 'position:fixed;z-index:1000;left:' + Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) + 'px;width:' + width + 'px;'
-        + 'max-height:' + Math.max(140, Math.min(300, (up ? r.top : below) - 8)) + 'px;overflow-y:auto;'
+        + 'max-height:' + Math.max(140, Math.min(300, (up ? r.top : below) - 8)) + 'px;overflow-y:auto;overscroll-behavior:contain;'
         + (up ? 'bottom:' + (window.innerHeight - r.top + 2) + 'px;' : 'top:' + (r.bottom + 2) + 'px;')
         + 'background:var(--surface-card);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-lg);padding:2px 0;font-size:0.8125rem;';
       document.body.appendChild(pop);

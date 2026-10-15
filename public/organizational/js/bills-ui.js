@@ -312,7 +312,7 @@
       : '';
     const lockedNote = (bill && !isDraft && bill.status !== 'void')
       ? (postedEditing
-        ? '<div class="organizational-panel-field-full"><label class="organizational-label">Reason for the change (optional)<input type="text" id="bill-edit-reason" class="organizational-input" maxlength="500" placeholder="Why this is being corrected"></label>'
+        ? '<div class="organizational-panel-field-full"><label class="organizational-label">Reason for the change *<input type="text" id="bill-edit-reason" class="organizational-input" maxlength="500" placeholder="Why this is being corrected"></label>'
           + '</div>'
         : '<p class="organizational-hint" style="margin:0;">To change an amount, the vendor or the bill date, enter a vendor credit note.</p>') : '';
 
@@ -658,6 +658,7 @@
       return { id: Number(row.getAttribute('data-line-id')), account_id: Number(account), program_id: Number(program), grant_id: grant ? Number(grant) : null, line_memo: row.querySelector('.bill-line-memo').value.trim() || null };
     });
     if (lines.some((l) => !l.account_id || !l.program_id)) { showPanelError('Every line needs an account and a program.'); return; }
+    if (!reason) { showPanelError('Give a reason for the change.'); return; }
     const body = {
       reason, lines,
       due_date: document.getElementById('bill-due-date').value || null,

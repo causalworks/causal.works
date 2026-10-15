@@ -389,6 +389,7 @@ function registerBillsRoutes(app, pool) {
     let posted = null;
     if (isMetadataOnly && Array.isArray(body.lines) && body.lines.length) {
       const reason = body.reason != null ? String(body.reason).trim() : '';
+      if (!reason) return res.status(400).json({ error: 'A reason is required to change an approved bill.', code: 'reason_required' });
       if (!bill.ledger_transaction_id) return res.status(409).json({ error: 'This bill has no ledger entry to update.', code: 'not_editable' });
       const tR = await pool.query('SELECT id, fiscal_year, status FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [bill.ledger_transaction_id, orgId]);
       const txn = tR.rows[0];

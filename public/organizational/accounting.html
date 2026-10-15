@@ -550,6 +550,20 @@
               <p id="organizational-acctset-numbering-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
             </section>
 
+            <h2 id="acct-sec-opening" class="organizational-subheading">Opening balances</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p class="organizational-hint" style="margin:0 0 10px;">For an organization moving its books here. Enter what the organization owned and owed on the day its books start, from the last closing balance sheet. One journal entry is posted on that date. Assets are entered as positive amounts, and so are liabilities and net assets. Whatever is left over goes to the net assets account you choose, so the entry balances.</p>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;max-width:760px;">
+                <label class="organizational-label">Books start on<input type="date" id="organizational-acctset-open-date" class="organizational-input"></label>
+                <label class="organizational-label">Program for these lines<select id="organizational-acctset-open-program" class="organizational-select"></select></label>
+                <label class="organizational-label">Balancing net assets account<select id="organizational-acctset-open-equity" class="organizational-select"></select></label>
+              </div>
+              <div id="organizational-acctset-open-grid" style="margin-top:14px;max-width:760px;">Loading…</div>
+              <p id="organizational-acctset-open-sum" class="organizational-hint" style="margin:8px 0 0;"></p>
+              <div class="organizational-actions"><button type="button" class="organizational-btn" id="organizational-acctset-open-post">Post opening balances</button></div>
+              <p id="organizational-acctset-open-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
+            </section>
+
             <h2 id="acct-sec-state" class="organizational-subheading">State</h2>
             <section class="organizational-card" style="padding:16px 20px;">
               <div id="organizational-acctset-state">Loading…</div>

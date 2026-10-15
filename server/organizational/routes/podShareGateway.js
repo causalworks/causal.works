@@ -74,7 +74,7 @@ async function sendCodeEmail(to, code, orgName) {
       'X-Postmark-Server-Token': process.env.POSTMARK_API_KEY,
     },
     body: JSON.stringify({
-      From: 'Causal <noreply@causal.works>',
+      From: `"${String(orgName).replace(/["\r\n]/g, '')}" <noreply@causal.works>`,
       To: to,
       Subject: `Your verification code: ${code}`,
       HtmlBody: `

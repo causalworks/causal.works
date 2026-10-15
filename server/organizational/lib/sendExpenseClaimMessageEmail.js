@@ -42,7 +42,7 @@ async function sendExpenseClaimMessageEmail(pool, { recipients, claimId, orgName
 
   for (const to of recipients) {
     const payload = {
-      From: `${orgName} via Causal <noreply@causal.works>`,
+      From: `"${String(orgName).replace(/["\r\n]/g, '')}" <noreply@causal.works>`,
       To: to,
       Subject: `New message on expense claim #${claimId}`,
       TextBody: text,

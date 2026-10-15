@@ -304,7 +304,7 @@
 
     <div class="spec">
       <div class="spec-label">Xero coexistence, not replacement</div>
-      Every organization has a single switch determining whether Xero or the workspace's own ledger is its system of record for actuals. Xero stays fully connected either way. When the Causal ledger is switched on, it writes its own summarized actuals into the same table Xero and CSV imports already write into. Every existing budget-vs-actual report, 990 export, and balance sheet view keeps working unchanged, because none of them needed to know where the numbers came from.
+      Every organization has a single switch determining whether Xero or the workspace's own ledger is its system of record for actuals. Xero stays fully connected either way. When the workspace's own ledger is switched on, it writes its own summarized actuals into the same table Xero and CSV imports already write into. Every existing budget-vs-actual report, 990 export, and balance sheet view keeps working unchanged, because none of them needed to know where the numbers came from.
     </div>
 
     <div class="spec">
@@ -329,7 +329,7 @@
       <p style="margin:12px 0 0;"><b>Rough today</b></p>
       <ul>
         <li>The Plaid webhook check has not been run against a real delivery, which needs a public HTTPS callback URL. Manual sync, the same code path, is verified. Worth a live check before relying on webhook-driven sync.</li>
-        <li>Switching from Xero to the Causal ledger is straightforward, but switching back isn't a clean undo: the period switched away from comes back empty and would need a re-import.</li>
+        <li>Switching from Xero to the workspace's own ledger is straightforward, but switching back isn't a clean undo: the period switched away from comes back empty and would need a re-import.</li>
         <li>Two people approving or voiding the same item at the same instant is handled safely but not optimized.</li>
         <li>There is no general account-edit screen. A cash account's flag can only be set from chart templates or the Plaid mapping panel's inline create.</li>
       </ul>

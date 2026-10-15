@@ -9,7 +9,7 @@ async function sendPlainEmail({ to, subject, text, fromName, replyTo, attachment
     const response = await fetch('https://api.postmarkapp.com/email', {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Postmark-Server-Token': process.env.POSTMARK_API_KEY },
-      body: JSON.stringify({ From: (fromName ? '"' + String(fromName).replace(/["\r\n]/g, '') + '" ' : 'Causal ') + '<noreply@causal.works>', ...(replyTo ? { ReplyTo: replyTo } : {}), To: to, Subject: subject, TextBody: text, ...(attachments && attachments.length ? { Attachments: attachments.map((a) => ({ Name: a.name, Content: a.content.toString('base64'), ContentType: a.contentType })) } : {}), MessageStream: 'outbound' }),
+      body: JSON.stringify({ From: (fromName ? '"' + String(fromName).replace(/["\r\n]/g, '') + '" ' : '') + '<noreply@causal.works>', ...(replyTo ? { ReplyTo: replyTo } : {}), To: to, Subject: subject, TextBody: text, ...(attachments && attachments.length ? { Attachments: attachments.map((a) => ({ Name: a.name, Content: a.content.toString('base64'), ContentType: a.contentType })) } : {}), MessageStream: 'outbound' }),
     });
     if (!response.ok) {
       console.error('sendPlainEmail: Postmark refused:', response.status, (await response.text()).slice(0, 200));

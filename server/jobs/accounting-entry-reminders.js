@@ -10,6 +10,7 @@ async function runAccountingEntryReminders(pool) {
     const link = `https://${domain}/organizational/o/${encodeURIComponent(row.org_slug)}/settings/organization`;
     await sendPlainEmail({
       to: row.email,
+      fromName: row.org_name,
       subject: `${row.org_name}: keep accounting entry access switched on?`,
       text: [
         `Your own access to enter and edit accounting transactions in ${row.org_name} has been switched on for 30 days.`,

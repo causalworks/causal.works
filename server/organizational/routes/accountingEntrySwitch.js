@@ -40,7 +40,7 @@ function registerAccountingEntrySwitchRoutes(app, pool) {
       on ? 'While it is on, this admin can post, change and void accounting entries like a finance member. It is logged in the Activity Log.' : 'This admin can no longer enter or change accounting transactions.',
       'If this is not expected, please check with them.',
     ].filter((l, i) => l !== '' || i > 0).join('\n');
-    const results = await Promise.all(fin.rows.map((r) => sendPlainEmail({ to: r.email, subject, text })));
+    const results = await Promise.all(fin.rows.map((r) => sendPlainEmail({ to: r.email, subject, text, fromName: d.org_name })));
     return { notified: fin.rows.length, sent: results.filter(Boolean).length };
   }
 

@@ -65,7 +65,7 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
   ].filter(line => line !== undefined).join('\n');
 
   const payload = {
-    From: `${orgName} via Causal <noreply@causal.works>`,
+    From: `"${String(orgName).replace(/["\r\n]/g, '')}" <noreply@causal.works>`,
     To: constituent.email,
     Subject: `Thank you for your gift to ${orgName}`,
     TextBody: text,

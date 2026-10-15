@@ -202,7 +202,7 @@ async function sendShareLinkEmail(to, token, orgName, docTitle, expiresAt) {
       'X-Postmark-Server-Token': process.env.POSTMARK_API_KEY,
     },
     body: JSON.stringify({
-      From: 'Causal <noreply@causal.works>',
+      From: `"${String(orgName).replace(/["\r\n]/g, '')}" <noreply@causal.works>`,
       To: to,
       Subject: `${orgName} shared a document with you`,
       HtmlBody: `

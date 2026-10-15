@@ -1229,15 +1229,31 @@
       + '<div class="organizational-panel-actions"><button type="button" id="billsched-save" class="organizational-btn organizational-btn-primary">Create schedule</button></div>';
   }
 
-  async function toggleBillScheduleForm() {
-    const willOpen = schedFormEl.hidden;
+  let editingScheduleId = null;
+
+  async function toggleBillScheduleForm(editSched) {
+    const willOpen = editSched ? true : schedFormEl.hidden;
     schedFormEl.hidden = !willOpen;
+    editingScheduleId = editSched ? editSched.id : null;
     if (!willOpen) return;
     schedFormEl.innerHTML = scheduleFormHtml();
+    if (editSched) {
+      const t = editSched.template || {};
+      document.getElementById('billsched-save').textContent = 'Save schedule';
+      document.getElementById('billsched-reference').value = t.reference || '';
+      document.getElementById('billsched-frequency').value = editSched.frequency;
+      document.getElementById('billsched-next-date').value = String(editSched.next_occurrence_date || '').slice(0, 10);
+      document.getElementById('billsched-end-date').value = editSched.end_date ? String(editSched.end_date).slice(0, 10) : '';
+      document.getElementById('billsched-due-days').value = t.due_days != null ? t.due_days : '';
+      document.getElementById('billsched-months').value = (editSched.active_months || []).join(',');
+      document.getElementById('billsched-months-row').hidden = editSched.frequency !== 'custom_months';
+      document.getElementById('billsched-lines-wrap').innerHTML = (t.lines && t.lines.length ? t.lines : [{}]).map(scheduleLineRowHtml).join('');
+    }
     const schedVendorField = document.getElementById('billsched-vendor-field');
     if (schedVendorField) {
       window.OrganizationalContactPicker.mount(schedVendorField, {
         getCache: () => vendorsCache, role: 'vendor', slug: currentSlug, valueElementId: 'billsched-vendor',
+        selectedId: editSched && editSched.template ? editSched.template.constituent_id : undefined,
       });
     }
     const linesWrap = document.getElementById('billsched-lines-wrap');
@@ -1274,8 +1290,8 @@
     const lines = collectScheduleLines();
     if (!lines) return;
 
-    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/recurring-schedules', {
-      method: 'POST',
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/recurring-schedules' + (editingScheduleId ? '/' + editingScheduleId : ''), {
+      method: editingScheduleId ? 'PATCH' : 'POST',
       body: JSON.stringify({
         schedule_type: 'bill', frequency, active_months: activeMonths, next_occurrence_date: nextDate, end_date: endDate,
         template: { constituent_id: Number(vendorId), reference, due_days: dueDays, lines },
@@ -1284,6 +1300,7 @@
     if (!out) return;
     if (out.res.ok) {
       schedFormEl.hidden = true;
+      editingScheduleId = null;
       await loadBillSchedules();
     } else {
       showScheduleFormError((out.data && (out.data.message || out.data.error)) || 'Could not create recurring schedule.');
@@ -1319,7 +1336,7 @@
       + '<td>' + esc(String(s.next_occurrence_date || '').slice(0, 10)) + '</td>'
       + '<td>' + esc(s.end_date ? String(s.end_date).slice(0, 10) : '—') + '</td>'
       + '<td>' + (s.active ? '<span class="organizational-badge">Active</span>' : '<span class="organizational-badge">Inactive</span>') + '</td>'
-      + '<td>' + (s.active && canWrite ? '<button type="button" class="organizational-btn organizational-btn-outline billsched-deactivate-btn" data-id="' + s.id + '" style="font-size:0.75rem;">Deactivate</button>' : '') + '</td>'
+      + '<td>' + (s.active && canWrite ? '<button type="button" class="organizational-btn organizational-btn-outline billsched-edit-btn" data-id="' + s.id + '" style="font-size:0.75rem;margin-right:6px;">Edit</button><button type="button" class="organizational-btn organizational-btn-outline billsched-deactivate-btn" data-id="' + s.id + '" style="font-size:0.75rem;">Deactivate</button>' : '') + '</td>'
       + '</tr>'
     )).join('') : '<tr class="organizational-table-empty"><td colspan="6">No recurring schedules yet.</td></tr>';
   }
@@ -1361,8 +1378,10 @@
     });
     if (vcPanelClose) vcPanelClose.addEventListener('click', closeVendorCompliancePanel);
     if (vcPanelOverlay) vcPanelOverlay.addEventListener('click', closeVendorCompliancePanel);
-    if (schedAddBtn) schedAddBtn.addEventListener('click', toggleBillScheduleForm);
+    if (schedAddBtn) schedAddBtn.addEventListener('click', () => toggleBillScheduleForm());
     if (schedTbody) schedTbody.addEventListener('click', (e) => {
+      const editBtn = e.target.closest('.billsched-edit-btn');
+      if (editBtn) { const sc = schedulesCache.find((x) => x.id === Number(editBtn.getAttribute('data-id'))); if (sc) toggleBillScheduleForm(sc); return; }
       const btn = e.target.closest('.billsched-deactivate-btn');
       if (btn) deactivateBillSchedule(Number(btn.getAttribute('data-id')));
     });

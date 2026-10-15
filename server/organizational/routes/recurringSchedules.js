@@ -45,43 +45,59 @@ function registerRecurringSchedulesRoutes(app, pool) {
     }
   });
 
+  function parseSchedule(body) {
+    const frequency = String(body.frequency || '').trim();
+    if (!FREQUENCIES.has(frequency)) return { error: 'frequency must be monthly, quarterly, annual, or custom_months' };
+    const activeMonths = Array.isArray(body.active_months) ? body.active_months.map(Number) : null;
+    if (frequency === 'custom_months' && (!activeMonths || !activeMonths.length)) return { error: 'active_months is required when frequency is custom_months' };
+    const nextOccurrenceDate = body.next_occurrence_date != null ? String(body.next_occurrence_date) : null;
+    if (!nextOccurrenceDate || !DATE_RE.test(nextOccurrenceDate)) return { error: 'next_occurrence_date is required and must be YYYY-MM-DD' };
+    const endDate = body.end_date != null && body.end_date !== '' ? String(body.end_date) : null;
+    if (endDate && !DATE_RE.test(endDate)) return { error: 'end_date must be YYYY-MM-DD' };
+    const template = body.template && typeof body.template === 'object' ? body.template : null;
+    if (!template || !template.constituent_id || !Array.isArray(template.lines) || !template.lines.length) return { error: 'template must include constituent_id and at least one line' };
+    if (template.due_days != null && !(Number.isInteger(template.due_days) && template.due_days >= 0 && template.due_days <= 365)) return { error: 'due_days must be a whole number of days, 0 to 365' };
+    return { frequency, activeMonths: frequency === 'custom_months' ? activeMonths : null, nextOccurrenceDate, endDate, template };
+  }
+
   app.post(base, ...orgAuth, financeWriter, async (req, res) => {
     const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
     const body = req.body || {};
-
     const scheduleType = String(body.schedule_type || '').trim();
     if (!['bill', 'invoice'].includes(scheduleType)) return res.status(400).json({ error: 'schedule_type must be bill or invoice' });
-    const frequency = String(body.frequency || '').trim();
-    if (!FREQUENCIES.has(frequency)) return res.status(400).json({ error: 'frequency must be monthly, quarterly, annual, or custom_months' });
-    const activeMonths = Array.isArray(body.active_months) ? body.active_months.map(Number) : null;
-    if (frequency === 'custom_months' && (!activeMonths || !activeMonths.length)) {
-      return res.status(400).json({ error: 'active_months is required when frequency is custom_months' });
-    }
-    const nextOccurrenceDate = body.next_occurrence_date != null ? String(body.next_occurrence_date) : null;
-    if (!nextOccurrenceDate || !DATE_RE.test(nextOccurrenceDate)) return res.status(400).json({ error: 'next_occurrence_date is required and must be YYYY-MM-DD' });
-    const endDate = body.end_date != null && body.end_date !== '' ? String(body.end_date) : null;
-    if (endDate && !DATE_RE.test(endDate)) return res.status(400).json({ error: 'end_date must be YYYY-MM-DD' });
-
-    const template = body.template && typeof body.template === 'object' ? body.template : null;
-    if (!template || !template.constituent_id || !Array.isArray(template.lines) || !template.lines.length) {
-      return res.status(400).json({ error: 'template must include constituent_id and at least one line' });
-    }
-
-    if (template.due_days != null && !(Number.isInteger(template.due_days) && template.due_days >= 0 && template.due_days <= 365)) {
-      return res.status(400).json({ error: 'due_days must be a whole number of days, 0 to 365' });
-    }
-
+    const p = parseSchedule(body);
+    if (p.error) return res.status(400).json({ error: p.error });
     try {
       const r = await pool.query(
         `INSERT INTO org_recurring_schedules (org_id, schedule_type, frequency, active_months, next_occurrence_date, end_date, template, created_by)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [orgId, scheduleType, frequency, activeMonths, nextOccurrenceDate, endDate, JSON.stringify(template), userId]
+        [orgId, scheduleType, p.frequency, p.activeMonths, p.nextOccurrenceDate, p.endDate, JSON.stringify(p.template), userId]
       );
       return res.status(201).json({ id: r.rows[0].id });
     } catch (e) {
       console.error('POST recurring-schedules:', e.message);
       return res.status(500).json({ error: 'Could not create recurring schedule' });
+    }
+  });
+
+  app.patch(base + '/:id', ...orgAuth, financeWriter, async (req, res) => {
+    const orgId = req.orgId;
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
+    const p = parseSchedule(req.body || {});
+    if (p.error) return res.status(400).json({ error: p.error });
+    try {
+      const r = await pool.query(
+        `UPDATE org_recurring_schedules SET frequency = $3, active_months = $4, next_occurrence_date = $5, end_date = $6, template = $7, updated_at = NOW()
+          WHERE id = $1 AND org_id = $2 AND active RETURNING id`,
+        [id, orgId, p.frequency, p.activeMonths, p.nextOccurrenceDate, p.endDate, JSON.stringify(p.template)]
+      );
+      if (!r.rows.length) return res.status(404).json({ error: 'Active schedule not found' });
+      return res.json({ id });
+    } catch (e) {
+      console.error('PATCH recurring-schedules:', e.message);
+      return res.status(500).json({ error: 'Could not update recurring schedule' });
     }
   });
 

@@ -17,6 +17,7 @@
     { group: 'General', name: 'Organization details', desc: 'Name, fiscal year end, tax identity, organization characteristics', href: '/settings/organization', mode: (a) => (isAdmin(a) ? 'edit' : null) },
     { group: 'General', name: 'Workspace users and access', desc: 'Who can sign in, their roles, and extra access person by person', href: '/settings/organization', mode: (a) => (isAdmin(a) || a.can_give_access ? 'edit' : null) },
     { group: 'General', name: 'Connected apps', desc: 'Bank connection and optional accounting integrations', href: '/settings/integrations', mode: (a) => (isAdmin(a) ? 'edit' : canR(a, 'finance_admin') ? 'view' : null) },
+    { group: 'General', name: 'Emails to donors and customers', desc: 'Reply-to address and gift acknowledgment wording', href: '/settings/organization', anchor: 'org-sec-emails', mode: (a) => (isAdmin(a) ? 'edit' : null) },
     { group: 'General', name: 'Security', desc: 'Sign-out after inactivity', href: '/settings/organization', mode: (a) => (isAdmin(a) ? 'edit' : null) },
 
     { group: 'Financial', modules: ['accounting', 'budget'], name: 'Financial structure', desc: 'Chart of accounts, programs and activities, projects; how amounts display', href: '/structure', mode: structureMode },

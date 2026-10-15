@@ -53,6 +53,8 @@ const ORG_SELECT_FIELDS = `o.id,
            s.phone,
            s.contact_email,
            s.payment_instructions,
+           s.acknowledgment_message,
+           s.acknowledgment_signoff,
            s.session_timeout_minutes,
            o.is_platform_demo,
            o.created_at,
@@ -193,7 +195,7 @@ function registerOrganizationalOrgRoutes(app, pool) {
                 s.has_lobbying_activity, s.has_political_electoral_activity, s.membership_enabled,
                 s.reply_to_email, s.onboarding_target_fiscal_year, s.onboarding_conversion_date,
                 s.onboarding_has_prior_data, s.session_timeout_minutes,
-                s.legal_name, s.mailing_address, s.phone, s.contact_email, s.payment_instructions
+                s.legal_name, s.mailing_address, s.phone, s.contact_email, s.payment_instructions, s.acknowledgment_message, s.acknowledgment_signoff
          FROM org_users m
          INNER JOIN coop_members o ON o.id = m.org_id
          LEFT JOIN org_settings s ON s.org_id = o.id
@@ -346,7 +348,7 @@ function registerOrganizationalOrgRoutes(app, pool) {
           : String(body.reply_to_email).trim();
       }
 
-      const DOC_FIELDS = { legal_name: 200, mailing_address: 500, phone: 50, contact_email: 200, payment_instructions: 2000 };
+      const DOC_FIELDS = { legal_name: 200, mailing_address: 500, phone: 50, contact_email: 200, payment_instructions: 2000, acknowledgment_message: 1000, acknowledgment_signoff: 100 };
       const docDetails = {};
       for (const [k, max] of Object.entries(DOC_FIELDS)) {
         let v = row[k] == null ? null : row[k];
@@ -428,8 +430,8 @@ function registerOrganizationalOrgRoutes(app, pool) {
           [row.id, ein, fiscalMonth, JSON.stringify(profile), fiscalSponsorshipMode, sponsorshipModel, defaultAdminRate, entityClassification, federalGrantRecipient, stateRegistrations, lobbyingActivity, politicalActivity, membershipEnabled, replyToEmail, onboardingTargetFY, onboardingConversionDate, onboardingHasPriorData, sessionTimeoutMinutes, state]
         );
         await client.query(
-          `UPDATE org_settings SET legal_name = $2, mailing_address = $3, phone = $4, contact_email = $5, payment_instructions = $6 WHERE org_id = $1`,
-          [row.id, docDetails.legal_name, docDetails.mailing_address, docDetails.phone, docDetails.contact_email, docDetails.payment_instructions]
+          `UPDATE org_settings SET legal_name = $2, mailing_address = $3, phone = $4, contact_email = $5, payment_instructions = $6, acknowledgment_message = $7, acknowledgment_signoff = $8 WHERE org_id = $1`,
+          [row.id, docDetails.legal_name, docDetails.mailing_address, docDetails.phone, docDetails.contact_email, docDetails.payment_instructions, docDetails.acknowledgment_message, docDetails.acknowledgment_signoff]
         );
         await client.query('COMMIT');
       } catch (e) {

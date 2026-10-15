@@ -222,6 +222,25 @@
               </div>
             </section>
 
+            <h2 class="organizational-subheading" id="org-sec-emails">Emails to donors and customers</h2>
+            <section class="organizational-card">
+              <p class="organizational-hint" style="margin-top:0;">Gift acknowledgments and invoices are sent from this workspace under your organization's name. Replies go to the reply-to address, or to the contact email when it is blank.</p>
+
+              <label for="organizational-org-reply-to">Reply-to email</label>
+              <input id="organizational-org-reply-to" type="email" maxlength="200" autocomplete="off" placeholder="Same as the contact email">
+
+              <label for="organizational-org-ack-message">Gift acknowledgment message <span class="organizational-hint">(follows "Thank you for your generous gift of ... received on ...")</span></label>
+              <textarea id="organizational-org-ack-message" rows="3" maxlength="1000" placeholder="Your support makes our work possible." style="width:100%;padding:10px 12px;border:0.5px solid var(--organizational-border-subtle, var(--border-subtle));border-radius:8px;font-family:var(--organizational-font-sans, var(--ui-sans));font-size:0.9375rem;resize:vertical;"></textarea>
+
+              <label for="organizational-org-ack-signoff">Sign-off</label>
+              <input id="organizational-org-ack-signoff" type="text" maxlength="100" placeholder="With gratitude,">
+
+              <p class="organizational-hint">The statement that no goods or services were provided, and your organization's details, are always included.</p>
+              <div class="organizational-actions">
+                <button type="button" class="organizational-btn" id="organizational-emails-save">Save email settings</button>
+              </div>
+            </section>
+
             <h2 class="organizational-subheading">Document design</h2>
             <section class="organizational-card" aria-disabled="true">
               <p class="organizational-hint" style="margin:0 0 10px;">Planned: choose how your invoices, bills, receipts and reports look. Not available yet; documents use the standard layout with the details above.</p>

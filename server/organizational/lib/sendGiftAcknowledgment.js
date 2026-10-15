@@ -11,6 +11,8 @@ function formatDate(dt) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
 function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
   const donorName = constituent.display_name ||
     [constituent.first_name, constituent.last_name].filter(Boolean).join(' ') ||
@@ -18,8 +20,9 @@ function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
   const amount = formatDollars(Number(gift.amount_cents));
   const date = formatDate(gift.received_at);
   const orgName = org.display_name;
+  const message = (info && info.acknowledgmentMessage) || 'Your support makes our work possible.';
+  const signoff = (info && info.acknowledgmentSignoff) || 'With gratitude,';
   const detail = info ? detailLines(info) : (org.ein ? ['EIN ' + org.ein] : []);
-  const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const ein = detail.length ? `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">${detail.map(esc).join('<br>')}</p>` : '';
 
   return `
@@ -28,14 +31,14 @@ function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
       <p style="margin:0 0 16px;line-height:1.6;">Dear ${donorName},</p>
       <p style="margin:0 0 16px;line-height:1.6;">
         Thank you for your generous gift of <strong>${amount}</strong> received on ${date}.
-        Your support makes our work possible.
+        ${esc(message)}
       </p>
       <p style="margin:0 0 16px;line-height:1.6;color:#374151;font-size:14px;">
         No goods or services were provided in exchange for this contribution.
         Your contribution is tax-deductible to the extent allowed by law.
       </p>
       ${ein}
-      <p style="margin:0;line-height:1.6;">With gratitude,</p>
+      <p style="margin:0;line-height:1.6;">${esc(signoff)}</p>
       <p style="margin:4px 0 0;font-weight:600;">${orgName}</p>
     </div>
   `.trim();
@@ -51,13 +54,13 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
   const text = [
     `Dear ${constituent.display_name || constituent.email},`,
     '',
-    `Thank you for your generous gift of ${formatDollars(Number(gift.amount_cents))} received on ${formatDate(gift.received_at)}.`,
+    `Thank you for your generous gift of ${formatDollars(Number(gift.amount_cents))} received on ${formatDate(gift.received_at)}. ${(info && info.acknowledgmentMessage) || 'Your support makes our work possible.'}`,
     '',
     'No goods or services were provided in exchange for this contribution.',
     'Your contribution is tax-deductible to the extent allowed by law.',
     org.ein ? `EIN: ${org.ein}` : '',
     '',
-    `With gratitude,`,
+    (info && info.acknowledgmentSignoff) || 'With gratitude,',
     orgName,
   ].filter(line => line !== undefined).join('\n');
 
@@ -70,8 +73,8 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
     MessageStream: 'outbound',
   };
 
-  if (org.reply_to_email) {
-    payload.ReplyTo = org.reply_to_email;
+  if (info.replyTo) {
+    payload.ReplyTo = info.replyTo;
   }
 
   const response = await fetch('https://api.postmarkapp.com/email', {

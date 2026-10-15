@@ -8,7 +8,7 @@ function addressLines(text) {
 
 async function loadOrgDocInfo(pool, orgId) {
   const r = await pool.query(
-    `SELECT o.display_name, s.legal_name, s.ein, s.mailing_address, s.phone, s.contact_email,
+    `SELECT o.display_name, s.legal_name, s.ein, s.mailing_address, s.phone, s.contact_email, s.reply_to_email, s.acknowledgment_message, s.acknowledgment_signoff,
             s.org_profile_data->>'website' AS website
        FROM coop_members o LEFT JOIN org_settings s ON s.org_id = o.id
       WHERE o.id = $1 LIMIT 1`, [orgId]);
@@ -20,6 +20,9 @@ async function loadOrgDocInfo(pool, orgId) {
     addressLines: addressLines(row.mailing_address),
     phone: row.phone || null,
     email: row.contact_email || null,
+    replyTo: row.reply_to_email || row.contact_email || null,
+    acknowledgmentMessage: row.acknowledgment_message || null,
+    acknowledgmentSignoff: row.acknowledgment_signoff || null,
     website: row.website || null,
   };
 }

@@ -105,6 +105,10 @@
   const sponsoredProjectsCount = document.getElementById('organizational-sponsored-projects-count');
 
   const membershipEnabledCheckbox = document.getElementById('organizational-membership-enabled');
+  const emailsSave = document.getElementById('organizational-emails-save');
+  const orgReplyTo = document.getElementById('organizational-org-reply-to');
+  const orgAckMessage = document.getElementById('organizational-org-ack-message');
+  const orgAckSignoff = document.getElementById('organizational-org-ack-signoff');
   const membershipSave = document.getElementById('organizational-membership-save');
 
   const sessionTimeoutSelect = document.getElementById('organizational-session-timeout');
@@ -168,6 +172,7 @@
       orgLegalName, orgAddress, orgPhone, orgContactEmail, orgPaymentInstructions,
       fiscalSponsorshipMode, sponsorshipModel, defaultAdminRate, fiscalSponsorshipSave,
       membershipEnabledCheckbox, membershipSave,
+      orgReplyTo, orgAckMessage, orgAckSignoff, emailsSave,
       sessionTimeoutSelect, sessionTimeoutSave,
       entityClassification, federalGrantRecipient, lobbyingActivity, politicalActivity,
       stateRegistrations, orgCharacteristicsSave,
@@ -348,6 +353,27 @@
         }
       });
     }
+  }
+
+  function wireEmails() {
+    if (!emailsSave) return;
+    emailsSave.addEventListener('click', async function () {
+      if (!currentSlug) return;
+      const body = {
+        reply_to_email: orgReplyTo.value.trim(),
+        acknowledgment_message: orgAckMessage.value.trim(),
+        acknowledgment_signoff: orgAckSignoff.value.trim(),
+      };
+      emailsSave.disabled = true;
+      try {
+        const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug), { method: 'PATCH', body: JSON.stringify(body) });
+        showError(out && out.res.ok ? '' : ((out && out.data && out.data.error) || 'Could not save email settings.'));
+      } catch (e) {
+        showError('Could not save email settings.');
+      } finally {
+        emailsSave.disabled = false;
+      }
+    });
   }
 
   function wireMembership() {
@@ -969,6 +995,9 @@
     if (orgPhone) orgPhone.value = org.phone || '';
     if (orgContactEmail) orgContactEmail.value = org.contact_email || '';
     if (orgPaymentInstructions) orgPaymentInstructions.value = org.payment_instructions || '';
+    if (orgReplyTo) orgReplyTo.value = org.reply_to_email || '';
+    if (orgAckMessage) orgAckMessage.value = org.acknowledgment_message || '';
+    if (orgAckSignoff) orgAckSignoff.value = org.acknowledgment_signoff || '';
 
     applyPermissionGating(org);
     currentOrgIsDemo = !!org.is_platform_demo;
@@ -1024,6 +1053,7 @@
     wireOrgBasicsSave();
     wireOrgDelete();
     wireFiscalSponsorship();
+    wireEmails();
     wireMembership();
     wireSessionTimeout();
     wireBooksSource();

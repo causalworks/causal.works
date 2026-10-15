@@ -11,7 +11,7 @@ const money = (cents) => '$' + (Number(cents) / 100).toLocaleString('en-US', { m
 async function sendInvoiceEmail(pool, { orgId, invoice, customerName, customerEmail, lines, totalCents }) {
   if (!customerEmail) return 'no_email';
   const info = await loadOrgDocInfo(pool, orgId);
-  if (!info.email) return 'no_org_email';
+  if (!info.replyTo) return 'no_org_email';
   const number = invoice.invoice_number || ('#' + invoice.id);
   let built = null;
   try {
@@ -23,7 +23,7 @@ async function sendInvoiceEmail(pool, { orgId, invoice, customerName, customerEm
   out.push(info.name + ' sent you invoice ' + number + ' for ' + money(built.remainingCents) + (invoice.due_date ? ', due ' + String(invoice.due_date).slice(0, 10) : '') + '.');
   out.push('The invoice is attached as a PDF.', '', 'Questions? Reply to this email.', '', info.name);
   const ok = await sendPlainEmail({
-    to: customerEmail, subject: 'Invoice ' + number + ' from ' + info.name, text: out.join('\n'), attachments: [{ name: 'Invoice-' + number.replace(/[^A-Za-z0-9._-]/g, '') + '.pdf', content: built.pdf, contentType: 'application/pdf' }], fromName: info.name, replyTo: info.email,
+    to: customerEmail, subject: 'Invoice ' + number + ' from ' + info.name, text: out.join('\n'), attachments: [{ name: 'Invoice-' + number.replace(/[^A-Za-z0-9._-]/g, '') + '.pdf', content: built.pdf, contentType: 'application/pdf' }], fromName: info.name, replyTo: info.replyTo,
   });
   return ok ? 'sent' : 'failed';
 }

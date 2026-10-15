@@ -1013,13 +1013,15 @@
       + '<td>' + (n.status === 'draft' && canWrite
           ? '<button type="button" class="organizational-btn organizational-btn-outline cn-apply-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Apply</button> '
             + '<button type="button" class="organizational-btn organizational-btn-outline cn-void-btn" data-id="' + n.id + '" style="font-size:0.75rem;">Void</button>'
-          : '')
+          : n.status === 'applied' && canWrite
+            ? '<button type="button" class="organizational-btn organizational-btn-outline cn-void-btn" data-id="' + n.id + '" data-applied="1" style="font-size:0.75rem;">Void</button>'
+            : '')
       + '</td>'
       + '</tr>'
     )).join('') : '<tr class="organizational-table-empty"><td colspan="6">No credit notes yet.</td></tr>';
   }
-  async function applyOrVoidBillCreditNote(id, action) {
-    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bill-credit-notes/' + id + '/' + action, { method: 'POST' });
+  async function applyOrVoidBillCreditNote(id, action, reason) {
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bill-credit-notes/' + id + '/' + action, { method: 'POST', body: reason ? JSON.stringify({ reason }) : undefined });
     if (out && out.res.ok) await loadBillCreditNotes();
     else showError((out && out.data && out.data.error) || ('Could not ' + action + ' credit note.'));
   }
@@ -1286,7 +1288,14 @@
       const applyBtn = e.target.closest('.cn-apply-btn');
       if (applyBtn) { applyOrVoidBillCreditNote(Number(applyBtn.getAttribute('data-id')), 'apply'); return; }
       const voidBtn = e.target.closest('.cn-void-btn');
-      if (voidBtn) { applyOrVoidBillCreditNote(Number(voidBtn.getAttribute('data-id')), 'void'); }
+      if (voidBtn) {
+        let reason;
+        if (voidBtn.getAttribute('data-applied')) {
+          reason = (window.prompt('Why is this applied credit note being voided? Its ledger entry will be voided.') || '').trim();
+          if (!reason) return;
+        }
+        applyOrVoidBillCreditNote(Number(voidBtn.getAttribute('data-id')), 'void', reason);
+      }
     });
     if (vcPanelClose) vcPanelClose.addEventListener('click', closeVendorCompliancePanel);
     if (vcPanelOverlay) vcPanelOverlay.addEventListener('click', closeVendorCompliancePanel);

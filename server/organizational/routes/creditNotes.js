@@ -8,7 +8,7 @@ const { requireAccountingAccess, requireAccountingWriter } = require('../middlew
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
-const { postLedgerTransaction } = require('../lib/ledgerPosting');
+const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -37,7 +37,7 @@ function registerCreditNotesRoutes(app, pool) {
   const orgAuth = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool)];
   const financeWriter = requireAccountingWriter(pool);
 
-  function registerSide({ kind, table, constituentRoleCol, originalCol, apAccountFn, arAccountFn }) {
+  function registerSide({ kind, table, constituentRoleCol, originalCol, apAccountFn, arAccountFn, parentTable, totalSql, noun }) {
     const base = '/api/organizational/orgs/:slug/' + kind;
 
     app.get(base, ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
@@ -80,6 +80,14 @@ function registerCreditNotesRoutes(app, pool) {
       if (!noteDate || !DATE_RE.test(noteDate)) return res.status(400).json({ error: 'date is required and must be YYYY-MM-DD' });
       const originalId = body[originalCol] != null && body[originalCol] !== '' ? Number.parseInt(String(body[originalCol]), 10) : null;
 
+      if (originalId != null) {
+        if (!Number.isInteger(originalId) || originalId < 1) return res.status(400).json({ error: originalCol + ' must be a positive integer' });
+        const p = await pool.query(`SELECT constituent_id, (${totalSql}) AS total_cents FROM ${parentTable} p WHERE p.id = $1 AND p.org_id = $2`, [originalId, orgId]);
+        if (!p.rows.length) return res.status(404).json({ error: 'The ' + noun + ' was not found' });
+        if (Number(p.rows[0].constituent_id) !== constituentId) return res.status(400).json({ error: 'The credit note must be for the same contact as the ' + noun + '.' });
+        if (amountCents > Number(p.rows[0].total_cents)) return res.status(400).json({ error: 'The credit note cannot be more than the ' + noun + ' total.' });
+      }
+
       let fiscalYear;
       try {
         const fyEndMonth = await getFiscalYearEndMonth(pool, orgId);
@@ -90,9 +98,9 @@ function registerCreditNotesRoutes(app, pool) {
 
       try {
         const r = await pool.query(
-          `INSERT INTO ${table} (org_id, constituent_id, ${originalCol}, account_id, program_id, amount_cents, reason, fiscal_year, created_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-          [orgId, constituentId, originalId, accountId, programId, amountCents, body.reason || null, fiscalYear, userId]
+          `INSERT INTO ${table} (org_id, constituent_id, ${originalCol}, account_id, program_id, amount_cents, reason, fiscal_year, created_by, note_date)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [orgId, constituentId, originalId, accountId, programId, amountCents, body.reason || null, fiscalYear, userId, noteDate]
         );
         return res.status(201).json({ id: r.rows[0].id, status: 'draft' });
       } catch (e) {
@@ -114,6 +122,15 @@ function registerCreditNotesRoutes(app, pool) {
         const note = r.rows[0];
         if (note.status !== 'draft') return res.status(409).json({ error: `Credit note is not in draft status (status: ${note.status})`, code: 'not_draft' });
 
+        if (note[originalCol]) {
+          const owed = await pool.query(
+            `SELECT (${totalSql}) - COALESCE((SELECT SUM(amount_cents) FROM ${table} WHERE ${originalCol} = p.id AND status = 'applied'), 0) AS left_cents
+               FROM ${parentTable} p WHERE p.id = $1 AND p.org_id = $2`, [note[originalCol], orgId]);
+          if (owed.rows.length && Number(note.amount_cents) > Number(owed.rows[0].left_cents)) {
+            return res.status(409).json({ error: 'The credit note is more than what is left on the ' + noun + ' after other credit notes.', code: 'exceeds_balance' });
+          }
+        }
+
         const contraAccountR = await pool.query(`SELECT ${apAccountFn ? apAccountFn : arAccountFn}($1) AS id`, [orgId]);
         const contraAccountId = contraAccountR.rows[0].id;
         const contactR = await pool.query('SELECT display_name FROM org_constituents WHERE id = $1', [note.constituent_id]);
@@ -130,7 +147,7 @@ function registerCreditNotesRoutes(app, pool) {
 
         const postResult = await postLedgerTransaction(pool, {
           orgId, userId,
-          transactionDate: new Date().toISOString().slice(0, 10),
+          transactionDate: note.note_date || new Date().toISOString().slice(0, 10),
           memo: `Credit note #${note.id}`,
           payee: contactR.rows[0] ? contactR.rows[0].display_name : null,
           referenceNumber: null,
@@ -152,23 +169,35 @@ function registerCreditNotesRoutes(app, pool) {
 
     app.post(base + '/:id/void', ...orgAuth, financeWriter, async (req, res) => {
       const orgId = req.orgId;
+      const userId = req.user.user_id ?? req.user.id;
       const id = Number.parseInt(String(req.params.id), 10);
       if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
+      const reason = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
       try {
-        const r = await pool.query(`SELECT status FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
+        const r = await pool.query(`SELECT status, ledger_transaction_id FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
         if (!r.rows.length) return res.status(404).json({ error: 'Credit note not found' });
-        if (r.rows[0].status !== 'draft') return res.status(409).json({ error: 'Only a draft credit note can be voided directly.', code: 'not_voidable' });
+        const { status, ledger_transaction_id: txnId } = r.rows[0];
+        if (status === 'void') return res.status(409).json({ error: 'This credit note is already void.', code: 'already_void' });
+        if (status === 'applied') {
+          if (!reason) return res.status(400).json({ error: 'A reason is required to void an applied credit note.', code: 'reason_required' });
+          const v = await voidLedgerTransaction(pool, { orgId, userId, transactionId: txnId, voidReason: `Credit note #${id} voided: ${reason}` });
+          if (v.httpStatus >= 400) return res.status(v.httpStatus).json(v.body);
+        }
         await pool.query(`UPDATE ${table} SET status = 'void' WHERE id = $1 AND org_id = $2`, [id, orgId]);
         return res.json({ id, status: 'void' });
       } catch (e) {
+        const translated = translateCreditNoteWriteError(e);
+        if (translated) return res.status(translated.status).json(translated.body);
         console.error('POST ' + kind + '/void:', e.message);
         return res.status(500).json({ error: 'Could not void credit note' });
       }
     });
   }
 
-  registerSide({ kind: 'bill-credit-notes', table: 'org_bill_credit_notes', originalCol: 'original_bill_id', apAccountFn: 'org_get_or_create_ap_account' });
-  registerSide({ kind: 'invoice-credit-notes', table: 'org_invoice_credit_notes', originalCol: 'original_invoice_id', arAccountFn: 'org_get_or_create_ar_account' });
+  registerSide({ kind: 'bill-credit-notes', table: 'org_bill_credit_notes', originalCol: 'original_bill_id', apAccountFn: 'org_get_or_create_ap_account',
+    parentTable: 'org_bills', noun: 'bill', totalSql: 'SELECT COALESCE(SUM(amount_cents), 0) FROM org_bill_lines WHERE bill_id = p.id' });
+  registerSide({ kind: 'invoice-credit-notes', table: 'org_invoice_credit_notes', originalCol: 'original_invoice_id', arAccountFn: 'org_get_or_create_ar_account',
+    parentTable: 'org_invoices', noun: 'invoice', totalSql: 'SELECT COALESCE(SUM(ROUND(quantity * unit_amount_cents)), 0) FROM org_invoice_lines WHERE invoice_id = p.id' });
 }
 
 module.exports = { registerCreditNotesRoutes };

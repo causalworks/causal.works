@@ -206,6 +206,137 @@
     });
   }
 
+  // Conversion balances
+  let conv = null;
+  const cents = (raw) => { const n = Number(String(raw || '').replace(/[$,\s]/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+  const money = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const amt = (c) => (Number(c) ? (Number(c) / 100).toFixed(2) : '');
+
+  function convTotals() {
+    let debits = 0; let credits = 0;
+    document.querySelectorAll('#organizational-acctset-conv-grid input[data-side]').forEach((el) => {
+      const v = cents(el.value);
+      if (!v || Number.isNaN(v)) return;
+      if (el.getAttribute('data-side') === 'd') debits += v; else credits += v;
+    });
+    return { debits, credits, diff: debits - credits };
+  }
+
+  function refreshConvSum() {
+    const t = convTotals();
+    const eq = $('organizational-acctset-conv-equity');
+    const label = eq.options[eq.selectedIndex] ? eq.options[eq.selectedIndex].textContent : 'the net assets account';
+    $('organizational-acctset-conv-sum').textContent = 'Debits ' + money(t.debits) + ' · Credits ' + money(t.credits)
+      + (t.diff ? ' · Difference ' + money(Math.abs(t.diff)) + ' goes to ' + label + ' as a ' + (t.diff > 0 ? 'credit' : 'debit') : ' · Balanced');
+  }
+
+  function convMessage(m) { const n = $('organizational-acctset-conv-note'); n.hidden = !m; n.textContent = m || ''; }
+
+  function renderConv(data) {
+    conv = data;
+    const c = data.conversion;
+    const locked = !!c && c.status === 'locked';
+    const manage = canManage();
+    const grid = $('organizational-acctset-conv-grid');
+    $('organizational-acctset-conv-program').innerHTML = data.programs.map((p) => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('');
+    const general = data.programs.find((p) => /management|general|admin/i.test(p.name));
+    const equities = data.accounts.filter((a) => a.type === 'equity' && !a.excluded_reason);
+    $('organizational-acctset-conv-equity').innerHTML = equities.map((a) => '<option value="' + esc(a.id) + '">' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
+    const unres = equities.find((a) => /without donor|unrestricted/i.test(a.name));
+    if (general) $('organizational-acctset-conv-program').value = String(general.id);
+    if (unres) $('organizational-acctset-conv-equity').value = String(unres.id);
+    if (c) {
+      $('organizational-acctset-conv-date').value = c.conversion_date;
+      if (c.program_id) $('organizational-acctset-conv-program').value = String(c.program_id);
+      if (c.balancing_account_id) $('organizational-acctset-conv-equity').value = String(c.balancing_account_id);
+    }
+    const groups = [['asset', 'Assets'], ['liability', 'Liabilities'], ['equity', 'Net assets']];
+    grid.innerHTML = '<div style="display:flex;gap:12px;font-size:0.75rem;color:var(--text-secondary);padding-bottom:4px;"><span style="flex:1;">Account</span><span style="width:130px;text-align:right;">Debit</span><span style="width:130px;text-align:right;">Credit</span></div>'
+      + groups.map(([type, label]) => '<div class="organizational-panel-section-head">' + label + '</div>'
+        + data.accounts.filter((a) => a.type === type).map((a) => {
+          const name = esc(a.code ? a.code + ' — ' + a.name : a.name);
+          if (a.excluded_reason) return '<div style="display:flex;gap:12px;align-items:center;padding:3px 0;color:var(--text-secondary);"><span style="flex:1;">' + name + '<br><span class="organizational-hint">' + esc(a.excluded_reason) + '</span></span></div>';
+          const l = data.lines[a.id] || {};
+          return '<div style="display:flex;gap:12px;align-items:center;padding:3px 0;"><span style="flex:1;">' + name + '</span>'
+            + '<input type="text" inputmode="decimal" class="organizational-input" style="width:130px;text-align:right;" data-acct="' + esc(a.id) + '" data-side="d" placeholder="0.00" value="' + amt(l.debit_cents) + '">'
+            + '<input type="text" inputmode="decimal" class="organizational-input" style="width:130px;text-align:right;" data-acct="' + esc(a.id) + '" data-side="c" placeholder="0.00" value="' + amt(l.credit_cents) + '"></div>';
+        }).join('')).join('');
+    const editable = manage && !locked;
+    grid.querySelectorAll('input').forEach((el) => { el.disabled = !editable; });
+    ['organizational-acctset-conv-date', 'organizational-acctset-conv-program', 'organizational-acctset-conv-equity'].forEach((id) => { $(id).disabled = !editable; });
+    $('organizational-acctset-conv-status').textContent = !c ? 'Not entered yet.'
+      : locked ? 'Locked. Entered as of ' + c.conversion_date + '.' : 'Entered as of ' + c.conversion_date + '. Open for changes: lock it once the balances are right.';
+    $('organizational-acctset-conv-save').hidden = !editable;
+    $('organizational-acctset-conv-lock').hidden = !(manage && c && !locked);
+    $('organizational-acctset-conv-unlock').hidden = !(['admin', 'finance'].includes(orgRole()) && locked);
+    $('organizational-acctset-conv-confirm').hidden = true;
+    const warn = $('organizational-acctset-conv-warn');
+    warn.hidden = !(data.earlier_entries > 0);
+    warn.textContent = data.earlier_entries > 0 ? data.earlier_entries + ' other entries are dated on or before the conversion date. Conversion balances replace everything before the first transaction recorded here, so check those dates.' : '';
+    refreshConvSum();
+  }
+
+  async function loadConversion() {
+    if (!$('organizational-acctset-conv-grid')) return;
+    const out = await apiJson(base() + '/conversion-balances');
+    if (!out || !out.res.ok) { $('organizational-acctset-conv-status').textContent = 'Conversion balances could not be loaded.'; return; }
+    renderConv(out.data);
+    wireConversion();
+  }
+
+  function askConvConfirm(text, withReason, label, onConfirm) {
+    const box = $('organizational-acctset-conv-confirm');
+    box.hidden = false;
+    box.innerHTML = '<div style="padding:10px 12px;border:1px solid var(--border);border-radius:6px;"><p style="margin:0 0 8px;">' + esc(text) + '</p>'
+      + (withReason ? '<label class="organizational-label">Reason<input type="text" id="organizational-acctset-conv-reason" class="organizational-input" maxlength="300"></label>' : '')
+      + '<div style="display:flex;gap:8px;margin-top:8px;"><button type="button" class="organizational-btn" data-conv-yes>' + esc(label) + '</button><button type="button" class="organizational-btn organizational-btn-outline" data-conv-no>Cancel</button></div></div>';
+    box.querySelector('[data-conv-no]').addEventListener('click', () => { box.hidden = true; });
+    box.querySelector('[data-conv-yes]').addEventListener('click', () => {
+      const reason = withReason ? $('organizational-acctset-conv-reason').value.trim() : '';
+      if (withReason && reason.length < 10) { convMessage('Give a reason of at least 10 characters.'); return; }
+      onConfirm(reason);
+    });
+  }
+
+  function wireConversion() {
+    const save = $('organizational-acctset-conv-save');
+    if (save.dataset.wired) return;
+    save.dataset.wired = '1';
+    $('organizational-acctset-conv-grid').addEventListener('input', refreshConvSum);
+    $('organizational-acctset-conv-equity').addEventListener('change', refreshConvSum);
+    save.addEventListener('click', async () => {
+      convMessage('');
+      const date = $('organizational-acctset-conv-date').value;
+      if (!date) { convMessage('Pick the conversion date.'); return; }
+      const byAcct = {};
+      let bad = false;
+      document.querySelectorAll('#organizational-acctset-conv-grid input[data-acct]').forEach((el) => {
+        if (!el.value.trim()) return;
+        const v = cents(el.value);
+        if (Number.isNaN(v) || v < 0) { bad = true; return; }
+        const id = el.getAttribute('data-acct');
+        byAcct[id] = byAcct[id] || { account_id: Number(id), debit_cents: 0, credit_cents: 0 };
+        byAcct[id][el.getAttribute('data-side') === 'd' ? 'debit_cents' : 'credit_cents'] = v;
+      });
+      if (bad) { convMessage('Check the amounts: each must be a positive number.'); return; }
+      save.disabled = true;
+      const res = await apiJson(base() + '/conversion-balances', { method: 'PUT', body: JSON.stringify({
+        conversion_date: date, program_id: Number($('organizational-acctset-conv-program').value),
+        balancing_account_id: Number($('organizational-acctset-conv-equity').value), lines: Object.values(byAcct) }) });
+      save.disabled = false;
+      if (res && res.res.ok) { await loadConversion(); convMessage('Saved.'); }
+      else convMessage((res && res.data && (res.data.message || res.data.error)) || 'Could not save the conversion balances.');
+    });
+    $('organizational-acctset-conv-lock').addEventListener('click', () => askConvConfirm('Lock the conversion balances? They can only be changed again by unlocking them with a reason, which is recorded.', false, 'Lock', async () => {
+      const res = await apiJson(base() + '/conversion-balances/lock', { method: 'POST' });
+      if (res && res.res.ok) { await loadConversion(); convMessage('Locked.'); } else convMessage((res && res.data && res.data.error) || 'Could not lock.');
+    }));
+    $('organizational-acctset-conv-unlock').addEventListener('click', () => askConvConfirm('Unlock the conversion balances to change them? Your reason is recorded. Lock them again when the changes are done.', true, 'Unlock', async (reason) => {
+      const res = await apiJson(base() + '/conversion-balances/unlock', { method: 'POST', body: JSON.stringify({ reason }) });
+      if (res && res.res.ok) { await loadConversion(); convMessage('Unlocked. Change the balances, save, and lock again.'); } else convMessage((res && res.data && res.data.error) || 'Could not unlock.');
+    }));
+  }
+
   async function init(s) {
     slug = s;
     const contacts = document.querySelector('[data-acctset-contacts]');
@@ -218,7 +349,7 @@
     if (structure) structure.href = '/organizational/o/' + encodeURIComponent(slug) + '/structure';
     wire();
     if (window.OrganizationalStateRules) window.OrganizationalStateRules.renderAccountingCard($('organizational-acctset-state'), slug);
-    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering()]);
+    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering(), loadConversion()]);
     const idx = $('organizational-acctset-index');
     if (idx && window.OrganizationalSettingsIndex) {
       const r = await window.OrganizationalSettingsIndex.load(slug);

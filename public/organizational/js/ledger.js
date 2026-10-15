@@ -141,7 +141,7 @@
   const SOURCE_LABELS = {
     manual: 'Manual', bank_reconciliation: 'Bank', bill_approval: 'Bill', invoice: 'Invoice', bill_payment: 'Bill payment',
     invoice_payment: 'Invoice payment', fixed_asset_depreciation: 'Depreciation', fixed_asset_disposal: 'Asset disposal',
-    recode: 'Recode', gift_posting: 'Gift',
+    recode: 'Recode', gift_posting: 'Gift', conversion_balance: 'Conversion',
   };
   const ENTRY_LABELS = { receive: 'Receive', spend: 'Spend', transfer: 'Transfer', journal: 'Journal' };
   function sourceLabel(src, entryType) {

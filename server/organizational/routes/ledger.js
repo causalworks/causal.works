@@ -336,7 +336,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     expense_claim_approval: 'an expense claim', expense_claim_payment: 'an expense claim payment',
     gift_in_kind: 'a gift', gift_reclassify: 'a gift', pledge_commitment: 'a pledge', pledge_accretion: 'a pledge',
     fixed_asset_depreciation: 'fixed assets', fixed_asset_disposal: 'fixed assets', recode: 'Find and recode',
-    indirect_cost_recovery: 'indirect cost recovery',
+    indirect_cost_recovery: 'indirect cost recovery', conversion_balance: 'Conversion balances',
   };
 
   async function editEligibility(orgId, txnId, source, status, fiscalYear, sourceLabels) {
@@ -901,8 +901,13 @@ function registerOrganizationalLedgerRoutes(app, pool) {
        UNION ALL
        SELECT 'invoice', id FROM org_invoices WHERE org_id = $1 AND ledger_transaction_id = $2 AND status NOT IN ('draft', 'void')
        UNION ALL
-       SELECT 'disbursement', id FROM org_sponsored_project_disbursements WHERE org_id = $1 AND ledger_transaction_id = $2 LIMIT 1`,
+       SELECT 'disbursement', id FROM org_sponsored_project_disbursements WHERE org_id = $1 AND ledger_transaction_id = $2
+       UNION ALL
+       SELECT 'conversion', id FROM org_conversion_balances WHERE org_id = $1 AND ledger_transaction_id = $2 LIMIT 1`,
       [orgId, transactionId]);
+    if (owner.rows.length && owner.rows[0].kind === 'conversion') {
+      return res.status(409).json({ error: 'This entry holds the conversion balances. Unlock and change them in Accounting settings, Conversion balances.', code: 'owned_by_document' });
+    }
     if (owner.rows.length) {
       const o = owner.rows[0];
       return res.status(409).json({

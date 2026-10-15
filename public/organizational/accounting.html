@@ -550,6 +550,29 @@
               <p id="organizational-acctset-numbering-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
             </section>
 
+            <h2 id="acct-sec-conversion" class="organizational-subheading">Conversion balances</h2>
+            <section class="organizational-card" style="padding:16px 20px;">
+              <p class="organizational-hint" style="margin:0 0 10px;">For an organization moving its books here without importing the detail. Enter the balance of each account on the conversion date, the day before the first transaction recorded here, from the last closing trial balance. Unpaid invoices and bills are not entered here: record them as invoices and bills dated before the conversion date. Fixed asset cost is entered here too, and then added to the register with its depreciation to date. Once the balances are right, lock them. Changing them later needs an unlock with a reason.</p>
+              <p id="organizational-acctset-conv-status" style="margin:0 0 10px;font-weight:600;">Loading…</p>
+              <div id="organizational-acctset-conv-form">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;max-width:760px;">
+                  <label class="organizational-label">Conversion date<input type="date" id="organizational-acctset-conv-date" class="organizational-input"></label>
+                  <label class="organizational-label">Program for these lines<select id="organizational-acctset-conv-program" class="organizational-select"></select></label>
+                  <label class="organizational-label">Net assets account for any difference<select id="organizational-acctset-conv-equity" class="organizational-select"></select></label>
+                </div>
+                <div id="organizational-acctset-conv-grid" style="margin-top:14px;max-width:760px;"></div>
+                <p id="organizational-acctset-conv-sum" class="organizational-hint" style="margin:8px 0 0;"></p>
+                <p id="organizational-acctset-conv-warn" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
+              </div>
+              <div id="organizational-acctset-conv-confirm" style="margin-top:10px;max-width:760px;" hidden></div>
+              <div class="organizational-actions">
+                <button type="button" class="organizational-btn" id="organizational-acctset-conv-save">Save conversion balances</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-acctset-conv-lock" hidden>Lock</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-acctset-conv-unlock" hidden>Unlock to change</button>
+              </div>
+              <p id="organizational-acctset-conv-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
+            </section>
+
             <h2 id="acct-sec-state" class="organizational-subheading">State</h2>
             <section class="organizational-card" style="padding:16px 20px;">
               <div id="organizational-acctset-state">Loading…</div>

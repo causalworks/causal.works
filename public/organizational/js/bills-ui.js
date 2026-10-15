@@ -1139,6 +1139,7 @@
       + '<select class="organizational-select sched-line-account" style="min-width:150px;">' + accountOptions(l.account_id) + '</select>'
       + '<select class="organizational-select sched-line-program" style="min-width:110px;">' + programOptions(l.program_id) + '</select>'
       + '<select class="organizational-select sched-line-grant" style="min-width:110px;">' + grantOptions(l.grant_id) + '</select>'
+      + '<input type="text" class="organizational-input sched-line-desc" placeholder="Description" maxlength="300" style="width:130px" value="' + esc(l.description) + '">'
       + '<input type="text" inputmode="decimal" class="organizational-input organizational-formula-amount sched-line-amount" placeholder="Amount" style="width:100px" value="' + (l.amount_cents != null ? (Number(l.amount_cents) / 100) : '') + '">'
       + '<button type="button" class="organizational-btn-icon sched-remove-line" title="Remove">✕</button>'
       + '</div>';
@@ -1160,7 +1161,7 @@
       if (!accountId && !programId && !amountCents) continue;
       if (!accountId || !programId) { showScheduleFormError('Every line needs an account and a program.'); return null; }
       if (Number.isNaN(amountCents) || amountCents <= 0) { showScheduleFormError('Every line needs a positive amount.'); return null; }
-      lines.push({ account_id: Number(accountId), program_id: Number(programId), grant_id: grantId ? Number(grantId) : null, amount_cents: amountCents });
+      lines.push({ account_id: Number(accountId), program_id: Number(programId), grant_id: grantId ? Number(grantId) : null, description: row.querySelector('.sched-line-desc').value.trim() || null, amount_cents: amountCents });
     }
     if (!lines.length) { showScheduleFormError('At least one line is required.'); return null; }
     return lines;
@@ -1182,6 +1183,7 @@
       + '<label class="organizational-label" style="flex:1">Active months * <span style="font-weight:400;color:var(--text-secondary);">(comma-separated, 1–12)</span><input type="text" id="billsched-months" class="organizational-input" placeholder="e.g. 1,4,7,10"></label>'
       + '</div>'
       + '<div class="organizational-panel-field-full"><label class="organizational-label">End date <span style="font-weight:400;color:var(--text-secondary);">(optional)</span><input type="date" id="billsched-end-date" class="organizational-input"></label></div>'
+      + '<div class="organizational-panel-field-full"><label class="organizational-label">Payment terms, days <span style="font-weight:400;color:var(--text-secondary);">(optional; the due date is this many days after each date)</span><input type="number" id="billsched-due-days" class="organizational-input" min="0" max="365" step="1" placeholder="e.g. 30"></label></div>'
       + '<div class="organizational-panel-section-head">Line items</div>'
       + '<div id="billsched-lines-wrap">' + scheduleLineRowHtml() + '</div>'
       + '<button type="button" id="billsched-add-line" class="organizational-sg-add-btn" style="font-size:0.8rem;margin-top:6px;">+ Add line</button>'
@@ -1221,6 +1223,9 @@
     const frequency = document.getElementById('billsched-frequency').value;
     const nextDate = document.getElementById('billsched-next-date').value;
     const endDate = document.getElementById('billsched-end-date').value || null;
+    const dueDaysRaw = document.getElementById('billsched-due-days').value.trim();
+    const dueDays = dueDaysRaw === '' ? null : Number(dueDaysRaw);
+    if (dueDays != null && (!Number.isInteger(dueDays) || dueDays < 0 || dueDays > 365)) { showScheduleFormError('Payment terms must be a whole number of days, 0 to 365.'); return; }
     const monthsRaw = document.getElementById('billsched-months').value.trim();
     if (!vendorId) { showScheduleFormError('A vendor is required.'); return; }
     if (!nextDate) { showScheduleFormError('Next occurrence date is required.'); return; }
@@ -1236,7 +1241,7 @@
       method: 'POST',
       body: JSON.stringify({
         schedule_type: 'bill', frequency, active_months: activeMonths, next_occurrence_date: nextDate, end_date: endDate,
-        template: { constituent_id: Number(vendorId), reference, lines },
+        template: { constituent_id: Number(vendorId), reference, due_days: dueDays, lines },
       }),
     });
     if (!out) return;

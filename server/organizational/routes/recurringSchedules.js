@@ -68,6 +68,10 @@ function registerRecurringSchedulesRoutes(app, pool) {
       return res.status(400).json({ error: 'template must include constituent_id and at least one line' });
     }
 
+    if (template.due_days != null && !(Number.isInteger(template.due_days) && template.due_days >= 0 && template.due_days <= 365)) {
+      return res.status(400).json({ error: 'due_days must be a whole number of days, 0 to 365' });
+    }
+
     try {
       const r = await pool.query(
         `INSERT INTO org_recurring_schedules (org_id, schedule_type, frequency, active_months, next_occurrence_date, end_date, template, created_by)

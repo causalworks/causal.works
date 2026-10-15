@@ -1014,6 +1014,7 @@
       + '<label class="organizational-label" style="flex:1">Active months * <span style="font-weight:400;color:var(--text-secondary);">(comma-separated, 1–12)</span><input type="text" id="invoicesched-months" class="organizational-input" placeholder="e.g. 1,4,7,10"></label>'
       + '</div>'
       + '<div class="organizational-panel-field-full"><label class="organizational-label">End date <span style="font-weight:400;color:var(--text-secondary);">(optional)</span><input type="date" id="invoicesched-end-date" class="organizational-input"></label></div>'
+      + '<div class="organizational-panel-field-full"><label class="organizational-label">Payment terms, days <span style="font-weight:400;color:var(--text-secondary);">(optional; the due date is this many days after each date)</span><input type="number" id="invoicesched-due-days" class="organizational-input" min="0" max="365" step="1" placeholder="e.g. 30"></label></div>'
       + '<div class="organizational-panel-section-head">Line items</div>'
       + '<div id="invoicesched-lines-wrap">' + scheduleLineRowHtml() + '</div>'
       + '<button type="button" id="invoicesched-add-line" class="organizational-sg-add-btn" style="font-size:0.8rem;margin-top:6px;">+ Add line</button>'
@@ -1053,6 +1054,9 @@
     const frequency = document.getElementById('invoicesched-frequency').value;
     const nextDate = document.getElementById('invoicesched-next-date').value;
     const endDate = document.getElementById('invoicesched-end-date').value || null;
+    const dueDaysRaw = document.getElementById('invoicesched-due-days').value.trim();
+    const dueDays = dueDaysRaw === '' ? null : Number(dueDaysRaw);
+    if (dueDays != null && (!Number.isInteger(dueDays) || dueDays < 0 || dueDays > 365)) { showScheduleFormError('Payment terms must be a whole number of days, 0 to 365.'); return; }
     const monthsRaw = document.getElementById('invoicesched-months').value.trim();
     if (!customerId) { showScheduleFormError('A customer is required.'); return; }
     if (!nextDate) { showScheduleFormError('Next occurrence date is required.'); return; }
@@ -1068,7 +1072,7 @@
       method: 'POST',
       body: JSON.stringify({
         schedule_type: 'invoice', frequency, active_months: activeMonths, next_occurrence_date: nextDate, end_date: endDate,
-        template: { constituent_id: Number(customerId), reference, lines },
+        template: { constituent_id: Number(customerId), reference, due_days: dueDays, lines },
       }),
     });
     if (!out) return;

@@ -11,6 +11,7 @@ const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 const { postLedgerTransaction, isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { acquireDocumentLock } = require('../lib/documentLock');
 const { recordBillPayment, voidBillPayment } = require('../lib/billInvoicePayments');
+const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { displayCents } = require('../lib/voidedDisplay');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
@@ -232,7 +233,7 @@ function registerBillsRoutes(app, pool) {
       const r = await pool.query(
         `SELECT b.id, b.reference, b.bill_date, b.due_date, c.display_name AS vendor_name,
                 COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0)
-                  - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) AS total_cents,
+                  - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) - ${billCreditSql('b')} AS total_cents,
                 (CURRENT_DATE - COALESCE(b.due_date, b.bill_date)) AS days_past_due
          FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
          WHERE b.org_id = $1 AND b.status IN ('approved', 'scheduled', 'partially_paid')
@@ -262,7 +263,8 @@ function registerBillsRoutes(app, pool) {
     try {
       const r = await pool.query(
         `SELECT b.*, c.display_name AS vendor_name,
-                COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0) AS total_cents
+                COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0) AS total_cents,
+                ${billCreditSql('b')} AS credited_cents
          FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
          WHERE b.id = $1 AND b.org_id = $2 LIMIT 1`,
         [billId, orgId]
@@ -272,7 +274,7 @@ function registerBillsRoutes(app, pool) {
       if (linesR.rows.length === 0 && programScopeFor(req) !== null) {
         return res.status(404).json({ error: 'Bill not found' });
       }
-      return res.json({ bill: rowToBill(r.rows[0]), lines: linesR.rows.map(rowToBillLine) });
+      return res.json({ bill: { ...rowToBill(r.rows[0]), credited_cents: String(r.rows[0].credited_cents) }, lines: linesR.rows.map(rowToBillLine) });
     } catch (e) {
       console.error('GET bill detail:', e.message);
       return res.status(500).json({ error: 'Could not load bill' });

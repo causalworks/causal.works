@@ -1,6 +1,7 @@
 'use strict';
 
 const { receivableItems } = require('../lib/receivablesPayables');
+const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { cashByRestriction } = require('../lib/cashByRestriction');
 const { requireAuth } = require('../../auth');
 const { waitingForAnAsset } = require('../lib/fixedAssetWaiting');
@@ -84,7 +85,7 @@ function registerAccountingDashboardRoutes(app, pool) {
         `WITH open_bills AS (
            SELECT b.id, COALESCE(b.due_date, b.bill_date) AS due,
                   COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0)
-                    - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) AS remaining
+                    - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) - ${billCreditSql('b')} AS remaining
              FROM org_bills b WHERE b.org_id = $1 AND b.status IN ('approved', 'scheduled', 'partially_paid'))
          SELECT COUNT(*) FILTER (WHERE due < CURRENT_DATE)::int AS overdue_n,
                 COALESCE(SUM(remaining) FILTER (WHERE due < CURRENT_DATE), 0)::bigint AS overdue_cents,
@@ -99,7 +100,7 @@ function registerAccountingDashboardRoutes(app, pool) {
         `WITH open_inv AS (
            SELECT i.id, COALESCE(i.due_date, i.invoice_date) AS due,
                   COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0)
-                    - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) AS remaining
+                    - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) - ${invoiceCreditSql('i')} AS remaining
              FROM org_invoices i WHERE i.org_id = $1 AND i.status IN ('sent', 'partially_paid', 'overdue'))
          SELECT COUNT(*) FILTER (WHERE due < CURRENT_DATE)::int AS overdue_n,
                 COALESCE(SUM(remaining) FILTER (WHERE due < CURRENT_DATE), 0)::bigint AS overdue_cents,

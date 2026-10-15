@@ -3,28 +3,39 @@
 const { acquireDocumentLock } = require('./documentLock');
 const { postLedgerTransaction, voidLedgerTransaction, isFiscalYearLocked, buildReversingLines } = require('./ledgerPosting');
 
+function billCreditSql(alias) {
+  return `COALESCE((SELECT SUM(amount_cents) FROM org_bill_credit_notes WHERE original_bill_id = ${alias}.id AND status = 'applied'), 0)`;
+}
+function invoiceCreditSql(alias) {
+  return `COALESCE((SELECT SUM(amount_cents) FROM org_invoice_credit_notes WHERE original_invoice_id = ${alias}.id AND status = 'applied'), 0)`;
+}
+
 async function invoiceRemainingBalanceCents(pool, invoiceId) {
   const r = await pool.query(
     `SELECT
        COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = $1), 0)::bigint AS total_cents,
-       COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = $1 AND status = 'posted'), 0)::bigint AS paid_cents`,
+       COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = $1 AND status = 'posted'), 0)::bigint AS paid_cents,
+       COALESCE((SELECT SUM(amount_cents) FROM org_invoice_credit_notes WHERE original_invoice_id = $1 AND status = 'applied'), 0)::bigint AS credited_cents`,
     [invoiceId]
   );
   const totalCents = Number(r.rows[0].total_cents);
   const paidCents = Number(r.rows[0].paid_cents);
-  return { totalCents, paidCents, remainingCents: totalCents - paidCents };
+  const creditedCents = Number(r.rows[0].credited_cents);
+  return { totalCents, paidCents, creditedCents, remainingCents: totalCents - paidCents - creditedCents };
 }
 
 async function billRemainingBalanceCents(pool, billId) {
   const r = await pool.query(
     `SELECT
        COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = $1), 0)::bigint AS total_cents,
-       COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = $1 AND status = 'posted'), 0)::bigint AS paid_cents`,
+       COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = $1 AND status = 'posted'), 0)::bigint AS paid_cents,
+       COALESCE((SELECT SUM(amount_cents) FROM org_bill_credit_notes WHERE original_bill_id = $1 AND status = 'applied'), 0)::bigint AS credited_cents`,
     [billId]
   );
   const totalCents = Number(r.rows[0].total_cents);
   const paidCents = Number(r.rows[0].paid_cents);
-  return { totalCents, paidCents, remainingCents: totalCents - paidCents };
+  const creditedCents = Number(r.rows[0].credited_cents);
+  return { totalCents, paidCents, creditedCents, remainingCents: totalCents - paidCents - creditedCents };
 }
 
 async function recordBillPayment(pool, args) {
@@ -113,7 +124,7 @@ async function voidBillPayment(pool, { orgId, userId, billId, paymentId, reason 
 
   await pool.query(`UPDATE org_bill_payments SET status = 'void' WHERE id = $1 AND org_id = $2`, [paymentId, orgId]);
   const { paidCents, remainingCents } = await billRemainingBalanceCents(pool, billId);
-  const newStatus = paidCents === 0 ? 'approved' : remainingCents === 0 ? 'paid' : 'partially_paid';
+  const newStatus = remainingCents <= 0 ? 'paid' : paidCents === 0 ? 'approved' : 'partially_paid';
   await pool.query(`UPDATE org_bills SET status = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`, [newStatus, billId, orgId]);
   return { httpStatus: 200, body: { id: paymentId, status: 'void', bill_status: newStatus, reversal_transaction_id: reversalTransactionId } };
 }
@@ -204,12 +215,33 @@ async function voidInvoicePayment(pool, { orgId, userId, invoiceId, paymentId, r
 
   await pool.query(`UPDATE org_invoice_payments SET status = 'void' WHERE id = $1 AND org_id = $2`, [paymentId, orgId]);
   const { paidCents, remainingCents } = await invoiceRemainingBalanceCents(pool, invoiceId);
-  const newStatus = paidCents === 0 ? 'sent' : remainingCents === 0 ? 'paid' : 'partially_paid';
+  const newStatus = remainingCents <= 0 ? 'paid' : paidCents === 0 ? 'sent' : 'partially_paid';
   await pool.query(`UPDATE org_invoices SET status = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`, [newStatus, invoiceId, orgId]);
   return { httpStatus: 200, body: { id: paymentId, status: 'void', invoice_status: newStatus, reversal_transaction_id: reversalTransactionId } };
 }
 
+async function refreshBillStatusAfterCredit(pool, orgId, billId) {
+  const { paidCents, remainingCents } = await billRemainingBalanceCents(pool, billId);
+  const cur = await pool.query('SELECT status FROM org_bills WHERE id = $1 AND org_id = $2', [billId, orgId]);
+  if (!cur.rows.length || !['approved', 'scheduled', 'partially_paid', 'paid'].includes(cur.rows[0].status)) return null;
+  const status = cur.rows[0].status;
+  const next = remainingCents <= 0 ? 'paid' : status === 'paid' ? (paidCents > 0 ? 'partially_paid' : 'approved') : status;
+  if (next !== status) await pool.query('UPDATE org_bills SET status = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3', [next, billId, orgId]);
+  return next;
+}
+
+async function refreshInvoiceStatusAfterCredit(pool, orgId, invoiceId) {
+  const { paidCents, remainingCents } = await invoiceRemainingBalanceCents(pool, invoiceId);
+  const cur = await pool.query('SELECT status FROM org_invoices WHERE id = $1 AND org_id = $2', [invoiceId, orgId]);
+  if (!cur.rows.length || !['sent', 'partially_paid', 'overdue', 'paid'].includes(cur.rows[0].status)) return null;
+  const status = cur.rows[0].status;
+  const next = remainingCents <= 0 ? 'paid' : status === 'paid' ? (paidCents > 0 ? 'partially_paid' : 'sent') : status;
+  if (next !== status) await pool.query('UPDATE org_invoices SET status = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3', [next, invoiceId, orgId]);
+  return next;
+}
+
 module.exports = {
+  billCreditSql, invoiceCreditSql, refreshBillStatusAfterCredit, refreshInvoiceStatusAfterCredit,
   invoiceRemainingBalanceCents,
   billRemainingBalanceCents,
   recordBillPayment, voidBillPayment,

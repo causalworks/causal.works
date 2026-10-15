@@ -9,6 +9,7 @@ const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
+const { refreshBillStatusAfterCredit, refreshInvoiceStatusAfterCredit } = require('../lib/billInvoicePayments');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -37,7 +38,7 @@ function registerCreditNotesRoutes(app, pool) {
   const orgAuth = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool)];
   const financeWriter = requireAccountingWriter(pool);
 
-  function registerSide({ kind, table, constituentRoleCol, originalCol, apAccountFn, arAccountFn, parentTable, totalSql, noun }) {
+  function registerSide({ kind, table, constituentRoleCol, originalCol, apAccountFn, arAccountFn, parentTable, totalSql, noun, refreshStatus }) {
     const base = '/api/organizational/orgs/:slug/' + kind;
 
     app.get(base, ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
@@ -158,6 +159,7 @@ function registerCreditNotesRoutes(app, pool) {
         if (postResult.httpStatus >= 400) return res.status(postResult.httpStatus).json(postResult.body);
 
         await pool.query(`UPDATE ${table} SET status = 'applied', ledger_transaction_id = $1 WHERE id = $2 AND org_id = $3`, [postResult.body.id, id, orgId]);
+        if (note[originalCol]) await refreshStatus(pool, orgId, note[originalCol]);
         return res.json({ id, status: 'applied', ledger_transaction_id: postResult.body.id });
       } catch (e) {
         const translated = translateCreditNoteWriteError(e);
@@ -174,7 +176,7 @@ function registerCreditNotesRoutes(app, pool) {
       if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
       const reason = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
       try {
-        const r = await pool.query(`SELECT status, ledger_transaction_id FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
+        const r = await pool.query(`SELECT status, ledger_transaction_id, ${originalCol} AS original_id FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
         if (!r.rows.length) return res.status(404).json({ error: 'Credit note not found' });
         const { status, ledger_transaction_id: txnId } = r.rows[0];
         if (status === 'void') return res.status(409).json({ error: 'This credit note is already void.', code: 'already_void' });
@@ -184,6 +186,7 @@ function registerCreditNotesRoutes(app, pool) {
           if (v.httpStatus >= 400) return res.status(v.httpStatus).json(v.body);
         }
         await pool.query(`UPDATE ${table} SET status = 'void' WHERE id = $1 AND org_id = $2`, [id, orgId]);
+        if (status === 'applied' && r.rows[0].original_id) await refreshStatus(pool, orgId, r.rows[0].original_id);
         return res.json({ id, status: 'void' });
       } catch (e) {
         const translated = translateCreditNoteWriteError(e);
@@ -195,9 +198,9 @@ function registerCreditNotesRoutes(app, pool) {
   }
 
   registerSide({ kind: 'bill-credit-notes', table: 'org_bill_credit_notes', originalCol: 'original_bill_id', apAccountFn: 'org_get_or_create_ap_account',
-    parentTable: 'org_bills', noun: 'bill', totalSql: 'SELECT COALESCE(SUM(amount_cents), 0) FROM org_bill_lines WHERE bill_id = p.id' });
+    parentTable: 'org_bills', noun: 'bill', refreshStatus: refreshBillStatusAfterCredit, totalSql: 'SELECT COALESCE(SUM(amount_cents), 0) FROM org_bill_lines WHERE bill_id = p.id' });
   registerSide({ kind: 'invoice-credit-notes', table: 'org_invoice_credit_notes', originalCol: 'original_invoice_id', arAccountFn: 'org_get_or_create_ar_account',
-    parentTable: 'org_invoices', noun: 'invoice', totalSql: 'SELECT COALESCE(SUM(ROUND(quantity * unit_amount_cents)), 0) FROM org_invoice_lines WHERE invoice_id = p.id' });
+    parentTable: 'org_invoices', noun: 'invoice', refreshStatus: refreshInvoiceStatusAfterCredit, totalSql: 'SELECT COALESCE(SUM(ROUND(quantity * unit_amount_cents)), 0) FROM org_invoice_lines WHERE invoice_id = p.id' });
 }
 
 module.exports = { registerCreditNotesRoutes };

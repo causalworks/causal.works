@@ -303,11 +303,13 @@
         + '</div>';
     const totalCents = (lines || []).reduce((s, l) => s + Number(l.amount_cents), 0);
     const paidCents = (payments || []).filter((p) => p.status === 'posted').reduce((s, p) => s + Number(p.amount_cents), 0);
-    const remainingCents = totalCents - paidCents;
+    const creditedCents = Number((bill && bill.credited_cents) || 0);
+    const remainingCents = totalCents - paidCents - creditedCents;
     const totalsHtml = (bill && !isDraft && bill.status !== 'void')
       ? '<div style="margin:10px 0 0 auto;width:260px;font-size:0.875rem;">'
         + '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>Total</span><span>' + fmtMoney(totalCents) + '</span></div>'
         + (paidCents ? '<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-secondary);"><span>Less payments</span><span>' + fmtMoney(paidCents) + '</span></div>' : '')
+        + (creditedCents ? '<div style="display:flex;justify-content:space-between;padding:2px 0;color:var(--text-secondary);"><span>Less credit notes</span><span>' + fmtMoney(creditedCents) + '</span></div>' : '')
         + '<div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);font-weight:600;"><span>Amount due</span><span>' + fmtMoney(remainingCents) + '</span></div></div>'
       : '';
     const lockedNote = (bill && !isDraft && bill.status !== 'void')

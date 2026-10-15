@@ -1,12 +1,14 @@
 'use strict';
 
+const { billCreditSql, invoiceCreditSql } = require('./billInvoicePayments');
+
 // Open receivable and payable items, shared by the schedules and the Accounting dashboard so both show the same totals.
 
 async function receivableItems(pool, orgId) {
   const inv = await pool.query(
     `SELECT i.id, i.reference, i.invoice_date AS date, i.due_date, i.ledger_transaction_id, c.id AS contact_id, c.display_name AS contact_name,
             COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0)
-            - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) AS balance_cents
+            - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) - ${invoiceCreditSql('i')} AS balance_cents
        FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
       WHERE i.org_id = $1 AND i.status IN ('sent', 'partially_paid', 'overdue')`, [orgId]);
   const inst = await pool.query(
@@ -39,7 +41,7 @@ async function payableItems(pool, orgId) {
   const bills = await pool.query(
     `SELECT b.id, b.reference, b.bill_date AS date, b.due_date, b.ledger_transaction_id, c.id AS contact_id, c.display_name AS contact_name,
             COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0)
-            - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) AS balance_cents
+            - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) - ${billCreditSql('b')} AS balance_cents
        FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
       WHERE b.org_id = $1 AND b.status IN ('approved', 'scheduled', 'partially_paid')`, [orgId]);
   const claims = await pool.query(

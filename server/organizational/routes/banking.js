@@ -24,6 +24,7 @@ const { recordSponsoredProjectDisbursementPayment } = require('../lib/sponsoredP
 const {
   recordBillPayment, recordInvoicePayment, voidBillPayment, voidInvoicePayment,
   billRemainingBalanceCents, invoiceRemainingBalanceCents,
+  billCreditSql, invoiceCreditSql,
 } = require('../lib/billInvoicePayments');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -726,7 +727,7 @@ function registerBankingRoutes(app, pool) {
           `SELECT * FROM (
              SELECT b.id, b.reference, b.bill_date, b.due_date, c.display_name AS vendor_name,
                     COALESCE((SELECT SUM(amount_cents) FROM org_bill_lines WHERE bill_id = b.id), 0)
-                      - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) AS remaining_cents
+                      - COALESCE((SELECT SUM(amount_cents) FROM org_bill_payments WHERE bill_id = b.id AND status = 'posted'), 0) - ${billCreditSql('b')} AS remaining_cents
              FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
              WHERE b.org_id = $1 AND b.status IN ('approved', 'scheduled', 'partially_paid') AND b.bill_date BETWEEN $2 AND $3
            ) candidate
@@ -771,7 +772,7 @@ function registerBankingRoutes(app, pool) {
           `SELECT * FROM (
              SELECT i.id, i.reference, i.invoice_date, i.due_date, c.display_name AS customer_name,
                     COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0)
-                      - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) AS remaining_cents
+                      - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) - ${invoiceCreditSql('i')} AS remaining_cents
              FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
              WHERE i.org_id = $1 AND i.status IN ('sent', 'partially_paid', 'overdue') AND i.invoice_date BETWEEN $2 AND $3
            ) candidate

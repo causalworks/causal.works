@@ -12,6 +12,7 @@ const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 const { postLedgerTransaction, isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { acquireDocumentLock } = require('../lib/documentLock');
 const { recordInvoicePayment, voidInvoicePayment, invoiceRemainingBalanceCents } = require('../lib/billInvoicePayments');
+const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
@@ -227,7 +228,7 @@ function registerInvoicesRoutes(app, pool) {
       const r = await pool.query(
         `SELECT i.id, i.reference, i.invoice_date, i.due_date, c.display_name AS customer_name,
                 COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0)
-                  - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) AS total_cents,
+                  - COALESCE((SELECT SUM(amount_cents) FROM org_invoice_payments WHERE invoice_id = i.id AND status = 'posted'), 0) - ${invoiceCreditSql('i')} AS total_cents,
                 (CURRENT_DATE - COALESCE(i.due_date, i.invoice_date)) AS days_past_due
          FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
          WHERE i.org_id = $1 AND i.status IN ('sent', 'partially_paid', 'overdue')
@@ -257,7 +258,8 @@ function registerInvoicesRoutes(app, pool) {
     try {
       const r = await pool.query(
         `SELECT i.*, c.display_name AS customer_name,
-                COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0) AS total_cents
+                COALESCE((SELECT SUM(ROUND(quantity * unit_amount_cents)) FROM org_invoice_lines WHERE invoice_id = i.id), 0) AS total_cents,
+                ${invoiceCreditSql('i')} AS credited_cents
          FROM org_invoices i JOIN org_constituents c ON c.id = i.constituent_id
          WHERE i.id = $1 AND i.org_id = $2 LIMIT 1`,
         [invoiceId, orgId]
@@ -267,7 +269,7 @@ function registerInvoicesRoutes(app, pool) {
       if (linesR.rows.length === 0 && programScopeFor(req) !== null) {
         return res.status(404).json({ error: 'Invoice not found' });
       }
-      return res.json({ invoice: rowToInvoice(r.rows[0]), lines: linesR.rows.map(rowToInvoiceLine) });
+      return res.json({ invoice: { ...rowToInvoice(r.rows[0]), credited_cents: String(r.rows[0].credited_cents) }, lines: linesR.rows.map(rowToInvoiceLine) });
     } catch (e) {
       console.error('GET invoice detail:', e.message);
       return res.status(500).json({ error: 'Could not load invoice' });

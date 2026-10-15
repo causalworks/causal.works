@@ -206,103 +206,6 @@
     });
   }
 
-  // Opening balances
-  let openAccounts = [];
-  const cents = (raw) => { const n = Number(String(raw || '').replace(/[$,\s]/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
-  const money = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  function openingTotals() {
-    let assets = 0; let liabilities = 0; let equity = 0;
-    document.querySelectorAll('#organizational-acctset-open-grid [data-open-acct]').forEach((el) => {
-      const v = cents(el.value);
-      if (!v || Number.isNaN(v)) return;
-      const t = el.getAttribute('data-type');
-      if (t === 'asset') assets += v; else if (t === 'liability') liabilities += v; else equity += v;
-    });
-    return { assets, liabilities, equity, balancing: assets - liabilities - equity };
-  }
-
-  function refreshOpeningSum() {
-    const t = openingTotals();
-    $('organizational-acctset-open-sum').textContent = 'Assets ' + money(t.assets) + ' · Liabilities ' + money(t.liabilities) + ' · Net assets entered ' + money(t.equity)
-      + ' · Balancing amount to the net assets account ' + money(t.balancing);
-  }
-
-  async function loadOpening() {
-    const grid = $('organizational-acctset-open-grid');
-    const post = $('organizational-acctset-open-post');
-    if (!grid) return;
-    const [acctOut, progOut] = await Promise.all([apiJson(base() + '/accounts'), apiJson(base() + '/programs?dimension=program')]);
-    if (!acctOut || !acctOut.res.ok) { grid.textContent = 'Accounts could not be loaded.'; return; }
-    openAccounts = (acctOut.data.accounts || []).filter((a) => ['asset', 'liability', 'equity'].includes(a.type) && a.is_posting !== false
-      && !a.is_system_clearing_account && !a.is_system_unallocated_receipts_account && !a.is_system_expense_claims_payable_account);
-    const programs = (progOut && progOut.data && progOut.data.programs) || [];
-    $('organizational-acctset-open-program').innerHTML = programs.map((p) => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('');
-    const general = programs.find((p) => /management|general|admin/i.test(p.name));
-    if (general) $('organizational-acctset-open-program').value = String(general.id);
-    const equities = openAccounts.filter((a) => a.type === 'equity');
-    $('organizational-acctset-open-equity').innerHTML = equities.map((a) => '<option value="' + esc(a.id) + '">' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</option>').join('');
-    const unres = equities.find((a) => /without donor|unrestricted/i.test(a.name));
-    if (unres) $('organizational-acctset-open-equity').value = String(unres.id);
-    const groups = [['asset', 'Assets'], ['liability', 'Liabilities'], ['equity', 'Net assets']];
-    grid.innerHTML = groups.map(([type, label]) => '<div class="organizational-panel-section-head">' + label + '</div>'
-      + openAccounts.filter((a) => a.type === type).map((a) => '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:3px 0;">'
-        + '<span>' + esc(a.code ? a.code + ' — ' + a.name : a.name) + '</span>'
-        + '<input type="text" inputmode="decimal" class="organizational-input" style="width:140px;text-align:right;" data-open-acct="' + esc(a.id) + '" data-type="' + type + '" placeholder="0.00"></div>').join('')).join('');
-    const manage = canManage();
-    grid.querySelectorAll('input').forEach((el) => { el.disabled = !manage; });
-    ['organizational-acctset-open-date', 'organizational-acctset-open-program', 'organizational-acctset-open-equity'].forEach((id) => { $(id).disabled = !manage; });
-    post.hidden = !manage;
-    refreshOpeningSum();
-    if (post.dataset.wired) return;
-    post.dataset.wired = '1';
-    grid.addEventListener('input', refreshOpeningSum);
-    post.addEventListener('click', async () => {
-      const note = $('organizational-acctset-open-note');
-      const say = (m) => { note.hidden = false; note.textContent = m; };
-      const date = $('organizational-acctset-open-date').value;
-      if (!date) { say('Pick the date the books start.'); return; }
-      const programId = Number($('organizational-acctset-open-program').value);
-      const equityId = Number($('organizational-acctset-open-equity').value);
-      if (!programId || !equityId) { say('Pick a program and a net assets account.'); return; }
-      const lines = [];
-      let bad = false;
-      grid.querySelectorAll('[data-open-acct]').forEach((el) => {
-        if (!el.value.trim()) return;
-        const v = cents(el.value);
-        if (Number.isNaN(v)) { bad = true; return; }
-        if (!v) return;
-        const debitNormal = el.getAttribute('data-type') === 'asset';
-        const debit = debitNormal ? v > 0 : v < 0;
-        lines.push({ account_id: Number(el.getAttribute('data-open-acct')), program_id: programId, debit_cents: debit ? Math.abs(v) : 0, credit_cents: debit ? 0 : Math.abs(v) });
-      });
-      if (bad) { say('Check the amounts: each must be a number.'); return; }
-      const t = openingTotals();
-      if (t.balancing) {
-        const debit = t.balancing < 0;
-        const existing = lines.find((l) => l.account_id === equityId);
-        if (existing) {
-          const net = existing.credit_cents - existing.debit_cents + Math.abs(t.balancing) * (debit ? -1 : 1);
-          existing.debit_cents = net < 0 ? -net : 0; existing.credit_cents = net > 0 ? net : 0;
-        } else {
-          lines.push({ account_id: equityId, program_id: programId, debit_cents: debit ? Math.abs(t.balancing) : 0, credit_cents: debit ? 0 : Math.abs(t.balancing) });
-        }
-      }
-      if (lines.length < 2) { say('Enter at least one balance.'); return; }
-      post.disabled = true;
-      const res = await apiJson(base() + '/ledger/entries', { method: 'POST', body: JSON.stringify({
-        entry_type: 'journal', transaction_date: date, memo: 'Opening balances as of ' + date, reason: 'Opening balances carried over from the previous books', lines } ) });
-      post.disabled = false;
-      if (res && res.res.ok) {
-        say('Posted as entry #' + (res.data && res.data.id) + '. To correct it, void that entry in Transactions and enter it again.');
-        grid.querySelectorAll('input').forEach((el) => { el.value = ''; });
-        refreshOpeningSum();
-      } else {
-        say((res && res.data && (res.data.message || res.data.error)) || 'Could not post the opening balances.');
-      }
-    });
-  }
-
   async function init(s) {
     slug = s;
     const contacts = document.querySelector('[data-acctset-contacts]');
@@ -315,7 +218,7 @@
     if (structure) structure.href = '/organizational/o/' + encodeURIComponent(slug) + '/structure';
     wire();
     if (window.OrganizationalStateRules) window.OrganizationalStateRules.renderAccountingCard($('organizational-acctset-state'), slug);
-    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering(), loadOpening()]);
+    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering()]);
     const idx = $('organizational-acctset-index');
     if (idx && window.OrganizationalSettingsIndex) {
       const r = await window.OrganizationalSettingsIndex.load(slug);

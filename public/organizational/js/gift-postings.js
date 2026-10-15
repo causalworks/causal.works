@@ -266,8 +266,8 @@
         (isInKind
           ? '<div><label class="organizational-label" style="font-size:0.75rem;">Gifts-in-Kind revenue account</label>' +
               '<select class="organizational-select" id="gp-revenue">' + acctOpts((a) => a.type === 'income' && !a.is_system_contribution_revenue_account, gift.in_kind.revenue_account_id) + '</select></div>' +
-            '<div><label class="organizational-label" style="font-size:0.75rem;">In-kind expense account (non-cash)</label>' +
-              '<select class="organizational-select" id="gp-expense">' + acctOpts((a) => a.type === 'expense' && a.is_non_cash, gift.in_kind.expense_account_id) + '</select></div>'
+            '<div><label class="organizational-label" style="font-size:0.75rem;">Expense account for what was donated</label>' +
+              '<select class="organizational-select" id="gp-expense">' + acctOpts((a) => a.type === 'expense' || (a.type === 'asset' && !a.is_cash_account), gift.in_kind.expense_account_id) + '</select></div>'
           : '<div><label class="organizational-label" style="font-size:0.75rem;">Contribution revenue account</label>' +
               '<select class="organizational-select" id="gp-revenue"><option value="">— select —</option>' + acctOpts((a) => a.type === 'income' && a.standard_category === 'REV_CONTRIB', individualRevenueId(gift)) + '</select></div>' +
             '<div><label class="organizational-label" style="font-size:0.75rem;">Pledges receivable account</label>' +

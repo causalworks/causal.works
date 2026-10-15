@@ -445,6 +445,7 @@ function registerFinancialStatementRoutes(app, pool) {
          JOIN org_ledger_transactions t ON t.id = l.transaction_id
          JOIN org_accounts a ON a.id = l.account_id
          WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year = $2
+           AND t.source NOT IN ('gift_in_kind')
            AND a.type = 'expense' AND a.is_posting = true AND a.is_non_cash = true
          GROUP BY a.code, a.name
          HAVING SUM(l.debit_cents - l.credit_cents) <> 0

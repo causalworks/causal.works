@@ -1120,15 +1120,12 @@
           const list = (Array.isArray(r.accounts) ? r.accounts : (Array.isArray(r) ? r : [])).filter(a => a.is_posting);
           const opt = (a) => `<option value="${a.id}">${esc(a.code ? a.code + ' — ' + a.name : a.name)}</option>`;
           const income = list.filter(a => a.type === 'income' && !a.is_system_contribution_revenue_account);
-          const nonCashExpense = list.filter(a => a.type === 'expense' && a.is_non_cash);
+          const inKindOffset = list.filter(a => a.type === 'expense' || (a.type === 'asset' && !a.is_cash_account));
           const asset = list.filter(a => a.type === 'asset');
           ikRevenueSelect.innerHTML = `<option value="">— select —</option>` + income.map(opt).join('');
-          ikExpenseSelect.innerHTML = `<option value="">— select —</option>` + nonCashExpense.map(opt).join('');
+          ikExpenseSelect.innerHTML = `<option value="">— select —</option>` + inKindOffset.map(opt).join('');
           plReceivableSelect.innerHTML = `<option value="">— select —</option>` + asset.map(opt).join('');
           syncPledgeFields();
-          if (!nonCashExpense.length) {
-            ikExpenseSelect.innerHTML = `<option value="">No non-cash expense account set up yet — flag one in Accounting → Chart of Accounts</option>`;
-          }
         } catch (_) {
           ikRevenueSelect.innerHTML = ikExpenseSelect.innerHTML = plReceivableSelect.innerHTML = `<option value="">Could not load accounts</option>`;
         }

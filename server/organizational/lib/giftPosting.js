@@ -35,12 +35,11 @@ async function postInKindGift(pool, opts) {
   }
 
   const expR = await pool.query(
-    `SELECT is_non_cash FROM org_accounts WHERE id = $1 AND org_id = $2 AND type = 'expense' LIMIT 1`,
+    `SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2 AND type IN ('expense', 'asset') AND is_posting = true AND is_cash_account = false LIMIT 1`,
     [expenseAccountId, orgId]
   );
-  if (!expR.rows.length) return { httpStatus: 400, body: { error: 'expense_account_id not found for this organization, or is not an expense account' } };
-  if (!expR.rows[0].is_non_cash) {
-    return { httpStatus: 400, body: { error: 'The in-kind expense account must have is_non_cash = true (Accounts settings) so the Statement of Cash Flows adds it back correctly.' } };
+  if (!expR.rows.length) {
+    return { httpStatus: 400, body: { error: 'Choose an expense account for what was donated (or an asset account for goods you will keep and depreciate). Bank accounts cannot be used.' } };
   }
 
   const amountCents = Number(gift.amount_cents);

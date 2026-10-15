@@ -328,6 +328,7 @@
     const ed = out.data.edit || {};
     lastDetail = out.data;
     if (canWrite() && ed.allowed) actions.push('<button type="button" class="organizational-btn organizational-btn-outline ledger-edit-btn" data-id="' + t.id + '">Edit</button>');
+    if (canWrite() && ENTRY_TYPES.some((x) => x.key === t.entry_type)) actions.push('<button type="button" class="organizational-btn organizational-btn-outline ledger-copy-btn" data-id="' + t.id + '">Copy</button>');
     const rc = out.data.reconciliation || {};
     lastDetail.statementLineIds = rc.statement_line_ids || [];
     const isPayment = t.source === 'bill_payment' || t.source === 'invoice_payment';
@@ -973,6 +974,54 @@
     if (type) u.searchParams.set('new', type); else u.searchParams.delete('new');
     return u.pathname + u.search;
   }
+  function copyTransaction() {
+    const d = lastDetail;
+    if (!d) return;
+    const t = d.transaction;
+    const lines = d.lines || [];
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    openPostPanel({ type: t.entry_type, push: true });
+    setVal('ledger-txn-memo', t.memo || '');
+    if (t.entry_type === 'transfer') {
+      const from = lines.find((l) => Number(l.credit_cents) > 0);
+      const to = lines.find((l) => Number(l.debit_cents) > 0);
+      if (from) setVal('ledger-from-account', String(from.account_id));
+      if (to) setVal('ledger-to-account', String(to.account_id));
+      if (to) setVal('ledger-transfer-amount', (Number(to.debit_cents) / 100).toFixed(2));
+      return;
+    }
+    const simple = t.entry_type === 'receive' || t.entry_type === 'spend';
+    const body = simple ? lines.filter((l) => l.limited_editable) : lines;
+    if (simple) {
+      const bank = lines.find((l) => !l.limited_editable);
+      if (bank) setVal('ledger-bank-account', String(bank.account_id));
+      if (t.constituent_id) { setVal('ledger-contact', String(t.constituent_id)); setVal('ledger-contact-input', t.contact_name || ''); }
+      else setVal('ledger-contact-input', t.payee || '');
+    }
+    const wrap = document.getElementById('ledger-lines-wrap');
+    const addBtn = document.getElementById('ledger-add-line');
+    while (wrap && addBtn && wrap.querySelectorAll('[data-post-line]').length < body.length) addBtn.click();
+    const allBox = document.getElementById('ledger-show-all-accounts');
+    if (allBox && body.some((l) => !document.querySelector('#ledger-lines-wrap .ledger-line-account option[value="' + l.account_id + '"]'))) {
+      allBox.checked = true; allBox.dispatchEvent(new Event('change'));
+    }
+    const rows = wrap ? wrap.querySelectorAll('[data-post-line]') : [];
+    body.forEach((l, i) => {
+      const row = rows[i];
+      if (!row) return;
+      row.querySelector('.ledger-line-account').value = String(l.account_id);
+      row.querySelector('.ledger-line-program').value = l.program_id ? String(l.program_id) : '';
+      row.querySelector('.ledger-line-grant').value = l.grant_id ? String(l.grant_id) : '';
+      if (simple) row.querySelector('.ledger-line-amount').value = (Math.max(Number(l.debit_cents), Number(l.credit_cents)) / 100).toFixed(2);
+      else {
+        row.querySelector('.ledger-line-debit').value = Number(l.debit_cents) > 0 ? (Number(l.debit_cents) / 100).toFixed(2) : '';
+        row.querySelector('.ledger-line-credit').value = Number(l.credit_cents) > 0 ? (Number(l.credit_cents) / 100).toFixed(2) : '';
+        row.querySelector('.ledger-line-memo').value = l.memo || '';
+      }
+    });
+    refreshLinesTotal();
+  }
+
   function openPostPanel(opts) {
     const type = opts && ENTRY_TYPES.some((t) => t.key === opts.type) ? opts.type : 'receive';
     postMode = true;
@@ -1031,6 +1080,8 @@
       if (unrecBtn) { unreconcileFromPanel(Number(unrecBtn.getAttribute('data-id')), true); return true; }
       const voidReturnBtn = e.target.closest('.ledger-voidreturn-btn');
       if (voidReturnBtn) { unreconcileFromPanel(Number(voidReturnBtn.getAttribute('data-id')), false); return true; }
+      const copyBtn = e.target.closest('.ledger-copy-btn');
+      if (copyBtn) { copyTransaction(); return true; }
       const editBtn = e.target.closest('.ledger-edit-btn');
       if (editBtn) { renderEditForm(); return true; }
       const editSave = e.target.closest('.ledger-edit-save');

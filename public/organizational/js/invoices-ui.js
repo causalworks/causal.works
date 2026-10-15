@@ -224,6 +224,7 @@
     const items = [];
     const add = (id, label) => items.push('<button type="button" role="menuitem" class="organizational-account-dropdown-item" id="' + id + '">' + label + '</button>');
     if (canWrite) {
+      add('invoice-copy', 'Copy invoice');
       if (['sent', 'overdue', 'partially_paid', 'paid'].includes(invoice.status)) add('invoice-edit', 'Edit invoice');
       if (['sent', 'overdue'].includes(invoice.status)) add('invoice-revert', 'Revert to draft');
       if (['sent', 'overdue', 'partially_paid'].includes(invoice.status)) add('invoice-writeoff', 'Write off balance');
@@ -526,6 +527,8 @@
         if (!menu.contains(e.target)) { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
       });
     }
+    const copyBtn = document.getElementById('invoice-copy');
+    if (copyBtn) copyBtn.addEventListener('click', () => openInvoicePanel(null, { copy: { invoice: invoiceData.invoice, lines: invoiceData.lines } }));
     const editBtn = document.getElementById('invoice-edit');
     if (editBtn) editBtn.addEventListener('click', () => openInvoicePanel(currentInvoiceId, { editing: true }));
     const editCancelBtn = document.getElementById('invoice-edit-cancel');
@@ -755,8 +758,15 @@
       if (notesEl) window.OrganizationalRecordNotes.mount(notesEl, { slug: currentSlug, type: 'invoice', id });
     } else {
       panelTitle.textContent = 'New invoice';
-      panelBody.innerHTML = renderPanelBody(null, null);
+      const copy = opts && opts.copy;
+      panelBody.innerHTML = renderPanelBody(null, copy && copy.lines && copy.lines.length ? copy.lines : null);
       wirePanelBody(null);
+      if (copy && copy.invoice) {
+        const cust = document.getElementById('invoice-customer');
+        const custInput = document.getElementById('invoice-customer-input');
+        if (cust) cust.value = copy.invoice.constituent_id ? String(copy.invoice.constituent_id) : '';
+        if (custInput) custInput.value = copy.invoice.customer_name || '';
+      }
       if (notesEl) notesEl.innerHTML = '';
     }
     if (!canWrite) {

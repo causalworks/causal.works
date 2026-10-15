@@ -249,6 +249,7 @@
     const items = [];
     const add = (id, label) => items.push('<button type="button" role="menuitem" class="organizational-account-dropdown-item" id="' + id + '">' + label + '</button>');
     if (canWrite) {
+      add('bill-copy', 'Copy bill');
       if (['approved', 'scheduled', 'partially_paid', 'paid'].includes(bill.status)) add('bill-edit', 'Edit bill');
       if (bill.status === 'approved') add('bill-schedule-toggle', 'Schedule payment');
       if (['approved', 'scheduled'].includes(bill.status)) add('bill-revert', 'Revert to draft');
@@ -592,6 +593,8 @@
         if (!menu.contains(e.target)) { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
       });
     }
+    const copyBtn = document.getElementById('bill-copy');
+    if (copyBtn) copyBtn.addEventListener('click', () => openBillPanel(null, { copy: { bill: billData.bill, lines: billData.lines } }));
     const editBtn = document.getElementById('bill-edit');
     if (editBtn) editBtn.addEventListener('click', () => openBillPanel(currentBillId, { editing: true }));
     const editCancelBtn = document.getElementById('bill-edit-cancel');
@@ -839,8 +842,15 @@
       if (notesEl) window.OrganizationalRecordNotes.mount(notesEl, { slug: currentSlug, type: 'bill', id });
     } else {
       panelTitle.textContent = 'New bill';
-      panelBody.innerHTML = renderPanelBody(null, null);
+      const copy = opts && opts.copy;
+      panelBody.innerHTML = renderPanelBody(null, copy && copy.lines && copy.lines.length ? copy.lines : null);
       wirePanelBody(null);
+      if (copy && copy.bill) {
+        const vend = document.getElementById('bill-vendor');
+        const vendInput = document.getElementById('bill-vendor-input');
+        if (vend) vend.value = copy.bill.constituent_id ? String(copy.bill.constituent_id) : '';
+        if (vendInput) vendInput.value = copy.bill.vendor_name || copy.bill.contact_name || '';
+      }
       const notesNew = document.getElementById('organizational-bill-page-notes');
       if (notesNew) notesNew.innerHTML = '';
     }

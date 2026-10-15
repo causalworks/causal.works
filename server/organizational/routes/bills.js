@@ -15,6 +15,7 @@ const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments'
 const { displayCents } = require('../lib/voidedDisplay');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
+const { suggestBillCoding } = require('../lib/billLineSuggestions');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -193,6 +194,21 @@ function registerBillsRoutes(app, pool) {
     try {
       const { extracted, error } = await extractBillOrInvoiceFields(req.file.buffer, req.file.mimetype, 'bill');
       if (error) return res.status(422).json({ error });
+      let vendorId = null;
+      if (extracted.counterparty_name) {
+        const v = await pool.query(
+          `SELECT c.id FROM org_constituents c
+            WHERE c.org_id = $1 AND lower(c.display_name) = lower($2)
+              AND EXISTS (SELECT 1 FROM org_contact_roles r WHERE r.constituent_id = c.id AND r.role = 'vendor' AND (r.ends_on IS NULL OR r.ends_on >= CURRENT_DATE))
+            LIMIT 1`,
+          [req.orgId, extracted.counterparty_name]);
+        vendorId = v.rows.length ? v.rows[0].id : null;
+      }
+      const lines = extracted.lines && extracted.lines.length
+        ? extracted.lines
+        : (extracted.total_amount_cents ? [{ description: extracted.suggested_description || '', amount_cents: extracted.total_amount_cents }] : []);
+      const suggestions = lines.length ? await suggestBillCoding(pool, req.orgId, vendorId, lines.map((l) => l.description)) : [];
+      extracted.lines = lines.map((l, i) => ({ ...l, suggestion: suggestions[i] || null }));
       return res.json({ extracted });
     } catch (e) {
       console.error('POST bills/ocr-preview:', e.message);

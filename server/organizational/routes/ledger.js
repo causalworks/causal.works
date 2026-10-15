@@ -613,9 +613,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
            FROM org_ledger_transactions t WHERE t.org_id = $1 AND t.id = $2`, [orgId, id]);
       const t = tR.rows[0];
       if (!t) return res.status(404).json({ error: 'Transaction not found' });
-      if (!reason && body.date != null && String(body.date) !== String(t.transaction_date).slice(0, 10)) {
-        return res.status(400).json({ error: 'Say why the date is changing.' });
-      }
+      if (!reason) return res.status(400).json({ error: 'A reason is required to change an entry.', code: 'reason_required' });
       const linesR = await pool.query(
         `SELECT id, account_id, program_id, grant_id, donor_restriction_class::text AS restriction, line_memo, source_line_type, source_line_id, debit_cents, credit_cents
            FROM org_ledger_lines WHERE transaction_id = $1 ORDER BY id`, [id]);
@@ -878,6 +876,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     if (!Number.isInteger(transactionId) || transactionId < 1) {
       return res.status(400).json({ error: 'invalid transaction id' });
     }
+    if (!voidReason) return res.status(400).json({ error: 'A reason is required to void an entry.', code: 'reason_required' });
     const rec = await pool.query(
       `SELECT 1 FROM org_bank_statement_lines WHERE org_id = $1 AND ledger_transaction_id = $2
        UNION ALL SELECT 1 FROM org_bank_statement_line_postings WHERE ledger_transaction_id = $2 LIMIT 1`, [orgId, transactionId]);

@@ -343,7 +343,7 @@
 
     const ocrSectionHtml = invoice ? '' : (
       '<div class="organizational-panel-field-full" style="margin-bottom:4px;">'
-      + '<a href="#" id="invoice-ocr-toggle" style="font-size:0.8125rem;">Upload the customer invoice to pre-fill</a>'
+      + '<a href="#" id="invoice-ocr-toggle" style="font-size:0.8125rem;color:var(--organizational-accent, var(--brand-primary));text-decoration:underline;">Upload the customer invoice to pre-fill</a>'
       + '<div id="invoice-ocr-box" hidden style="margin-top:6px;">'
       + '<div style="display:flex;gap:12px;align-items:flex-start;">'
       + '<input type="file" id="invoice-ocr-file" class="organizational-input" accept="image/*,application/pdf" style="flex:1;">'
@@ -366,7 +366,7 @@
       + '<div style="border-top:1px solid var(--border);margin:12px 0 8px;"></div>'
       + (invoice && !isDraft && !postedEditing && invoice.status !== 'void' ? '<p class="organizational-hint" style="margin:0;">To change an amount, the customer or the invoice date, revert the invoice to draft or enter a customer credit note.</p>' : '')
       + linesHtml
-      + (postedEditing ? '<div class="organizational-panel-field-full"><label class="organizational-label">Reason for the change (optional)<input type="text" id="invoice-edit-reason" class="organizational-input" maxlength="500" placeholder="Why this is being corrected"></label></div>' : '')
+      + (postedEditing ? '<div class="organizational-panel-field-full"><label class="organizational-label">Reason for the change *<input type="text" id="invoice-edit-reason" class="organizational-input" maxlength="500" value="Correction" placeholder="Why this is being corrected"></label></div>' : '')
       + invoiceTotalsHtml
       + (postedEditing ? '' : paymentSection)
       + (invoice ? window.OrganizationalDocumentAttach.html('invoice', ['customer_invoice', 'other']) : '')
@@ -742,6 +742,7 @@
       description: row.querySelector('.invoice-line-desc').value.trim() || null,
     }));
     if (lines.some((l) => !l.account_id || !l.program_id)) { showPanelError('Every line needs an account and a program.'); return; }
+    if (!reason) { showPanelError('Add a reason for the change.'); return; }
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + currentInvoiceId, {
       method: 'PATCH',
       body: JSON.stringify({ reason, lines, due_date: document.getElementById('invoice-due-date').value || null, reference: document.getElementById('invoice-reference').value.trim() || null }),

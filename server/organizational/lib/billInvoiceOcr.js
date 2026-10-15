@@ -17,13 +17,14 @@ function buildPrompt(kind) {
   "due_date": "YYYY-MM-DD" or null,
   "reference": string or null (the document's own invoice/bill number),
   "total_amount_cents": integer (the total amount due, in cents) or null,
-  "suggested_description": string or null (a short plain-English description of what this is for, e.g. "Office supplies delivery" or "Monthly consulting retainer")
+  "suggested_description": string or null (a short plain-English description of what this is for, e.g. "Office supplies delivery" or "Monthly consulting retainer"),
+  "lines": array of up to 15 objects {"description": string, "amount_cents": integer} (the line items as printed, with delivery, shipping, tax or fees as their own lines when the document shows them separately; an empty array if no line items are legible)
 }
 
 Rules:
 - Only fill a field if you can read it with real confidence. Use null for anything unclear, cut off, or not genuinely stated.
 - total_amount_cents must be the FINAL total due (including tax if shown), not a subtotal or a partial/deposit amount.
-- Do not attempt to identify individual line items, general ledger accounts, or programs -- this document alone cannot tell you this organization's internal chart of accounts.
+- Read line items exactly as printed. Never guess general ledger accounts or programs -- this document alone cannot tell you this organization's internal chart of accounts.
 - If the image does not appear to be ${docLabel.replace('a copy of ', '')}, return every field as null.
 - Return ONLY the JSON object, no other text.`;
 }
@@ -55,7 +56,12 @@ async function extractBillOrInvoiceFields(fileBuffer, mimeType, kind) {
       total_amount_cents: Number.isInteger(parsed.total_amount_cents) && parsed.total_amount_cents > 0 ? parsed.total_amount_cents : null,
       suggested_description: typeof parsed.suggested_description === 'string' && parsed.suggested_description.trim() ? parsed.suggested_description.trim() : null,
     };
-    const hasAnything = Object.values(extracted).some((v) => v != null);
+    extracted.lines = Array.isArray(parsed.lines)
+      ? parsed.lines.slice(0, 15)
+        .map((l) => ({ description: l && typeof l.description === 'string' ? l.description.trim().slice(0, 200) : '', amount_cents: l && Number.isInteger(l.amount_cents) ? l.amount_cents : 0 }))
+        .filter((l) => l.amount_cents > 0)
+      : [];
+    const hasAnything = Object.values(extracted).some((v) => v != null && !(Array.isArray(v) && v.length === 0));
     if (!hasAnything) return { extracted: null, error: 'Could not read this as a ' + kind + '.' };
     return { extracted, error: null };
   } catch (e) {

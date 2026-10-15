@@ -406,7 +406,7 @@
         + '<div class="organizational-panel-field-full"><label class="organizational-label">Payee as entered<input type="text" id="ledger-edit-payee" class="organizational-input" maxlength="300" value="' + esc(t.payee || '') + '"></label></div>')
       + '<div class="organizational-panel-field-full"><label class="organizational-label">Memo<input type="text" id="ledger-edit-memo" class="organizational-input" maxlength="500" value="' + esc(t.memo || '') + '"></label></div>'
       + (memoOnly ? '' : '<div class="organizational-panel-section-head">Line items</div>' + lineRows)
-      + '<div class="organizational-panel-field-full" style="margin-top:12px;"><label class="organizational-label">Reason for the change (optional) <span class="organizational-hint">(needed if the date changes)</span><input type="text" id="ledger-edit-reason" class="organizational-input" maxlength="300" value="Correction"></label></div>'
+      + '<div class="organizational-panel-field-full" style="margin-top:12px;"><label class="organizational-label">Reason for the change *<input type="text" id="ledger-edit-reason" class="organizational-input" maxlength="300" value="Correction"></label></div>'
       + '</div>'
       + '<div class="organizational-panel-actions" style="margin:16px 0 0;padding:14px 0;bottom:0;">'
       + '<button type="button" class="organizational-btn organizational-btn-primary ledger-edit-save" data-id="' + t.id + '">Save changes</button> '
@@ -429,6 +429,7 @@
     showPanelError('');
     const val = (elId) => { const el = document.getElementById(elId); return el ? el.value : ''; };
     const reason = val('ledger-edit-reason').trim();
+    if (!reason) { showPanelError('Add a reason for the change.'); return; }
     const body = {
       reason, memo: val('ledger-edit-memo'), reference: val('ledger-edit-ref'),
       lines: [...panelBody.querySelectorAll('.ledger-edit-line')].map((row) => {

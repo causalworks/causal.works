@@ -382,7 +382,7 @@
 
     const ocrSectionHtml = bill ? '' : (
       '<div class="organizational-panel-field-full" style="margin-bottom:4px;">'
-      + '<a href="#" id="bill-ocr-toggle" style="font-size:0.8125rem;">Upload the vendor\'s bill to pre-fill</a>'
+      + '<a href="#" id="bill-ocr-toggle" style="font-size:0.8125rem;color:var(--organizational-accent, var(--brand-primary));text-decoration:underline;">Upload the vendor\'s bill to pre-fill</a>'
       + '<div id="bill-ocr-box" hidden style="margin-top:6px;">'
       + '<div style="display:flex;gap:12px;align-items:flex-start;">'
       + '<input type="file" id="bill-ocr-file" class="organizational-input" accept="image/*,application/pdf" style="flex:1;">'
@@ -554,9 +554,21 @@
       if (ext.document_date) document.getElementById('bill-date').value = ext.document_date;
       if (ext.due_date) document.getElementById('bill-due-date').value = ext.due_date;
       if (ext.reference) document.getElementById('bill-reference').value = ext.reference;
-      const firstAmountInput = document.querySelector('#bill-lines-wrap .bill-line-amount');
-      if (firstAmountInput && !firstAmountInput.value && ext.total_amount_cents) {
-        firstAmountInput.value = (ext.total_amount_cents / 100).toFixed(2);
+      const wrapEl = document.getElementById('bill-lines-wrap');
+      const rowsBlank = Array.from(wrapEl.querySelectorAll('[data-line]')).every((r) => !r.querySelector('.bill-line-amount').value && !r.querySelector('.bill-line-account').value);
+      let suggestedLines = false;
+      if (rowsBlank && Array.isArray(ext.lines) && ext.lines.length) {
+        wrapEl.innerHTML = ext.lines.map((l) => lineRowHtml({
+          account_id: l.suggestion ? l.suggestion.account_id : null,
+          program_id: l.suggestion ? l.suggestion.program_id : null,
+          line_memo: l.description, amount_cents: l.amount_cents,
+        })).join('');
+        suggestedLines = ext.lines.some((l) => l.suggestion);
+      } else {
+        const firstAmountInput = wrapEl.querySelector('.bill-line-amount');
+        if (firstAmountInput && !firstAmountInput.value && ext.total_amount_cents) {
+          firstAmountInput.value = (ext.total_amount_cents / 100).toFixed(2);
+        }
       }
       if (ext.total_amount_cents) ocrExpectedTotalCents = ext.total_amount_cents;
       updateBillLinesTotal();
@@ -576,7 +588,7 @@
           vendorMatchNote = ' No matching vendor found for "' + ext.counterparty_name + '" — pick one or add a new vendor above.';
         }
       }
-      ocrStatus.textContent = 'Pre-filled from the bill — review before saving.' + vendorMatchNote;
+      ocrStatus.textContent = 'Pre-filled from the bill — review before saving.' + vendorMatchNote + (suggestedLines ? ' Accounts and programs are suggestions from earlier bills: check every line.' : '');
     });
 
     const vcBtn = document.getElementById('bill-vendor-compliance-btn');

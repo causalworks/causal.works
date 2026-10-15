@@ -337,6 +337,13 @@
         statusEl.textContent = (out && out.data && out.data.error) || 'Could not post';
         return;
       }
+      if (out.data && out.data.warning) {
+        statusEl.textContent = 'Posted. ' + out.data.warning;
+        const postBtn = document.getElementById('gp-post-btn');
+        if (postBtn) postBtn.disabled = true;
+        await loadPending();
+        return;
+      }
       postPanel.hidden = true;
       await loadPending();
     });

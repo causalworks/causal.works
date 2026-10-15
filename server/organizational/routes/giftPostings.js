@@ -139,6 +139,14 @@ function registerGiftPostingRoutes(app, pool) {
       } else {
         return res.status(400).json({ error: 'This gift is neither in-kind nor a pledge -- nothing to post' });
       }
+      if (result.httpStatus < 400 && isPledge) {
+        const g = await pool.query(
+          `SELECT g.is_multi_year_pledge, (SELECT COUNT(*) FROM org_gift_pledge_installments i WHERE i.gift_id = g.id) AS installments
+             FROM org_gifts g WHERE g.id = $1 AND g.org_id = $2`, [giftId, orgId]);
+        if (g.rows[0] && g.rows[0].is_multi_year_pledge && Number(g.rows[0].installments) === 0) {
+          result.body.warning = 'This multi-year pledge has no installment schedule, so its discount will not be accreted. Add the installments in Funding.';
+        }
+      }
       return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /gift-postings/:giftId/post:', e.message);

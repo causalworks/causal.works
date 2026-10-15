@@ -534,6 +534,21 @@
               <p id="organizational-acctset-defaults-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
             </section>
 
+            <h2 id="acct-sec-numbering" class="organizational-subheading">Invoice and bill numbers, payment terms</h2>
+            <section class="organizational-card" id="organizational-acctset-numbering-card" style="padding:16px 20px;">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;max-width:760px;">
+                <label class="organizational-label">Invoice number prefix<input type="text" id="organizational-acctset-inv-prefix" class="organizational-input" maxlength="12"></label>
+                <label class="organizational-label">Next invoice number<input type="number" id="organizational-acctset-inv-next" class="organizational-input" min="1" step="1"></label>
+                <label class="organizational-label">Invoices due after (days)<input type="number" id="organizational-acctset-inv-terms" class="organizational-input" min="0" max="365" step="1" placeholder="No default"></label>
+                <label class="organizational-label">Bill number prefix<input type="text" id="organizational-acctset-bill-prefix" class="organizational-input" maxlength="12"></label>
+                <label class="organizational-label">Next bill number<input type="number" id="organizational-acctset-bill-next" class="organizational-input" min="1" step="1"></label>
+                <label class="organizational-label">Bills due after (days)<input type="number" id="organizational-acctset-bill-terms" class="organizational-input" min="0" max="365" step="1" placeholder="No default"></label>
+              </div>
+              <p class="organizational-hint" style="margin:8px 0 0;">Each new invoice and bill takes the next number when it is first saved. The number can be changed on a draft, never after it is sent or approved, and two documents cannot share one. Set the next number to carry on from numbers used in another system. Payment terms fill the due date of a new invoice or bill; each document can still change it.</p>
+              <div class="organizational-actions"><button type="button" class="organizational-btn" id="organizational-acctset-numbering-save">Save</button></div>
+              <p id="organizational-acctset-numbering-note" class="organizational-hint" style="margin:6px 0 0;" hidden></p>
+            </section>
+
             <h2 id="acct-sec-state" class="organizational-subheading">State</h2>
             <section class="organizational-card" style="padding:16px 20px;">
               <div id="organizational-acctset-state">Loading…</div>
@@ -573,6 +588,7 @@
                 <table class="organizational-table" aria-label="Bills">
                   <thead>
                     <tr>
+                      <th>Number</th>
                       <th>Vendor</th>
                       <th>Bill date</th>
                       <th>Due date</th>
@@ -666,6 +682,7 @@
                 <table class="organizational-table" aria-label="Invoices">
                   <thead>
                     <tr>
+                      <th>Number</th>
                       <th>Customer</th>
                       <th>Invoice date</th>
                       <th>Due date</th>

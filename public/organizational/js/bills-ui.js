@@ -9,6 +9,7 @@
   const addBtn        = document.getElementById('organizational-bills-add');
   const sorter = tbody && window.OrganizationalTableSort ? window.OrganizationalTableSort.attach(tbody.closest('table'), {
     columns: [
+      { key: 'number', type: 'text', get: (b) => b.bill_number },
       { key: 'vendor', type: 'text', get: (b) => b.vendor_name },
       { key: 'bill_date', type: 'date', get: (b) => b.bill_date },
       { key: 'due_date', type: 'date', get: (b) => b.due_date },
@@ -92,8 +93,11 @@
     return window.OrganizationalStatusHtml(status, STATUS_LABELS[status] || status);
   }
 
+  let termsDays = null;
+  function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   async function loadAccounts(slug) {
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/accounts');
+    termsDays = out && out.data && out.data.numbering ? out.data.numbering.default_bill_terms_days : null;
     accountsCache = ((out && out.data && (out.data.accounts || out.data)) || []).filter((a) => a.is_posting);
   }
   async function loadPrograms(slug) {
@@ -181,11 +185,12 @@
   function renderRows(bills) {
     if (!tbody) return;
     if (!bills.length) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="6">No bills yet.</td></tr>';
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="7">No bills yet.</td></tr>';
       return;
     }
     tbody.innerHTML = (sorter ? sorter.sortRows(bills) : bills).map((b) => (
       '<tr class="organizational-bills-row" data-id="' + b.id + '" style="cursor:pointer;">'
+      + '<td>' + esc(b.bill_number || '—') + '</td>'
       + '<td>' + esc(b.vendor_name) + '</td>'
       + '<td>' + esc(String(b.bill_date || '').slice(0, 10)) + '</td>'
       + '<td>' + esc(String(b.due_date || '').slice(0, 10) || '—') + '</td>'
@@ -278,9 +283,9 @@
     const d = (v) => (v ? esc(String(v).slice(0, 10)) : '');
     const rows = (lines || []).map((l) => '<tr><td>' + esc(l.account_code ? l.account_code + ' ' + l.account_name : l.account_name) + '</td><td>' + esc(l.program_name || '') + '</td><td>' + esc(l.grant_name || '') + '</td><td>' + esc(l.line_memo || '') + '</td><td class="r">' + fmtMoney(l.amount_cents) + '</td></tr>').join('');
     const payRows = (payments || []).filter((p) => p.status === 'posted').map((p) => '<tr><td colspan="4">Payment ' + d(p.payment_date) + (p.bank_account_name ? ' · ' + esc(p.bank_account_name) : '') + (p.reference ? ' · ' + esc(p.reference) : '') + '</td><td class="r">-' + fmtMoney(p.amount_cents) + '</td></tr>').join('');
-    P.open('Bill #' + bill.id,
+    P.open('Bill ' + (bill.bill_number || '#' + bill.id),
       '<div class="top"><div><h2>Bill to</h2>' + P.letterheadHtml(org) + '</div>'
-      + '<div style="text-align:right"><h1>BILL</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Bill no.</td><td>' + esc(bill.id) + '</td></tr>'
+      + '<div style="text-align:right"><h1>BILL</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Bill no.</td><td>' + esc(bill.bill_number || bill.id) + '</td></tr>'
       + (bill.reference ? '<tr><td>Vendor reference</td><td>' + esc(bill.reference) + '</td></tr>' : '')
       + '<tr><td>Bill date</td><td>' + d(bill.bill_date) + '</td></tr><tr><td>Status</td><td>' + esc(String(bill.status).replace('_', ' ')) + '</td></tr></table></div></div>'
       + '<div class="band"><div>' + P.contactHtml('From (vendor)', vendor, bill) + '</div>'
@@ -404,6 +409,7 @@
       + (canCompliance ? '<a href="#" id="bill-vendor-compliance-btn" style="font-size:0.75rem;">Edit compliance</a>' : '') + '</div>'
       + '<label class="organizational-label" style="flex:1">Bill date *<input type="date" id="bill-date" class="organizational-input" value="' + esc((bill && bill.bill_date) ? String(bill.bill_date).slice(0, 10) : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Due date<input type="date" id="bill-due-date" class="organizational-input" value="' + esc((bill && bill.due_date) ? String(bill.due_date).slice(0, 10) : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
+      + '<label class="organizational-label" style="flex:1">Bill no.<input type="text" id="bill-number" class="organizational-input" maxlength="40" placeholder="Assigned when saved" value="' + esc(bill ? bill.bill_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Reference<input type="text" id="bill-reference" class="organizational-input" value="' + esc(bill ? bill.reference : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
       + '</div>'
       + rationaleHtml
@@ -498,6 +504,9 @@
     if (linesWrap) linesWrap.addEventListener('change', (e) => {
       if (e.target.classList.contains('bill-line-grant')) updateRationale();
     });
+    const billDateEl = document.getElementById('bill-date');
+    const billDueEl = document.getElementById('bill-due-date');
+    if (!bill && billDateEl && billDueEl) billDateEl.addEventListener('change', () => { if (!billDueEl.value && termsDays != null && billDateEl.value) billDueEl.value = addDays(billDateEl.value, termsDays); });
     const rationaleAdd = document.getElementById('bill-rationale-add');
     if (rationaleAdd) rationaleAdd.addEventListener('click', (e) => {
       e.preventDefault();
@@ -731,6 +740,7 @@
     const billDate = document.getElementById('bill-date').value;
     const dueDate = document.getElementById('bill-due-date').value;
     const reference = document.getElementById('bill-reference').value.trim() || null;
+    const numberEl = document.getElementById('bill-number');
     const rationale = document.getElementById('bill-rationale').value.trim() || null;
     if (!vendorId) { showPanelError('A vendor is required.'); return; }
     if (!billDate) { showPanelError('Bill date is required.'); return; }
@@ -741,12 +751,12 @@
     if (currentBillId == null) {
       out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bills', {
         method: 'POST',
-        body: JSON.stringify({ constituent_id: Number(vendorId), bill_date: billDate, due_date: dueDate || null, reference, lines }),
+        body: JSON.stringify({ constituent_id: Number(vendorId), bill_date: billDate, due_date: dueDate || null, reference, bill_number: numberEl && numberEl.value.trim() || undefined, lines }),
       });
     } else {
       out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bills/' + currentBillId, {
         method: 'PATCH',
-        body: JSON.stringify({ constituent_id: Number(vendorId), due_date: dueDate || null, reference, procurement_rationale: rationale, lines }),
+        body: JSON.stringify({ constituent_id: Number(vendorId), due_date: dueDate || null, reference, bill_number: numberEl && numberEl.value.trim() || undefined, procurement_rationale: rationale, lines }),
       });
     }
     if (!out) return;
@@ -835,6 +845,7 @@
         payments = payOut && payOut.res.ok ? payOut.data.payments : [];
       }
       billData = { bill: out.data.bill, lines: out.data.lines, payments };
+      if (out.data.bill && out.data.bill.bill_number) panelTitle.textContent = 'Bill ' + out.data.bill.bill_number;
       panelBody.innerHTML = renderPanelBody(out.data.bill, out.data.lines, payments);
       window.OrganizationalDocumentAttach.wire(panelBody, { slug: currentSlug, sourceRefType: 'bill', sourceRefId: id });
       wirePanelBody(out.data.bill);

@@ -101,7 +101,7 @@ function registerOrganizationalAccountRoutes(app, pool) {
       }
 
       const r = await pool.query(sql, params);
-      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id, default_individual_gift_account_id FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
+      const d = (await pool.query('SELECT default_pledge_receivable_account_id, default_bank_account_id, default_individual_gift_account_id, invoice_number_prefix, invoice_next_number, bill_number_prefix, bill_next_number, default_invoice_terms_days, default_bill_terms_days FROM org_settings WHERE org_id = $1', [orgId])).rows[0];
       return res.json({
         accounts: r.rows.map(rowToAccount),
         defaults: {
@@ -109,6 +109,11 @@ function registerOrganizationalAccountRoutes(app, pool) {
           bank_account_id: d && d.default_bank_account_id != null ? Number(d.default_bank_account_id) : null,
           individual_gift_account_id: d && d.default_individual_gift_account_id != null ? Number(d.default_individual_gift_account_id) : null,
         },
+        numbering: d ? {
+          invoice_number_prefix: d.invoice_number_prefix, invoice_next_number: d.invoice_next_number,
+          bill_number_prefix: d.bill_number_prefix, bill_next_number: d.bill_next_number,
+          default_invoice_terms_days: d.default_invoice_terms_days, default_bill_terms_days: d.default_bill_terms_days,
+        } : null,
       });
     } catch (e) {
       console.error('GET /api/organizational/orgs/:slug/accounts:', e.message);
@@ -131,6 +136,47 @@ function registerOrganizationalAccountRoutes(app, pool) {
       return res.json({ show_number_colors: want });
     } catch (e) {
       console.error('PUT /display-settings:', e.message);
+      return res.status(500).json({ error: 'Could not save this setting' });
+    }
+  });
+
+  app.put('/api/organizational/orgs/:slug/document-numbering', ...orgAuth, requireWriteAccess('structure'), async (req, res) => {
+    const body = req.body || {};
+    const sets = [];
+    const vals = [];
+    const cols = [];
+    const add = (col, v) => { cols.push(col); vals.push(v); sets.push(col + ' = $' + (vals.length + 1)); };
+    for (const col of ['invoice_number_prefix', 'bill_number_prefix']) {
+      if (!(col in body)) continue;
+      const v = String(body[col] == null ? '' : body[col]).trim();
+      if (v.length > 12 || /[^A-Za-z0-9._\-\/ ]/.test(v)) return res.status(400).json({ error: 'A prefix is up to 12 letters, numbers or - . / characters.' });
+      add(col, v);
+    }
+    for (const col of ['invoice_next_number', 'bill_next_number']) {
+      if (!(col in body)) continue;
+      const n = Number(body[col]);
+      if (!Number.isInteger(n) || n < 1 || n > 99999999) return res.status(400).json({ error: 'The next number must be a whole number, 1 or more.' });
+      add(col, n);
+    }
+    for (const col of ['default_invoice_terms_days', 'default_bill_terms_days']) {
+      if (!(col in body)) continue;
+      const raw = body[col];
+      const n = raw === null || raw === '' ? null : Number(raw);
+      if (n !== null && (!Number.isInteger(n) || n < 0 || n > 365)) return res.status(400).json({ error: 'Payment terms are a whole number of days, 0 to 365.' });
+      add(col, n);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to save' });
+    try {
+      const before = (await pool.query('SELECT ' + cols.join(', ') + ' FROM org_settings WHERE org_id = $1', [req.orgId])).rows[0];
+      if (!before) return res.status(404).json({ error: 'Settings not found' });
+      await pool.query('UPDATE org_settings SET ' + sets.join(', ') + ', updated_at = NOW() WHERE org_id = $1', [req.orgId, ...vals]);
+      const after = {};
+      cols.forEach((c, i) => { after[c] = vals[i]; });
+      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_settings', recordId: req.orgId,
+        fields: diffFields(before, after, cols), metadata: reqMeta(req) });
+      return res.json(after);
+    } catch (e) {
+      console.error('PUT /document-numbering:', e.message);
       return res.status(500).json({ error: 'Could not save this setting' });
     }
   });

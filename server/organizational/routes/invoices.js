@@ -28,6 +28,9 @@ function translateInvoiceWriteError(e) {
   if (e.code === 'CA003') {
     return { status: 422, body: { error: e.message, code: 'non_posting_account', message: 'One of these lines references an account that is a rollup/header account, not a postable account.' } };
   }
+  if (e.code === '23505' && /number_unique/.test(String(e.constraint || e.message))) {
+    return { status: 409, body: { error: 'That number is already used by another invoice. Pick a different number.', code: 'duplicate_number' } };
+  }
   if (e.code === 'CA004') {
     return { status: 422, body: { error: e.message, code: 'cross_org_reference', message: 'This invoice references an account, program, or constituent that belongs to a different organization, or a constituent that is not marked as a customer.' } };
   }
@@ -46,6 +49,7 @@ function rowToInvoice(row) {
     invoice_date: row.invoice_date,
     due_date: row.due_date,
     reference: row.reference,
+    invoice_number: row.invoice_number || null,
     status: row.status,
     ledger_transaction_id: row.ledger_transaction_id,
     membership_payment_id: row.membership_payment_id,
@@ -307,15 +311,15 @@ function registerInvoicesRoutes(app, pool) {
     try {
       await client.query('BEGIN');
       const r = await client.query(
-        `INSERT INTO org_invoices (org_id, constituent_id, invoice_date, due_date, reference, fiscal_year, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [orgId, constituentId, invoiceDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
+        `INSERT INTO org_invoices (org_id, invoice_number, constituent_id, invoice_date, due_date, reference, fiscal_year, created_by)
+         VALUES ($1, COALESCE($2, org_take_document_number($1, 'invoice')), $3, $4, $5, $6, $7, $8) RETURNING id, invoice_number`,
+        [orgId, String(body.invoice_number || '').trim() || null, constituentId, invoiceDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
       );
       const invoiceId = r.rows[0].id;
       await replaceLines(client, invoiceId, parsedLines);
       await client.query('COMMIT');
       logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_invoices', recordId: invoiceId, metadata: reqMeta(req) }).catch(() => {});
-      return res.status(201).json({ id: invoiceId, status: 'draft' });
+      return res.status(201).json({ id: invoiceId, status: 'draft', invoice_number: r.rows[0].invoice_number });
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
       const translated = translateInvoiceWriteError(e);
@@ -380,6 +384,7 @@ function registerInvoicesRoutes(app, pool) {
     const nextConstituentId = isFullEdit && body.constituent_id !== undefined
       ? Number.parseInt(String(body.constituent_id), 10) : invoice.constituent_id;
     const nextReference = body.reference !== undefined ? (body.reference ? String(body.reference) : null) : invoice.reference;
+    const nextNumber = isFullEdit && body.invoice_number !== undefined ? (String(body.invoice_number || '').trim() || invoice.invoice_number) : invoice.invoice_number;
 
     let posted = null;
     if (isMetadataOnly && Array.isArray(body.lines) && body.lines.length) {
@@ -440,8 +445,8 @@ function registerInvoicesRoutes(app, pool) {
     try {
       await client.query('BEGIN');
       await client.query(
-        `UPDATE org_invoices SET constituent_id = $1, due_date = $2, reference = $3, updated_at = NOW() WHERE id = $4 AND org_id = $5`,
-        [nextConstituentId, dueDate, nextReference, invoiceId, orgId]
+        `UPDATE org_invoices SET constituent_id = $1, due_date = $2, reference = $3, invoice_number = $6, updated_at = NOW() WHERE id = $4 AND org_id = $5`,
+        [nextConstituentId, dueDate, nextReference, invoiceId, orgId, nextNumber]
       );
       if (parsedLines) await replaceLines(client, invoiceId, parsedLines);
       if (posted) {
@@ -534,7 +539,7 @@ function registerInvoicesRoutes(app, pool) {
         orgId,
         userId,
         transactionDate: invoice.invoice_date,
-        memo: `Invoice #${invoiceId}${invoice.reference ? ' (' + invoice.reference + ')' : ''}`,
+        memo: `Invoice ${invoice.invoice_number || '#' + invoiceId}${invoice.reference ? ' (' + invoice.reference + ')' : ''}`,
         payee: customerR.rows[0] ? customerR.rows[0].display_name : null,
         referenceNumber: invoice.reference,
         lines: ledgerLines,

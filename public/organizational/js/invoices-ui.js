@@ -9,6 +9,7 @@
   const addBtn        = document.getElementById('organizational-invoices-add');
   const sorter = tbody && window.OrganizationalTableSort ? window.OrganizationalTableSort.attach(tbody.closest('table'), {
     columns: [
+      { key: 'number', type: 'text', get: (i) => i.invoice_number },
       { key: 'customer', type: 'text', get: (i) => i.customer_name },
       { key: 'invoice_date', type: 'date', get: (i) => i.invoice_date },
       { key: 'due_date', type: 'date', get: (i) => i.due_date },
@@ -82,8 +83,11 @@
     return window.OrganizationalStatusHtml(status, STATUS_LABELS[status] || status);
   }
 
+  let termsDays = null;
+  function addDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   async function loadAccounts(slug) {
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/accounts');
+    termsDays = out && out.data && out.data.numbering ? out.data.numbering.default_invoice_terms_days : null;
     accountsCache = ((out && out.data && (out.data.accounts || out.data)) || []).filter((a) => a.is_posting);
   }
   async function loadPrograms(slug) {
@@ -156,11 +160,12 @@
   function renderRows(invoices) {
     if (!tbody) return;
     if (!invoices.length) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="6">No invoices yet.</td></tr>';
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="7">No invoices yet.</td></tr>';
       return;
     }
     tbody.innerHTML = (sorter ? sorter.sortRows(invoices) : invoices).map((i) => (
       '<tr class="organizational-invoices-row" data-id="' + i.id + '" style="cursor:pointer;">'
+      + '<td>' + esc(i.invoice_number || '—') + '</td>'
       + '<td>' + esc(i.customer_name) + '</td>'
       + '<td>' + esc(String(i.invoice_date || '').slice(0, 10)) + '</td>'
       + '<td>' + esc(String(i.due_date || '').slice(0, 10) || '—') + '</td>'
@@ -258,9 +263,9 @@
     const howToPay = (org && org.payment_instructions)
       ? '<div class="pay"><h2>How to pay</h2>' + esc(org.payment_instructions) + (invoice.reference ? '\nPlease quote ' + esc(invoice.reference) + ' with your payment.' : '') + '</div>'
       : '';
-    P.open('Invoice #' + invoice.id,
+    P.open('Invoice ' + (invoice.invoice_number || '#' + invoice.id),
       '<div class="top">' + P.letterheadHtml(org)
-      + '<div style="text-align:right"><h1>INVOICE' + (statusWord ? ' · ' + statusWord : '') + '</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Invoice no.</td><td>' + esc(invoice.id) + '</td></tr>'
+      + '<div style="text-align:right"><h1>INVOICE' + (statusWord ? ' · ' + statusWord : '') + '</h1><table class="facts" style="width:auto;margin:6px 0 0 auto"><tr><td>Invoice no.</td><td>' + esc(invoice.invoice_number || invoice.id) + '</td></tr>'
       + (invoice.reference ? '<tr><td>Reference / PO</td><td>' + esc(invoice.reference) + '</td></tr>' : '')
       + '<tr><td>Invoice date</td><td>' + d(invoice.invoice_date) + '</td></tr></table></div></div>'
       + '<div class="band"><div>' + P.contactHtml('Bill to', customer, invoice) + '</div>'
@@ -357,6 +362,7 @@
       + '<div style="flex:2;min-width:0;"><label class="organizational-label">Customer *<div id="invoice-customer-field" class="organizational-contact-picker-mount"></div></label></div>'
       + '<label class="organizational-label" style="flex:1">Invoice date *<input type="date" id="invoice-date" class="organizational-input" value="' + esc((invoice && invoice.invoice_date) ? String(invoice.invoice_date).slice(0, 10) : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Due date<input type="date" id="invoice-due-date" class="organizational-input" value="' + esc((invoice && invoice.due_date) ? String(invoice.due_date).slice(0, 10) : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
+      + '<label class="organizational-label" style="flex:1">Invoice no.<input type="text" id="invoice-number" class="organizational-input" maxlength="40" placeholder="Assigned when saved" value="' + esc(invoice ? invoice.invoice_number : '') + '" ' + (isDraft ? '' : 'disabled') + '></label>'
       + '<label class="organizational-label" style="flex:1">Reference / PO<input type="text" id="invoice-reference" class="organizational-input" title="A customer PO or your own number. Shown in the invoice list and in the ledger memo." value="' + esc(invoice ? invoice.reference : '') + '" ' + (isDraft || postedEditing ? '' : 'disabled') + '></label>'
       + '</div>'
       + '<div style="border-top:1px solid var(--border);margin:12px 0 8px;"></div>'
@@ -429,6 +435,9 @@
       if (e.target.classList.contains('invoice-line-amount')) updateInvoiceLinesTotal();
     });
     updateInvoiceLinesTotal();
+    const dateEl = document.getElementById('invoice-date');
+    const dueEl = document.getElementById('invoice-due-date');
+    if (!invoice && dateEl && dueEl) dateEl.addEventListener('change', () => { if (!dueEl.value && termsDays != null && dateEl.value) dueEl.value = addDays(dateEl.value, termsDays); });
 
     const ocrToggle = document.getElementById('invoice-ocr-toggle');
     if (ocrToggle) ocrToggle.addEventListener('click', (e) => { e.preventDefault(); const bx = document.getElementById('invoice-ocr-box'); bx.hidden = !bx.hidden; });
@@ -592,6 +601,7 @@
     const invoiceDate = document.getElementById('invoice-date').value;
     const dueDate = document.getElementById('invoice-due-date').value;
     const reference = document.getElementById('invoice-reference').value.trim() || null;
+    const numberEl = document.getElementById('invoice-number');
     if (!customerId) { showPanelError('A customer is required.'); return; }
     if (!invoiceDate) { showPanelError('Invoice date is required.'); return; }
     const lines = collectLines();
@@ -601,12 +611,12 @@
     if (currentInvoiceId == null) {
       out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices', {
         method: 'POST',
-        body: JSON.stringify({ constituent_id: Number(customerId), invoice_date: invoiceDate, due_date: dueDate || null, reference, lines }),
+        body: JSON.stringify({ constituent_id: Number(customerId), invoice_date: invoiceDate, due_date: dueDate || null, reference, invoice_number: numberEl && numberEl.value.trim() || undefined, lines }),
       });
     } else {
       out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/invoices/' + currentInvoiceId, {
         method: 'PATCH',
-        body: JSON.stringify({ constituent_id: Number(customerId), due_date: dueDate || null, reference, lines }),
+        body: JSON.stringify({ constituent_id: Number(customerId), due_date: dueDate || null, reference, invoice_number: numberEl && numberEl.value.trim() || undefined, lines }),
       });
     }
     if (!out) return;
@@ -752,6 +762,7 @@
         payments = payOut && payOut.res.ok ? payOut.data.payments : [];
       }
       invoiceData = { invoice: out.data.invoice, lines: out.data.lines, payments };
+      if (out.data.invoice && out.data.invoice.invoice_number) panelTitle.textContent = 'Invoice ' + out.data.invoice.invoice_number;
       panelBody.innerHTML = renderPanelBody(out.data.invoice, out.data.lines, payments);
       window.OrganizationalDocumentAttach.wire(panelBody, { slug: currentSlug, sourceRefType: 'invoice', sourceRefId: id });
       wirePanelBody(out.data.invoice);

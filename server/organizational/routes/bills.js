@@ -31,6 +31,9 @@ function translateBillWriteError(e) {
   if (e.code === 'CA003') {
     return { status: 422, body: { error: e.message, code: 'non_posting_account', message: 'One of these lines references an account that is a rollup/header account, not a postable account.' } };
   }
+  if (e.code === '23505' && /number_unique/.test(String(e.constraint || e.message))) {
+    return { status: 409, body: { error: 'That number is already used by another bill. Pick a different number.', code: 'duplicate_number' } };
+  }
   if (e.code === 'CA004') {
     return { status: 422, body: { error: e.message, code: 'cross_org_reference', message: 'This bill references an account, program, grant, or vendor that belongs to a different organization, or a constituent that is not marked as a vendor.' } };
   }
@@ -52,6 +55,7 @@ function rowToBill(row) {
     bill_date: row.bill_date,
     due_date: row.due_date,
     reference: row.reference,
+    bill_number: row.bill_number || null,
     status: row.status,
     scheduled_payment_date: row.scheduled_payment_date || null,
     approved_by: row.approved_by,
@@ -312,15 +316,15 @@ function registerBillsRoutes(app, pool) {
     try {
       await client.query('BEGIN');
       const r = await client.query(
-        `INSERT INTO org_bills (org_id, constituent_id, bill_date, due_date, reference, fiscal_year, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [orgId, constituentId, billDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
+        `INSERT INTO org_bills (org_id, bill_number, constituent_id, bill_date, due_date, reference, fiscal_year, created_by)
+         VALUES ($1, COALESCE($2, org_take_document_number($1, 'bill')), $3, $4, $5, $6, $7, $8) RETURNING id, bill_number`,
+        [orgId, String(body.bill_number || '').trim() || null, constituentId, billDate, dueDate, body.reference != null ? String(body.reference) : null, fiscalYear, userId]
       );
       const billId = r.rows[0].id;
       await replaceLines(client, billId, parsedLines);
       await client.query('COMMIT');
       logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_bills', recordId: billId, metadata: reqMeta(req) }).catch(() => {});
-      return res.status(201).json({ id: billId, status: 'draft' });
+      return res.status(201).json({ id: billId, status: 'draft', bill_number: r.rows[0].bill_number });
     } catch (e) {
       await client.query('ROLLBACK').catch(() => {});
       const translated = translateBillWriteError(e);
@@ -386,6 +390,7 @@ function registerBillsRoutes(app, pool) {
     const nextConstituentId = isFullEdit && body.constituent_id !== undefined
       ? Number.parseInt(String(body.constituent_id), 10) : bill.constituent_id;
     const nextReference = body.reference !== undefined ? (body.reference ? String(body.reference) : null) : bill.reference;
+    const nextNumber = isFullEdit && body.bill_number !== undefined ? (String(body.bill_number || '').trim() || bill.bill_number) : bill.bill_number;
     const nextRationale = body.procurement_rationale !== undefined ? (body.procurement_rationale ? String(body.procurement_rationale) : null) : bill.procurement_rationale;
 
     let posted = null;
@@ -462,9 +467,9 @@ function registerBillsRoutes(app, pool) {
       await client.query('BEGIN');
       await client.query(
         `UPDATE org_bills SET
-           constituent_id = $1, due_date = $2, reference = $3, procurement_rationale = $4, updated_at = NOW()
+           constituent_id = $1, due_date = $2, reference = $3, procurement_rationale = $4, bill_number = $7, updated_at = NOW()
          WHERE id = $5 AND org_id = $6`,
-        [nextConstituentId, dueDate, nextReference, nextRationale, billId, orgId]
+        [nextConstituentId, dueDate, nextReference, nextRationale, billId, orgId, nextNumber]
       );
       if (parsedLines) await replaceLines(client, billId, parsedLines);
       if (posted) {
@@ -626,7 +631,7 @@ function registerBillsRoutes(app, pool) {
         orgId,
         userId,
         transactionDate: bill.bill_date,
-        memo: `Bill #${billId}${bill.reference ? ' (' + bill.reference + ')' : ''}`,
+        memo: `Bill ${bill.bill_number || '#' + billId}${bill.reference ? ' (' + bill.reference + ')' : ''}`,
         payee: vendorR.rows[0] ? vendorR.rows[0].display_name : null,
         referenceNumber: bill.reference,
         lines: ledgerLines,

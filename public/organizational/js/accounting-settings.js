@@ -162,6 +162,30 @@
     });
   }
 
+  async function loadNumbering() {
+    const ids = { invoice_number_prefix: 'inv-prefix', invoice_next_number: 'inv-next', default_invoice_terms_days: 'inv-terms', bill_number_prefix: 'bill-prefix', bill_next_number: 'bill-next', default_bill_terms_days: 'bill-terms' };
+    const save = $('organizational-acctset-numbering-save');
+    const note = $('organizational-acctset-numbering-note');
+    if (!save) return;
+    const out = await apiJson(base() + '/accounts');
+    const n = out && out.res.ok ? out.data.numbering : null;
+    if (!n) { note.hidden = false; note.textContent = 'Could not load these settings.'; return; }
+    const manage = canManage();
+    Object.keys(ids).forEach((k) => { const el = $('organizational-acctset-' + ids[k]); el.value = n[k] == null ? '' : n[k]; el.disabled = !manage; });
+    save.hidden = !manage;
+    note.hidden = manage;
+    note.textContent = manage ? '' : 'Changed by finance or an admin.';
+    if (save.dataset.wired) return;
+    save.dataset.wired = '1';
+    save.addEventListener('click', async () => {
+      const body = {};
+      Object.keys(ids).forEach((k) => { const v = $('organizational-acctset-' + ids[k]).value.trim(); body[k] = /terms/.test(k) ? (v === '' ? null : Number(v)) : (/next/.test(k) ? Number(v) : v); });
+      const res = await apiJson(base() + '/document-numbering', { method: 'PUT', body: JSON.stringify(body) });
+      note.hidden = false;
+      note.textContent = res && res.res.ok ? 'Saved.' : ((res && res.data && res.data.error) || 'Could not save.');
+    });
+  }
+
   function wire() {
     if (wired) return;
     wired = true;
@@ -194,7 +218,7 @@
     if (structure) structure.href = '/organizational/o/' + encodeURIComponent(slug) + '/structure';
     wire();
     if (window.OrganizationalStateRules) window.OrganizationalStateRules.renderAccountingCard($('organizational-acctset-state'), slug);
-    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults()]);
+    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering()]);
     const idx = $('organizational-acctset-index');
     if (idx && window.OrganizationalSettingsIndex) {
       const r = await window.OrganizationalSettingsIndex.load(slug);

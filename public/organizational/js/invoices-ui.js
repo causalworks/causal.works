@@ -317,7 +317,9 @@
       actions.push('<button type="button" id="invoice-send" class="organizational-btn organizational-btn-outline" title="Saves the invoice, posts it to the ledger as money owed to you, and emails it to the customer when the customer has an email address.">Send</button>');
     } else if (['sent', 'partially_paid', 'overdue'].includes(invoice.status)) {
       actions.push('<button type="button" id="invoice-record-payment" class="organizational-btn organizational-btn-primary">Record payment</button>');
-      actions.push('<button type="button" id="invoice-email" class="organizational-btn organizational-btn-outline">Email to customer</button>');
+    }
+    if (invoice && ['sent', 'partially_paid', 'overdue', 'paid'].includes(invoice.status)) {
+      actions.push('<button type="button" id="invoice-email" class="organizational-btn organizational-btn-outline" title="Emails the invoice to the customer again with the PDF attached.">Send again</button>');
     }
 
     let paymentSection = '';
@@ -697,7 +699,7 @@
     }
     await openInvoicePanel(id);
     const e = out.data.emailed;
-    showPanelError(e === 'sent' ? 'Sent and emailed to the customer.' : ('Sent. ' + (EMAIL_NOTES[e] || '') + (EMAIL_NOTES[e] ? ' Use Email to customer once fixed.' : '')), true);
+    showPanelError(e === 'sent' ? 'Sent and emailed to the customer.' : ('Sent. ' + (EMAIL_NOTES[e] || '') + (EMAIL_NOTES[e] ? ' Use Send again once fixed.' : '')), true);
   }
 
   async function sendSavedInvoice(id) {

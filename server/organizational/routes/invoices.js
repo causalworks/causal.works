@@ -731,7 +731,7 @@ function registerInvoicesRoutes(app, pool) {
       if (!r.rows.length) return res.status(404).json({ error: 'Invoice not found' });
       const invoice = r.rows[0];
       if (!headerProgramsInScope(req, await invoiceLinePrograms(pool, invoiceId))) return res.status(404).json({ error: 'Invoice not found' });
-      if (!['sent', 'partially_paid', 'overdue'].includes(invoice.status)) return res.status(409).json({ error: 'Only a sent invoice can be emailed.' });
+      if (!['sent', 'partially_paid', 'overdue', 'paid'].includes(invoice.status)) return res.status(409).json({ error: 'Only a sent invoice can be emailed.' });
       const newEmail = req.body && typeof req.body.customer_email === 'string' ? req.body.customer_email.trim() : '';
       if (newEmail && !EMAIL_RE.test(newEmail)) return res.status(400).json({ error: 'That email address is not valid.' });
       if (newEmail) await saveCustomerEmail(pool, { orgId, userId, req, constituentId: invoice.constituent_id, email: newEmail });

@@ -284,6 +284,7 @@
     if (w) h += '<p class="what">' + esc(w) + '</p>';
     var meta = [];
     if (it.confidence) meta.push('Confidence: ' + it.confidence);
+    if (it.claude_note) meta.push('Claude pass: ' + it.claude_note);
     if (it.status) meta.push('Status: ' + it.status);
     if (it.size) meta.push('Rough size: ' + it.size);
     if (it.source) meta.push('Source: ' + it.source);

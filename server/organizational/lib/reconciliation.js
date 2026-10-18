@@ -8,13 +8,44 @@ async function runReconciliationChecks(pool, orgId, fiscalYear) {
   {
     const fyEndMonth = await getFiscalYearEndMonth(pool, orgId);
     const { endDate } = fyDateRange(fiscalYear, fyEndMonth);
-    const dateR = await pool.query(
-      `SELECT as_of_date::text AS as_of_date FROM org_balance_sheet_snapshots
-       WHERE org_id = $1 AND as_of_date <= $2::date
-       ORDER BY as_of_date DESC LIMIT 1`,
-      [orgId, endDate]
-    );
-    if (dateR.rows.length === 0) {
+    const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
+    const fromLedger = !srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger';
+    const dateR = fromLedger
+      ? { rows: [] }
+      : await pool.query(
+          `SELECT as_of_date::text AS as_of_date FROM org_balance_sheet_snapshots
+           WHERE org_id = $1 AND as_of_date <= $2::date
+           ORDER BY as_of_date DESC LIMIT 1`,
+          [orgId, endDate]
+        );
+    if (fromLedger) {
+      const sumsR = await pool.query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN a.type = 'asset' THEN l.debit_cents - l.credit_cents END), 0)::bigint AS asset,
+           COALESCE(SUM(CASE WHEN a.type = 'liability' THEN l.credit_cents - l.debit_cents END), 0)::bigint AS liability,
+           COALESCE(SUM(CASE WHEN a.type IN ('equity', 'income', 'expense') THEN l.credit_cents - l.debit_cents END), 0)::bigint AS equity
+         FROM org_ledger_lines l
+         JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         JOIN org_accounts a ON a.id = l.account_id
+         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2`,
+        [orgId, fiscalYear]
+      );
+      const totals = {
+        asset: Number(sumsR.rows[0].asset),
+        liability: Number(sumsR.rows[0].liability),
+        equity: Number(sumsR.rows[0].equity),
+      };
+      const diff = totals.asset - (totals.liability + totals.equity);
+      checks.push({
+        id: 'balance_sheet_ties',
+        label: 'Balance sheet ties (Assets = Liabilities + Equity)',
+        status: diff === 0 ? 'pass' : 'fail',
+        detail:
+          diff === 0
+            ? `As of ${endDate}: Assets ${totals.asset} = Liabilities ${totals.liability} + Net assets ${totals.equity}.`
+            : `As of ${endDate}: Assets ${totals.asset} vs. Liabilities + Net assets ${totals.liability + totals.equity} (off by ${diff} cents).`,
+      });
+    } else if (dateR.rows.length === 0) {
       checks.push({
         id: 'balance_sheet_ties',
         label: 'Balance sheet ties (Assets = Liabilities + Equity)',

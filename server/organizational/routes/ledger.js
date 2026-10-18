@@ -11,7 +11,7 @@ const { translateLedgerWriteError, postLedgerTransaction, voidLedgerTransaction,
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { previewLedgerRecode, executeLedgerRecode } = require('../lib/findAndRecode');
 const { validateConditions, searchLedgerLines, loadFieldOptions } = require('../lib/ledgerSearch');
-const { logAudit } = require('../lib/auditLog');
+const { logAudit, diffFields } = require('../lib/auditLog');
 const { displayAmountSql, displayCents } = require('../lib/voidedDisplay');
 const { sourceLabel, statusLabel } = require('../lib/ledgerLabels');
 const { voidBillPayment, voidInvoicePayment } = require('../lib/billInvoicePayments');
@@ -995,6 +995,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     }
 
     try {
+      const beforeR = await pool.query('SELECT reviewer_role, review_cadence, description, flagged_amount_threshold_cents FROM org_ledger_approval_policies WHERE org_id = $1', [orgId]);
       await pool.query(
         `INSERT INTO org_ledger_approval_policies
            (org_id, reviewer_role, review_cadence, description, flagged_amount_threshold_cents, updated_by, updated_at)
@@ -1008,6 +1009,12 @@ function registerOrganizationalLedgerRoutes(app, pool) {
            updated_at = NOW()`,
         [orgId, reviewerRole, reviewCadence, description, thresholdCents, userId]
       );
+      const before = beforeR.rows[0] || { flagged_amount_threshold_cents: 500000 };
+      const after = { reviewer_role: reviewerRole, review_cadence: reviewCadence, description, flagged_amount_threshold_cents: thresholdCents };
+      await logAudit(pool, {
+        orgId, userId, action: 'update', tableName: 'org_ledger_approval_policies', recordId: orgId,
+        fields: diffFields(before, after, ['reviewer_role', 'review_cadence', 'description', 'flagged_amount_threshold_cents']),
+      });
       return res.json({ ok: true });
     } catch (e) {
       console.error('PUT /ledger/approval-policy:', e.message);

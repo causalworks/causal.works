@@ -606,7 +606,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
           [constituentId, orgId]
         );
         if (Number(check.rows[0].total) > 0) {
-          return res.status(409).json({ error: 'This donor has gift or interaction history — use Archive instead.' });
+          return res.status(409).json({ error: 'This contact has gift or interaction history. Use Archive instead.' });
         }
         const gone = await pool.query('SELECT display_name FROM org_constituents WHERE id = $1 AND org_id = $2', [constituentId, orgId]);
         await pool.query('DELETE FROM org_constituents WHERE id = $1 AND org_id = $2', [constituentId, orgId]);
@@ -621,6 +621,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
       logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_constituents', recordId: constituentId, fields: [{ fieldName: 'is_active', oldValue: 'true', newValue: 'false' }], metadata: reqMeta(req) }).catch(() => {});
       return res.json({ ok: true });
     } catch (e) {
+      if (e.code === '23503') return res.status(409).json({ error: 'This contact is used by bills, invoices, entries or other records. Use Archive instead.' });
       console.error('DELETE constituent:', e.message);
       return res.status(500).json({ error: 'Could not remove constituent' });
     }

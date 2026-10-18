@@ -289,6 +289,15 @@ async function runGrantsImport(client, orgId, rows, programMap) {
     }
 
     if (!row.grant_code) {
+      const same = await client.query(
+        `SELECT grant_code FROM org_grants
+         WHERE org_id = $1 AND lower(btrim(funder)) = lower(btrim($2)) AND lower(btrim(name)) = lower(btrim($3)) AND grant_code IS NOT NULL
+         ORDER BY id LIMIT 1`,
+        [orgId, row.funder || '', row.grant_name || '']
+      );
+      if (same.rows.length) row = { ...row, grant_code: same.rows[0].grant_code };
+    }
+    if (!row.grant_code) {
       let candidate;
       do {
         candidate = 'G-' + String(nextAutoNum++).padStart(3, '0');

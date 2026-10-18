@@ -779,7 +779,7 @@
     org_bills: 'Bill', org_invoices: 'Invoice',
     org_ledger_transactions: 'Ledger transaction', org_ledger_lines: 'Ledger line',
     org_expense_claims: 'Expense claim', org_documents: 'Document', org_gifts: 'Gift',
-    org_fiscal_year_locks: 'Fiscal year lock', org_sponsored_project_disbursements: 'Sponsored project disbursement',
+    org_fiscal_year_locks: 'Fiscal year lock', org_ledger_approval_policies: 'Approval policy', org_sponsored_project_disbursements: 'Sponsored project disbursement',
   };
   const FIELD_LABELS  = {
     amount_cents: 'Amount', unit_amount_cents: 'Unit amount', label: 'Label',

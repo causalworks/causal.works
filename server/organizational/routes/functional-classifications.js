@@ -118,6 +118,18 @@ function registerFunctionalClassificationRoutes(app, pool) {
     const fmt = String(req.query.format || 'json').toLowerCase();
 
     try {
+      const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
+      const fromLedger = !srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger';
+      const totalsSql = fromLedger
+        ? `LEFT JOIN (
+             SELECT l.account_id, SUM(l.debit_cents - l.credit_cents) AS amount_cents
+             FROM org_ledger_lines l
+             JOIN org_ledger_transactions t ON t.id = l.transaction_id
+             WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year = $2
+             GROUP BY l.account_id
+           ) bl ON bl.account_id = a.id`
+        : `LEFT JOIN org_budget_lines bl
+             ON bl.account_id = a.id AND bl.fiscal_year = $2 AND bl.org_id = $1`;
       const { rows } = await pool.query(
         `SELECT
            a.id           AS account_id,
@@ -128,10 +140,7 @@ function registerFunctionalClassificationRoutes(app, pool) {
            COALESCE(fc.mgmt_general_bps,     0)            AS mgmt_general_bps,
            COALESCE(fc.fundraising_bps,       0)           AS fundraising_bps
          FROM org_accounts a
-         LEFT JOIN org_budget_lines bl
-           ON bl.account_id = a.id
-          AND bl.fiscal_year = $2
-          AND bl.org_id = $1
+         ${totalsSql}
          LEFT JOIN org_functional_classifications fc
            ON fc.account_id = a.id
           AND fc.org_id = $1

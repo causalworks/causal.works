@@ -181,7 +181,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
     }
 
     try {
-      const curProj = await pool.query('SELECT program_id FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1', [id, req.orgId]);
+      const curProj = await pool.query('SELECT program_id, admin_rate FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1', [id, req.orgId]);
       if (!curProj.rows.length) return res.status(404).json({ error: 'Sponsored project not found' });
       if (!leadMayTouch(req, [curProj.rows[0].program_id])) {
         return res.status(403).json({ code: 'program_scope', error: 'Program leads can change only sponsored projects under their own programs.' });
@@ -301,7 +301,9 @@ function registerSponsoredProjectsRoutes(app, pool) {
 
       if (body.admin_rate !== undefined) {
         const hasRule = await pool.query('SELECT 1 FROM org_sponsor_fee_rules WHERE sponsored_project_id = $1 AND org_id = $2 LIMIT 1', [id, req.orgId]);
-        if (hasRule.rows.length) {
+        const oldRate = curProj.rows[0].admin_rate != null ? Number(curProj.rows[0].admin_rate) : null;
+        const newRate = body.admin_rate !== null && body.admin_rate !== '' ? Number(body.admin_rate) : null;
+        if (hasRule.rows.length && oldRate !== newRate) {
           return res.status(409).json({ code: 'fee_rule_exists', error: 'This project has a fee rule. Change the fee in the project\'s Fees section.' });
         }
         const rate = body.admin_rate !== null ? Number(body.admin_rate) : null;

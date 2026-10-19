@@ -97,7 +97,9 @@ function registerGiftPostingRoutes(app, pool) {
             AND g.posting_status <> 'void' AND g.review_status <> 'dismissed'
             AND g.created_at >= ss.untagged_review_from
           ORDER BY g.received_at DESC, g.id DESC LIMIT 200`, [req.orgId]);
+      const fsR = await pool.query('SELECT fiscal_sponsorship_mode FROM org_settings WHERE org_id = $1', [req.orgId]);
       return res.json({
+        fiscal_sponsor: !!(fsR.rows[0] && fsR.rows[0].fiscal_sponsorship_mode),
         sponsor_untagged: u.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, gift_type: x.gift_type,
           in_books: !!x.ledger_transaction_id, constituent_name: x.constituent_name || null })),
         flagged: f.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, note: x.not_gift_note, flagged_at: x.not_gift_flagged_at,

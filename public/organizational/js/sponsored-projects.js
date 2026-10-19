@@ -32,6 +32,9 @@
 
   let currentSlug = '';
   let orgDefaultModel = '';
+  let myAccess = { write: {}, read: {} };
+  const canMoney = () => !!(myAccess.write && myAccess.write.finance);
+  const canReadFund = () => !!(myAccess.read && myAccess.read.sponsorship);
 
   function showError(msg) {
     if (!errEl) return;
@@ -179,8 +182,9 @@
         '<h4 style="margin: 0 0 8px 0;">Fiscal sponsorship</h4>' +
         '<p style="margin: 0;">Model: ' + escapeHtml(sponsorshipModelLabel(project.effective_sponsorship_model)) +
         (project.sponsorship_model ? '' : ' <span class="organizational-hint">(organization default)</span>') + '<br>' +
-        'Admin rate: ' + (project.effective_admin_rate != null ? Number(project.effective_admin_rate) + '%' : 'Not set') +
-        (project.admin_rate != null ? '' : ' <span class="organizational-hint">(organization default)</span>') + '<br>' +
+        'Fee rate: ' + (project.effective_admin_rate != null ? Number(project.effective_admin_rate) + '%' : 'Not set') +
+        (project.current_fee_kind ? ' <span class="organizational-hint">(fee rule' + (project.current_fee_kind !== 'percent' ? ', ' + escapeHtml(project.current_fee_kind) : '') + ')</span>'
+          : project.admin_rate != null ? '' : ' <span class="organizational-hint">(organization default)</span>') + '<br>' +
         'Budget program: ' + escapeHtml(programName(project.program_id)) + '</p></div>' +
         '<div style="margin-bottom: 16px;">' +
         '<h4 style="margin: 0 0 8px 0;">Project finances &amp; reports</h4>' +
@@ -200,8 +204,10 @@
   async function loadViewSummary(project) {
     const el = document.getElementById('organizational-sp-view-summary');
     if (!el) return;
-    if (project.effective_sponsorship_model === 'model_a') {
-      el.innerHTML = '<p style="margin:0;">Managed projects post through the sponsor\'s own regular expense accounts, coded to the linked program/activity above.</p>';
+    if (!canReadFund()) { el.innerHTML = '<p class="organizational-hint" style="margin:0;">The project balance is for finance, admins, board members and the project\'s lead.</p>'; return; }
+    if (window.OrganizationalSponsorFund) {
+      await window.OrganizationalSponsorFund.renderBalance(el, { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
+      el.insertAdjacentHTML('beforeend', '<p style="margin:6px 0 0;">Next report due: <strong>' + (project.next_report_due ? formatDate(project.next_report_due) : 'Not set') + '</strong></p>');
       return;
     }
     try {
@@ -275,21 +281,19 @@
     if (!el) return;
     const effectiveModel = project.effective_sponsorship_model;
     if (effectiveModel === 'model_a') {
+      el.innerHTML = '<div id="organizational-sp-fund"></div>';
+      if (window.OrganizationalSponsorFund) await window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
       const progLabel = project.program_id ? escapeHtml(programName(project.program_id)) : null;
-      el.innerHTML = '<p class="organizational-hint" style="margin: 0;"><em>Managed projects post through the sponsor\'s own regular expense accounts -- ' +
+      el.insertAdjacentHTML('beforeend', '<p class="organizational-hint" style="margin: 0;"><em>Managed projects post through the sponsor\'s own regular expense accounts -- ' +
         (progLabel ? 'code bills and other expenses to <strong>' + progLabel + '</strong> (the linked program/activity above)' : 'link a program or activity above, then code bills to it') +
-        ', same as any other program. See Budget → By Program for this project\'s figures; no separate view here.</em></p>';
+        ', same as any other program. Those costs show above as other spending in the books.</em></p>');
       return;
     }
     try {
       const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + project.id + '/tracking', { credentials: 'include' });
       const data = res.ok ? await res.json() : null;
       if (!data) { el.innerHTML = '<p class="organizational-error">Could not load tracking data.</p>'; return; }
-      const s = data.summary;
       const disbursements = Array.isArray(data.disbursements) ? data.disbursements : [];
-      const pendingNote = s.pending_disbursed_cents > 0
-        ? ' <span class="organizational-hint">(+ ' + formatCurrency(s.pending_disbursed_cents / 100) + ' awaiting approval, not yet counted)</span>'
-        : '';
       const disbursementRows = disbursements.length
         ? disbursements.map(function (d) {
             const isPending = d.status === 'pending_approval';
@@ -307,14 +311,11 @@
           }).join('')
         : '<p class="organizational-hint" style="margin:4px 0;">No disbursements recorded yet.</p>';
       el.innerHTML =
-        '<p style="margin: 0 0 8px 0;">' +
-        'Received: <strong>' + formatCurrency(s.total_received_cents / 100) + '</strong><br>' +
-        'Disbursed: <strong>' + formatCurrency(s.total_disbursed_cents / 100) + '</strong>' + pendingNote + '<br>' +
-        'Admin fee retained: <strong>' + formatCurrency(s.total_admin_fee_cents / 100) + '</strong><br>' +
-        'Balance held: <strong>' + formatCurrency(s.balance_cents / 100) + '</strong></p>' +
+        '<div id="organizational-sp-fund"></div>' +
         disbursementRows +
         '<button type="button" class="organizational-btn organizational-btn-outline" id="organizational-sp-record-disbursement" style="font-size:0.8125rem;margin-top:6px;">Record disbursement</button>' +
         '<div id="organizational-sp-disbursement-form" hidden style="margin-top:10px;"></div>';
+      if (window.OrganizationalSponsorFund) window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
       const btn = document.getElementById('organizational-sp-record-disbursement');
       if (btn) btn.addEventListener('click', function () { openDisbursementForm(project); });
       el.querySelectorAll('.organizational-sp-unpost-disb').forEach(function (unBtn) {
@@ -357,7 +358,6 @@
     formEl.innerHTML =
       '<label>Disbursement date <input type="date" id="organizational-sp-disb-date"></label><br>' +
       '<label>Amount paid to sponsee <input type="number" min="0" step="0.01" id="organizational-sp-disb-amount"></label><br>' +
-      '<label>Admin fee retained (optional) <input type="number" min="0" step="0.01" id="organizational-sp-disb-fee"></label><br>' +
       '<label>Notes <input type="text" id="organizational-sp-disb-notes"></label><br>' +
       '<button type="button" class="organizational-btn" id="organizational-sp-disb-save" style="margin-top:6px;">Save</button>' +
       '<span id="organizational-sp-disb-error" class="organizational-error" style="display:none;margin-left:8px;"></span>';
@@ -366,13 +366,11 @@
     if (saveBtn) saveBtn.addEventListener('click', async function () {
       const dateEl = document.getElementById('organizational-sp-disb-date');
       const amountEl = document.getElementById('organizational-sp-disb-amount');
-      const feeEl = document.getElementById('organizational-sp-disb-fee');
       const notesEl = document.getElementById('organizational-sp-disb-notes');
       const errEl = document.getElementById('organizational-sp-disb-error');
       const body = {
         disbursement_date: dateEl && dateEl.value ? dateEl.value : null,
         amount_cents: amountEl && amountEl.value ? Math.round(Number(amountEl.value) * 100) : null,
-        admin_fee_cents: feeEl && feeEl.value ? Math.round(Number(feeEl.value) * 100) : null,
         notes: notesEl && notesEl.value ? notesEl.value : null,
       };
       try {
@@ -411,6 +409,10 @@
     if (spSponsorshipModel) spSponsorshipModel.value = project && project.sponsorship_model ? project.sponsorship_model : '';
     if (spProgram) spProgram.value = project && project.program_id ? String(project.program_id) : '';
     if (spAdminRate) spAdminRate.value = project && project.admin_rate !== null && project.admin_rate !== undefined ? project.admin_rate : '';
+    if (spAdminRate) {
+      spAdminRate.disabled = !!(project && project.current_fee_kind);
+      spAdminRate.title = spAdminRate.disabled ? 'This project has a fee rule. Change the fee in the project\'s balance section.' : '';
+    }
     if (spNextReportDue) spNextReportDue.value = project && project.next_report_due ? project.next_report_due.slice(0, 10) : '';
     if (spStatus) spStatus.value = project ? project.status : 'active';
     updateProgramHint();
@@ -579,6 +581,15 @@
     }
   }
 
+  async function loadMyAccess(slug) {
+    try {
+      const out = await window.apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/my-access', { method: 'GET' });
+      if (out && out.res.ok && out.data) myAccess = out.data.access || out.data;
+    } catch (e) {
+      console.error('loadMyAccess:', e);
+    }
+  }
+
   async function loadOrgInfo(slug) {
     try {
       const controller = new AbortController();
@@ -621,7 +632,12 @@
     }
 
     wireSpModal();
-    await Promise.all([loadOrgInfo(slug), loadPrograms(slug)]);
+    await Promise.all([loadOrgInfo(slug), loadPrograms(slug), loadMyAccess(slug)]);
+    const settingsEl = document.getElementById('organizational-sp-settings');
+    if (settingsEl && canReadFund() && window.OrganizationalSponsorFund) {
+      settingsEl.closest('details').hidden = false;
+      window.OrganizationalSponsorFund.renderSettings(settingsEl, { slug, canMoney: canMoney() });
+    }
 
     loadingEl.hidden = true;
     dashEl.hidden = false;

@@ -19,6 +19,8 @@
   const runPanel = document.getElementById('organizational-giftpostings-run-panel');
   const runAccretionBtn = document.getElementById('organizational-giftpostings-run-accretion-btn');
   const runRecoveryBtn = document.getElementById('organizational-giftpostings-run-recovery-btn');
+  const runFeesBtn = document.getElementById('organizational-giftpostings-run-fees-btn');
+  let sponsoredProjects = [];
   let pendingRows = [];
   const sorter = tbody && window.OrganizationalTableSort ? window.OrganizationalTableSort.attach(tbody.closest('table'), {
     columns: [
@@ -73,7 +75,14 @@
       id: 'd' + d.id, disbursement: d, received_at: d.date, constituent_name: d.project_name, amount_cents: d.amount_cents,
     }));
     const flagged = ((out && out.res.ok && out.data && out.data.flagged) || []).map((f) => ({ ...f, flag: f }));
-    renderRows(flagged.concat(rows, dis));
+    const isSponsor = !!(out && out.res.ok && out.data && out.data.fiscal_sponsor);
+    if (runFeesBtn) runFeesBtn.hidden = !isSponsor;
+    const untagged = ((out && out.res.ok && out.data && out.data.sponsor_untagged) || []).map((u) => ({ ...u, id: 'u' + u.id, untagged: u }));
+    if (isSponsor && untagged.length && !sponsoredProjects.length) {
+      const sp = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects', { method: 'GET' });
+      sponsoredProjects = (sp && sp.res.ok && sp.data && sp.data.sponsored_projects) || [];
+    }
+    renderRows(flagged.concat(untagged, rows, dis));
   }
 
   function renderRows(rows) {
@@ -93,6 +102,16 @@
           + (g.flag.ledger_transaction_id ? ' · <a href="/organizational/o/' + encodeURIComponent(currentSlug) + '/transactions?txn=' + g.flag.ledger_transaction_id + '">Open the entry</a> to recode it first' : '') + '</td>'
           + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-accept" data-id="' + g.id + '">Not a gift</button> '
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-keep" data-id="' + g.id + '">Keep as gift</button></td></tr>';
+      }
+      if (g.untagged) {
+        const u = g.untagged;
+        const opts = '<option value="">Choose project</option>' + sponsoredProjects.map((p) => '<option value="' + p.id + '">' + esc(p.name) + '</option>').join('');
+        return '<tr data-id="' + g.id + '"><td><strong style="color:var(--amber);">No project?</strong></td>'
+          + '<td>' + esc((u.received_at || '').slice(0, 10)) + '</td><td>' + esc(u.constituent_name || '—') + '</td><td>' + fmtUsd(u.amount_cents) + '</td>'
+          + '<td style="font-size:0.8125rem;color:var(--text-secondary);">This workspace is a fiscal sponsor and the gift is not tagged to a project.'
+          + (u.in_books ? ' It is already in the books, so recode the entry first if it belongs to a project.' : '') + '</td>'
+          + '<td style="white-space:nowrap;">' + (u.in_books ? '' : '<select class="organizational-select gp-untagged-project" style="max-width:150px;" data-id="' + u.id + '" aria-label="Project">' + opts + '</select> ')
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-untagged-own" data-id="' + u.id + '">Workspace\'s own</button></td></tr>';
       }
       const typeLabel = g.disbursement ? 'Disbursement' : isCashGrant ? 'Grant (cash)' : (isInKind ? 'In-kind' : 'Pledge');
       const details = g.disbursement
@@ -126,6 +145,15 @@
       if (f && f.flag && f.flag.ledger_transaction_id) openFlagPanel(f); else resolveFlag(b.dataset.id, false);
     }));
     tbody.querySelectorAll('.gp-flag-keep').forEach((b) => b.addEventListener('click', () => resolveFlag(b.dataset.id, true)));
+    const reviewUntagged = async (id, body) => {
+      const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/' + id + '/sponsor-review', { method: 'POST', body: JSON.stringify(body) });
+      if (r && r.res.ok) await loadPending();
+      else window.alert((r && r.data && r.data.error) || 'Could not save.');
+    };
+    tbody.querySelectorAll('.gp-untagged-project').forEach((sel) => sel.addEventListener('change', () => {
+      if (sel.value) reviewUntagged(sel.dataset.id, { sponsored_project_id: Number(sel.value) });
+    }));
+    tbody.querySelectorAll('.gp-untagged-own').forEach((b) => b.addEventListener('click', () => reviewUntagged(b.dataset.id, { own: true })));
     tbody.querySelectorAll('.organizational-giftpostings-review-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         const gift = rows.find((g) => String(g.id) === btn.dataset.id);
@@ -349,8 +377,75 @@
     });
   }
 
+  function openFeeRunPanel() {
+    const base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug);
+    const today = new Date().toISOString().slice(0, 10);
+    runPanel.innerHTML =
+      '<p style="margin:0 0 10px;font-weight:600;font-size:0.875rem;">Run sponsorship fees</p>' +
+      '<p class="organizational-hint" style="margin:0 0 10px;">Lists the administrative fee due for each sponsored project and each quarter that ended on or before the date, less what is already posted. Each entry charges the project\'s fund and credits fee income.</p>' +
+      '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">' +
+        '<div><label class="organizational-label" style="font-size:0.75rem;" for="gp-fee-through">Through date</label>' +
+          '<input type="date" class="organizational-input" id="gp-fee-through" value="' + today + '"></div>' +
+        '<button type="button" class="organizational-btn organizational-btn-outline" id="gp-fee-preview">Preview</button>' +
+        '<button type="button" class="organizational-btn organizational-btn-primary" id="gp-fee-confirm" disabled>Post fees</button>' +
+        '<button type="button" class="organizational-btn organizational-btn-outline" id="gp-fee-cancel">Cancel</button>' +
+      '</div>' +
+      '<div id="gp-fee-result" style="margin-top:10px;font-size:0.8125rem;"></div>' +
+      '<details class="organizational-collapsible" style="margin-top:10px;"><summary class="organizational-section-heading">Posted fee entries</summary>' +
+        '<div class="organizational-section-body" id="gp-fee-entries"></div></details>';
+    runPanel.hidden = false;
+    const resultEl = document.getElementById('gp-fee-result');
+    const confirmBtn = document.getElementById('gp-fee-confirm');
+    const rowsHtml = (rows, withError) => '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Project</th><th>Quarter</th><th>Received</th><th>Fee</th><th>Already posted</th><th>To post</th>' + (withError ? '<th></th>' : '') + '</tr></thead><tbody>' +
+      rows.map((r) => '<tr><td>' + esc(r.project_name) + '</td><td>' + esc(r.period_start + ' to ' + r.period_end) + '</td><td>' + fmtUsd(r.gross_cents) +
+        (r.exempt_cents ? ' <span class="organizational-hint">(' + fmtUsd(r.exempt_cents) + ' exempt)</span>' : '') + '</td><td>' + fmtUsd(r.fee_cents) +
+        (r.minimum_applied ? ' <span class="organizational-hint">minimum</span>' : '') + '</td><td>' + fmtUsd(r.posted_cents) + '</td><td>' + fmtUsd(r.due_cents) + '</td>' +
+        (withError ? '<td style="color:var(--organizational-error);">' + esc(r.error || r.problem || '') + '</td>' : '') + '</tr>').join('') + '</tbody></table></div>';
+    async function loadEntries() {
+      const el = document.getElementById('gp-fee-entries');
+      const out = await apiJson(base + '/sponsor-fees/postings', { method: 'GET' });
+      const list = (out && out.res.ok && out.data && out.data.postings) || [];
+      el.innerHTML = list.length ? '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Project</th><th>Quarter</th><th>Amount</th><th></th></tr></thead><tbody>' +
+        list.map((p) => '<tr><td>' + esc(p.project_name) + '</td><td>' + esc(p.period_start + ' to ' + p.period_end) + '</td><td>' + fmtUsd(p.live ? p.amount_cents : 0) + '</td><td>' +
+          (p.live ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-fee-void" data-id="' + p.id + '">Reverse…</button>'
+            : '<span class="organizational-hint">Reversed' + (p.void_reason ? ': ' + esc(p.void_reason) : '') + '</span>') + '</td></tr>').join('') + '</tbody></table></div>'
+        : '<p class="organizational-hint" style="margin:0;">No fee entries yet.</p>';
+      el.querySelectorAll('.gp-fee-void').forEach((b) => b.addEventListener('click', async () => {
+        const reason = window.prompt('Why is this fee being reversed? (required)');
+        if (!reason || !reason.trim()) return;
+        const r = await apiJson(base + '/sponsor-fees/postings/' + b.dataset.id + '/void', { method: 'POST', body: JSON.stringify({ reason }) });
+        if (!r || !r.res.ok) { window.alert((r && r.data && r.data.error) || 'Could not reverse the fee.'); return; }
+        loadEntries();
+      }));
+    }
+    loadEntries();
+    document.getElementById('gp-fee-cancel').addEventListener('click', () => { runPanel.hidden = true; });
+    document.getElementById('gp-fee-preview').addEventListener('click', async () => {
+      resultEl.textContent = 'Working out fees…';
+      confirmBtn.disabled = true;
+      const through = document.getElementById('gp-fee-through').value;
+      const out = await apiJson(base + '/sponsor-fees/preview?through_date=' + encodeURIComponent(through), { method: 'GET' });
+      if (!out || !out.res.ok) { resultEl.textContent = (out && out.data && out.data.error) || 'Could not work out the fees.'; return; }
+      const rows = out.data.rows || [];
+      if (!rows.length) { resultEl.textContent = 'No fees are due through ' + through + '.'; return; }
+      const blocked = rows.filter((r) => r.problem);
+      resultEl.innerHTML = rowsHtml(rows, blocked.length > 0) + '<p style="margin:6px 0 0;">Total to post: <strong>' + fmtUsd(out.data.total_cents) + '</strong></p>';
+      confirmBtn.disabled = blocked.length === rows.length;
+    });
+    confirmBtn.addEventListener('click', async () => {
+      confirmBtn.disabled = true;
+      resultEl.textContent = 'Posting fees…';
+      const out = await apiJson(base + '/sponsor-fees/run', { method: 'POST', body: JSON.stringify({ through_date: document.getElementById('gp-fee-through').value }) });
+      if (!out || !out.res.ok) { resultEl.textContent = (out && out.data && out.data.error) || 'Could not post fees.'; return; }
+      resultEl.innerHTML = '<p style="margin:0;">Posted ' + out.data.posted_count + (out.data.failed_count ? ', not posted ' + out.data.failed_count : '') + '.</p>' +
+        (out.data.failed_count ? rowsHtml(out.data.failed, true) : '');
+      loadEntries();
+    });
+  }
+
   function openRunPanel(kind) {
     if (!runPanel) return;
+    if (kind === 'fees') { openFeeRunPanel(); return; }
     const today = new Date().toISOString().slice(0, 10);
     const firstOfYear = today.slice(0, 4) + '-01-01';
     if (kind === 'accretion') {
@@ -454,6 +549,7 @@
     wired = true;
     if (runAccretionBtn) runAccretionBtn.addEventListener('click', () => openRunPanel('accretion'));
     if (runRecoveryBtn) runRecoveryBtn.addEventListener('click', () => openRunPanel('recovery'));
+    if (runFeesBtn) runFeesBtn.addEventListener('click', () => openRunPanel('fees'));
   }
 
   document.addEventListener('keydown', function (e) {

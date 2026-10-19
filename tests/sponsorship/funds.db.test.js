@@ -234,3 +234,20 @@ test('untagged gifts in a sponsor workspace are flagged in Gift Postings until r
     assert.equal(res.body.sponsor_untagged.length, 0);
   });
 });
+
+test('a bill paid straight from the project program lowers the available balance and keeps the tie-out', opts, async () => {
+  await h.withDb(async ({ pool, asApp }) => {
+    const ws = await h.seedWorkspace(pool);
+    const project = await h.seedProject(pool, ws, { rule: { kind: 'percent', rate: 0 } });
+    await h.seedPostedGift(pool, ws, project, 100000, '2026-01-15');
+    const t = await h.one(pool, `INSERT INTO org_ledger_transactions (org_id, transaction_date, fiscal_year, memo, source) VALUES ($1, '2026-02-01', 2026, 'Venue', 'bill_approval') RETURNING id`, [ws.orgId]);
+    await pool.query(`INSERT INTO org_ledger_lines (transaction_id, account_id, program_id, debit_cents, credit_cents) VALUES ($1, $2, $3, 30000, 0), ($1, $4, $3, 0, 30000)`,
+      [t.id, ws.accounts.projectExpense, project.program_id, ws.accounts.bank]);
+    await asApp(ws.orgId);
+    const { loadProjectBalance } = require('../../server/organizational/lib/sponsorBalance');
+    const b = (await loadProjectBalance(pool, ws.orgId, project.id, { asOf: '2026-03-01' })).balance;
+    assert.equal(b.other_spending_cents, 30000);
+    assert.equal(b.available_cents, 70000);
+    assert.equal(b.tie_out.difference_cents, 0);
+  });
+});

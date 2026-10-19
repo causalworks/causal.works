@@ -10,7 +10,7 @@ const RESTRICTED_CLASS = 'temporarily_restricted';
 
 function sum(rows, pick) { return rows.reduce((s, r) => s + Number(pick(r) || 0), 0); }
 
-// facts: { receipts, feePeriods, feePostings, disbursements, requests, ledgerNetCents, openPledgeCents }
+// facts: { receipts, feePeriods, feePostings, disbursements, requests, otherSpendingCents, ledgerNetCents, openPledgeCents }
 function computeBalance(facts) {
   const receipts = facts.receipts || [];
   const disbursements = facts.disbursements || [];
@@ -26,9 +26,10 @@ function computeBalance(facts) {
   const disbursementsPending = sum(disbursements.filter((d) => d.status === 'pending_approval' || (d.status === 'approved' && !d.posted)), (d) => d.amount_cents);
   const requestsPending = sum(requests.filter((r) => ['submitted', 'in_review', 'needs_info', 'approved'].includes(r.status) && !r.disbursement_id), (r) => r.amount_cents);
   const pending = disbursementsPending + requestsPending;
-  const available = receivedPosted - feesCharged - disbursedPosted - pending;
+  const otherSpending = Number(facts.otherSpendingCents || 0);
+  const available = receivedPosted - feesCharged - disbursedPosted - otherSpending - pending;
 
-  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted;
+  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted - otherSpending;
   const ledgerNet = facts.ledgerNetCents == null ? null : Number(facts.ledgerNetCents);
   const openPledge = Number(facts.openPledgeCents || 0);
   const difference = ledgerNet == null ? null : ledgerNet - expectedLedgerNet;
@@ -41,6 +42,7 @@ function computeBalance(facts) {
     fees_posted_cents: feesPosted,
     fees_unposted_cents: Math.max(0, feesAccrued - feesPosted),
     disbursed_posted_cents: disbursedPosted,
+    other_spending_cents: otherSpending,
     pending_cents: pending,
     pending_disbursements_cents: disbursementsPending,
     pending_requests_cents: requestsPending,
@@ -61,7 +63,7 @@ function explainTieOut(t, opts) {
   if (t.difference_cents === 0) return 'Agrees with the books.';
   const parts = [];
   if (t.open_pledge_cents) parts.push('pledges booked but not yet collected');
-  if (t.unexplained_cents) parts.push('entries coded to the project\'s program that are not this project\'s gifts, fees or payments' + (opts && opts.sharedProgram ? ' (another project uses the same program)' : ''));
+  if (t.unexplained_cents) parts.push('income coded to the project\'s program that is not a gift tagged to this project' + (opts && opts.sharedProgram ? ' (another project uses the same program)' : ''));
   return 'Differs from the books by the amount shown: ' + parts.join('; ') + '.';
 }
 
@@ -148,6 +150,20 @@ async function loadLedgerNet(pool, orgId, programIds) {
   return new Map(r.rows.map((x) => [Number(x.program_id), Number(x.net)]));
 }
 
+async function loadOtherSpending(pool, orgId, programIds) {
+  if (!programIds.length) return new Map();
+  const r = await pool.query(
+    `SELECT l.program_id, COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS spent
+       FROM org_ledger_lines l
+       JOIN org_ledger_transactions t ON t.id = l.transaction_id
+       JOIN org_accounts a ON a.id = l.account_id
+      WHERE t.org_id = $1 AND t.status = 'posted' AND l.program_id = ANY($2::int[]) AND a.type = 'expense'
+        AND t.source <> 'sponsor_fee'
+        AND NOT EXISTS (SELECT 1 FROM org_sponsored_project_disbursements d WHERE d.org_id = t.org_id AND d.ledger_transaction_id = t.id)
+      GROUP BY l.program_id`, [orgId, programIds]);
+  return new Map(r.rows.map((x) => [Number(x.program_id), Number(x.spent)]));
+}
+
 async function loadOpenPledges(pool, orgId, projectIds) {
   const r = await pool.query(
     `SELECT g.sponsored_project_id,
@@ -175,7 +191,7 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
     loadFeePostings(pool, orgId, ids), loadDisbursements(pool, orgId, ids), loadRequests(pool, orgId, ids), loadOpenPledges(pool, orgId, ids),
   ]);
   const programIds = [...new Set(projR.rows.map((p) => p.program_id).filter((x) => x != null).map(Number))];
-  const ledgerNet = await loadLedgerNet(pool, orgId, programIds);
+  const [ledgerNet, otherSpending] = await Promise.all([loadLedgerNet(pool, orgId, programIds), loadOtherSpending(pool, orgId, programIds)]);
   const programCount = new Map();
   if (programIds.length) {
     const pc = await pool.query(
@@ -196,6 +212,7 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
       receipts: pr, feePeriods, feePostings: fp,
       disbursements: disb.filter((d) => Number(d.sponsored_project_id) === pid),
       requests: requests.filter((r) => Number(r.sponsored_project_id) === pid),
+      otherSpendingCents: p.program_id != null ? (otherSpending.get(Number(p.program_id)) || 0) : 0,
       ledgerNetCents: p.program_id != null ? (ledgerNet.get(Number(p.program_id)) || 0) : null,
       openPledgeCents: openPledges.get(pid) || 0,
     });

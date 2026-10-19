@@ -427,6 +427,15 @@
 
   function renderObligationRow(obligation) {
     const statusColor = getStatusColor(obligation.status);
+    if (obligation.source === 'sponsorship') {
+      const badge = `<span class="organizational-badge organizational-badge--tag" style="font-size: 0.8125rem;"><span class="organizational-badge-dot" style="background:${statusColor};"></span>${escapeHtml(getStatusLabel(obligation.status))}</span>`;
+      const when = obligation.next_due_date ? `Due ${formatDate(obligation.next_due_date)} (${escapeHtml(obligation.relative_due_date || '')})` : 'Needs action';
+      return `<tr><td style="width:34%;font-weight:500;"><a href="${escapeHtml(obligation.href)}" style="${OBL_LINK}">${escapeHtml(obligation.title)}</a>
+        <div style="font-size:0.8125rem;font-weight:400;color:var(--text-muted);">Sponsorship</div></td>
+        <td style="color:var(--text-secondary);"><div style="font-size:0.8125rem;color:var(--text-muted);">${when}</div></td>
+        <td style="width:130px;white-space:nowrap;">${badge}</td>
+        <td style="width:190px;text-align:right;white-space:nowrap;font-size:0.8125rem;"><a href="${escapeHtml(obligation.href)}" style="${OBL_LINK}">Open project</a></td></tr>`;
+    }
     const statusBadge = `<span class="organizational-badge organizational-badge--tag" style="font-size: 0.8125rem;"><span class="organizational-badge-dot" style="background:${statusColor};"></span>${escapeHtml(getStatusLabel(obligation.status))}</span>`;
     const docCount = Number(obligation.document_count) || 0;
     const due = obligation.next_due_date ? `Due ${formatDate(obligation.next_due_date)} (${escapeHtml(obligation.relative_due_date || '')})` : 'No due date';

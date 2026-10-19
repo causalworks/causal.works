@@ -70,12 +70,15 @@ async function fetchAttentionFeed(pool, orgId, slug) {
       [orgId]
     );
     const flagR = await pool.query(
-      `SELECT id, name, status, hold_reason FROM org_sponsored_projects
+      `SELECT id, name, status, hold_reason, agreement_signed_at FROM org_sponsored_projects
         WHERE sponsor_org_id = $1 AND status NOT IN ('applicant', 'ended')`, [orgId]);
     const balances = await loadProjectBalances(pool, orgId, flagR.rows.map((p) => p.id));
     for (const sp of flagR.rows) {
       const b = balances.get(Number(sp.id));
       const negative = b && b.balance.negative;
+      if (!sp.agreement_signed_at && ['accepted', 'active', 'on_hold', 'winding_down'].includes(sp.status)) {
+        items.push({ type: 'sponsored_project', flag: 'danger', urgency_days: 0, title: (sp.name || 'Sponsored project') + ' has no signed agreement', due_date: null, href: `${base}/sponsored-projects?focus=${sp.id}` });
+      }
       if (sp.status !== 'on_hold' && !negative) continue;
       items.push({
         type: 'sponsored_project',

@@ -201,7 +201,7 @@ test('dashboard flags a negative or held project', opts, async () => {
     await sp.call('POST', P + '/sponsored-projects/:id/hold', { ...as(1), body: { reason: 'Board review' } });
     const { fetchAttentionFeed } = require('../../server/organizational/lib/OrganizationalAttentionFeed');
     const feed = await fetchAttentionFeed(pool, ws.orgId, ws.slug);
-    const items = (feed.items || feed).filter((i) => i.type === 'sponsored_project' && i.flag === 'danger');
+    const items = (feed.items || feed).filter((i) => i.type === 'sponsored_project' && i.flag === 'danger' && /on hold/.test(i.title));
     assert.equal(items.length, 1);
     assert.match(items[0].title, /on hold: Board review/);
     void project;

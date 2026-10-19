@@ -1,5 +1,7 @@
 'use strict';
 
+const { complianceItems: sponsorComplianceItems } = require('../lib/sponsorReports');
+
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
@@ -83,6 +85,16 @@ function registerComplianceRoutes(app, pool) {
         if (enriched.status === 'overdue') overdue.push(enriched);
         else if ((enriched.status === 'upcoming' || enriched.status === 'due_soon') && enriched.next_due_date && String(enriched.next_due_date).slice(0, 10) <= in90) comingUp.push(enriched);
       });
+
+      const fsR = await pool.query('SELECT fiscal_sponsorship_mode FROM org_settings WHERE org_id = $1', [orgId]);
+      if (fsR.rows[0] && fsR.rows[0].fiscal_sponsorship_mode) {
+        const sponsorItems = await sponsorComplianceItems(pool, orgId, String(req.params.slug || ''));
+        sponsorItems.forEach((item) => {
+          const enriched = { ...item, relative_due_date: item.next_due_date ? getRelativeTime(item.next_due_date) : null };
+          if (enriched.status === 'overdue') overdue.push(enriched);
+          else if (enriched.status === 'due_soon' || enriched.status === 'upcoming') comingUp.push(enriched);
+        });
+      }
 
       return res.json({
         coming_up: comingUp,

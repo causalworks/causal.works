@@ -34,7 +34,6 @@
     if (key === 'grant-reports') return allReportsHref + '?only=grant-reports&embed=1';
     return allReportsHref + '?report=' + encodeURIComponent(key) + '&embed=1';
   }
-  function store(k, v) { try { if (v === undefined) return window.sessionStorage.getItem('orgRpt-' + active + k); window.sessionStorage.setItem('orgRpt-' + active + k, v); } catch (e) {  } return null; }
 
   var IDX = window.OrganizationalReportsIndex;
   var listEl = null, viewEl = null, titleEl = null, reports = [];
@@ -79,7 +78,7 @@
 
   function show(key) {
     if (!frame) return;
-    if (!key) { viewEl.hidden = true; listEl.hidden = false; frame.removeAttribute('src'); store('last', ''); return; }
+    if (!key) { viewEl.hidden = true; listEl.hidden = false; frame.removeAttribute('src'); return; }
     var r = null;
     for (var i = 0; i < reports.length; i++) if (reports[i].key === key) r = reports[i];
     titleEl.textContent = r ? r.name : '';
@@ -87,7 +86,6 @@
     viewEl.hidden = false;
     frame.style.height = '70vh';
     frame.src = srcFor(key);
-    store('last', key);
   }
 
   function hideFollowing() {
@@ -109,10 +107,7 @@
     if (tabBtn) tabBtn.classList.add('active');
     hideFollowing();
     pane.hidden = false;
-    if (frame && !frame.getAttribute('src')) {
-      var last = store('last');
-      if (last) { var t = setInterval(function () { if (reports.length) { clearInterval(t); show(last); } }, 100); setTimeout(function () { clearInterval(t); }, 3000); }
-    }
+    if (frame && viewEl && !viewEl.hidden) show('');
   }
   function closePane() {
     if (!open) return;

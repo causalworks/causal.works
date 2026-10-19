@@ -188,12 +188,6 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
-  function goToCashForecast() {
-    const slug = currentSlug || parseSlug();
-    if (!slug) return;
-    window.location.href = '/organizational/o/' + encodeURIComponent(slug) + '/reports/cash-forecast';
-  }
-
   async function apiJson(url, options) {
     const res = await fetch(url, {
       credentials: 'include',
@@ -373,29 +367,9 @@
     if (loadingEl) loadingEl.hidden = true;
     if (dashEl) dashEl.hidden = false;
     const access = window.OrganizationalMyAccess ? await window.OrganizationalMyAccess(slug) : null;
-    const financeOnly = ['trial-balance', 'general-ledger', 'account-transactions', 'receivables-schedule', 'payables-schedule', 'financial-position', 'statement-of-activities', 'stmt-functional-expenses', 'cash-flows', 'balance-sheet', 'reconciliation', 'cash-forecast'];
-    if (access && access.can_read_contacts === false) {
-      document.querySelectorAll('.organizational-report-card').forEach(function (card) {
-        if (/showReport\('giving-summary'\)/.test(card.getAttribute('onclick') || '')) card.hidden = true;
-      });
-    }
-    if (access && (!access.can_read_reports || access.can_read_contacts === false)) {
-      if (!access.can_read_reports) {
-        document.querySelectorAll('.organizational-report-card').forEach(function (card) {
-          const attr = card.getAttribute('onclick') || '';
-          const m = /showReport\('([^']+)'\)/.exec(attr);
-          if ((m && financeOnly.indexOf(m[1]) >= 0) || /goToCashForecast/.test(attr)) card.hidden = true;
-        });
-      }
-      document.querySelectorAll('#reports-index .organizational-section-title').forEach(function (title) {
-        const grid = title.nextElementSibling && title.nextElementSibling.classList.contains('organizational-report-grid') ? title.nextElementSibling : (title.nextElementSibling && title.nextElementSibling.nextElementSibling);
-        if (grid && grid.classList && grid.classList.contains('organizational-report-grid') && !grid.querySelector('.organizational-report-card:not([hidden])')) {
-          title.hidden = true; grid.hidden = true;
-          const hint = title.nextElementSibling;
-          if (hint && hint !== grid) hint.hidden = true;
-        }
-      });
-    }
+    const financeOnly = window.OrganizationalReportsIndex.all.filter(function (r) { return r.need === 'finance'; }).map(function (r) { return r.key; });
+    const groupsEl = document.getElementById('reports-index-groups');
+    if (groupsEl) window.OrganizationalReportsIndex.render(groupsEl, { slug: slug, access: access });
     if (new URLSearchParams(window.location.search).get('only') === 'grant-reports') {
       const index = document.getElementById('reports-index');
       let keep = false;
@@ -2506,7 +2480,6 @@
 
   window.showReport = showReport;
   window.showReportsIndex = showReportsIndex;
-  window.goToCashForecast = goToCashForecast;
   window.loadPartIX = loadPartIX;
   window.loadBalanceSheet = loadBalanceSheet;
   window.loadReconciliation = loadReconciliation;

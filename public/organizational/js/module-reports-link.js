@@ -1,6 +1,6 @@
 /* module-reports-link.js -- a "Reports" tab on Budget, Accounting, Funding and Membership (a button on Sponsored Projects).
-   It opens that module's reports inside the module: a list of the module's reports under the tab row, and the chosen report
-   below it, in place of the module's own content until another tab is chosen. The report itself is the Reports page shown
+   It opens that module's reports inside the module: the module's reports as grouped links (list in reports-index.js), and the
+   chosen report in place of the list, in place of the module's own content until another tab is chosen. The report itself is the Reports page shown
    in embedded mode (?embed=1: no header, sidebar or title), so the reports exist in one place only (js/reports.js).
    Loaded after each page's own workspace script so it does not take part in that script's tab switching. */
 (function () {
@@ -10,33 +10,22 @@
   var slug = decodeURIComponent(m[1]);
   var active = document.body.getAttribute('data-organizational-active');
 
-  var BOARD = ['board', 'Board report'];
-  var CASH = ['cash-forecast', 'Cash forecast'];
-  var ACTIVITY = ['activity', 'Activity log'];
   var PAGES = {
-    budget: {
-      row: '#organizational-budget-workspace-tabs', after: '[data-section="scenarios"]',
-      anchor: '.organizational-budget-sticky-header',
-      hideInside: ['#organizational-budget-stat-strip', '#organizational-budget-filter-bar', '#organizational-budget-top-scroll-row'],
-      reports: [['budget', 'Budget views'], BOARD, CASH, ['990', '990 Part IX: functional expenses'], ACTIVITY],
-    },
-    accounting: {
-      row: '#organizational-accounting-workspace-tabs', after: '[data-section="gift-postings"]',
-      reports: [['financial-position', 'Statement of Financial Position'], ['statement-of-activities', 'Statement of Activities'], ['stmt-functional-expenses', 'Statement of Functional Expenses'], ['cash-flows', 'Statement of Cash Flows'], ['balance-sheet', 'Balance sheet'], ['trial-balance', 'Trial Balance'], ['general-ledger', 'General Ledger'], ['account-transactions', 'Account Transactions'], ['reconciliation', 'Reconciliation and close'], CASH, ['1099', '1099 Report']],
-    },
-    grants: {
-      row: '#organizational-funders-workspace-tabs', after: '[data-section="donors"]',
-      reports: [['giving-summary', 'Giving summary'], BOARD, ACTIVITY, ['grant-reports', 'Grant reports (per grant)']],
-    },
-    membership: { row: '.organizational-tabs', after: '[data-membership-tab="payments"]', reports: [], label: 'Membership' },
-    'sponsored-projects': { button: '#organizational-sp-add-btn', reports: [], label: 'Sponsorship' },
+    budget: { row: '#organizational-budget-workspace-tabs', after: '[data-section="scenarios"]', anchor: '.organizational-budget-sticky-header',
+      hideInside: ['#organizational-budget-stat-strip', '#organizational-budget-filter-bar', '#organizational-budget-top-scroll-row'] },
+    accounting: { row: '#organizational-accounting-workspace-tabs', after: '[data-section="gift-postings"]' },
+    funding: { row: '#organizational-funders-workspace-tabs', after: '[data-section="donors"]' },
+    membership: { row: '.organizational-tabs', after: '[data-membership-tab="payments"]', label: 'Membership' },
+    'sponsored-projects': { button: '#organizational-sp-add-btn', label: 'Sponsorship' },
   };
-  var cfg = PAGES[active];
+  var MODULE_OF = { grants: 'funding' };
+  var cfg = PAGES[MODULE_OF[active] || active];
+  var moduleKey = MODULE_OF[active] || active;
   if (!cfg) return;
 
   var base = '/organizational/o/' + encodeURIComponent(slug);
   var allReportsHref = base + '/reports';
-  var anchorEl = null, row = null, tabBtn = null, pane = null, frame = null, sel = null, prevActive = null, open = false;
+  var anchorEl = null, row = null, tabBtn = null, pane = null, frame = null, prevActive = null, open = false;
   var hidden = [];
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -47,36 +36,56 @@
   }
   function store(k, v) { try { if (v === undefined) return window.sessionStorage.getItem('orgRpt-' + active + k); window.sessionStorage.setItem('orgRpt-' + active + k, v); } catch (e) {  } return null; }
 
+  var IDX = window.OrganizationalReportsIndex;
+  var listEl = null, viewEl = null, titleEl = null, reports = [];
+
   function buildPane() {
     pane = document.createElement('div');
     pane.id = 'organizational-module-reports-pane';
     pane.hidden = true;
     pane.style.cssText = 'padding:12px 0;';
-    if (!cfg.reports.length) {
+    if (!IDX || !IDX.forModule(moduleKey).length) {
       pane.innerHTML = '<p class="organizational-hint" style="margin:0;">There are no reports for ' + esc(cfg.label || 'this module') + ' yet. <a href="' + allReportsHref + '">See all reports</a>.</p>';
       return;
     }
-    pane.innerHTML = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">'
-      + '<label class="organizational-hint" for="organizational-module-reports-select">Report</label>'
-      + '<select id="organizational-module-reports-select" class="organizational-select" style="width:auto;min-width:280px;"><option value="">Choose a report…</option>'
-      + cfg.reports.map(function (r) { return '<option value="' + esc(r[0]) + '">' + esc(r[1]) + '</option>'; }).join('')
-      + '</select><a class="organizational-hint" href="' + allReportsHref + '">All reports</a></div>'
-      + '<iframe id="organizational-module-reports-frame" title="Report" style="width:100%;border:0;min-height:60vh;display:none;"></iframe>';
-    sel = pane.querySelector('select');
+    pane.innerHTML = '<div id="organizational-module-reports-list"></div>'
+      + '<div id="organizational-module-reports-view" hidden><div style="display:flex;gap:12px;align-items:baseline;margin-bottom:8px;">'
+      + '<a href="#" data-reports-back style="color:var(--organizational-accent);text-decoration:underline;">All reports</a>'
+      + '<b id="organizational-module-reports-title"></b></div>'
+      + '<iframe id="organizational-module-reports-frame" title="Report" style="width:100%;border:0;min-height:60vh;"></iframe></div>'
+      + '<p class="organizational-hint" style="margin:12px 0 0;"><a href="' + allReportsHref + '">All reports across modules</a></p>';
+    listEl = pane.querySelector('#organizational-module-reports-list');
+    viewEl = pane.querySelector('#organizational-module-reports-view');
+    titleEl = pane.querySelector('#organizational-module-reports-title');
     frame = pane.querySelector('iframe');
-    sel.addEventListener('change', function () { show(sel.value); });
+    pane.addEventListener('click', function (e) {
+      var back = e.target.closest('[data-reports-back]');
+      if (back) { e.preventDefault(); show(''); return; }
+      var a = e.target.closest('[data-report-key]');
+      if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      show(a.getAttribute('data-report-key'));
+    });
     window.addEventListener('message', function (e) {
       if (e.origin !== window.location.origin || !e.data || e.data.type !== 'organizational-embed-height' || !frame) return;
       if (frame.contentWindow !== e.source) return;
       frame.style.height = Math.max(Number(e.data.height) || 0, 300) + 'px';
     });
+    var loadAccess = window.OrganizationalMyAccess ? window.OrganizationalMyAccess(slug) : Promise.resolve(null);
+    loadAccess.catch(function () { return null; }).then(function (access) {
+      reports = IDX.render(listEl, { slug: slug, access: access, module: moduleKey });
+    });
   }
 
   function show(key) {
     if (!frame) return;
-    if (!key) { frame.style.display = 'none'; frame.removeAttribute('src'); return; }
+    if (!key) { viewEl.hidden = true; listEl.hidden = false; frame.removeAttribute('src'); store('last', ''); return; }
+    var r = null;
+    for (var i = 0; i < reports.length; i++) if (reports[i].key === key) r = reports[i];
+    titleEl.textContent = r ? r.name : '';
+    listEl.hidden = true;
+    viewEl.hidden = false;
     frame.style.height = '70vh';
-    frame.style.display = 'block';
     frame.src = srcFor(key);
     store('last', key);
   }
@@ -100,9 +109,9 @@
     if (tabBtn) tabBtn.classList.add('active');
     hideFollowing();
     pane.hidden = false;
-    if (sel && !sel.value) {
+    if (frame && !frame.getAttribute('src')) {
       var last = store('last');
-      if (last && cfg.reports.some(function (r) { return r[0] === last; })) { sel.value = last; show(last); }
+      if (last) { var t = setInterval(function () { if (reports.length) { clearInterval(t); show(last); } }, 100); setTimeout(function () { clearInterval(t); }, 3000); }
     }
   }
   function closePane() {

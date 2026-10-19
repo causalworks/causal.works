@@ -57,14 +57,14 @@ test('balance from the database: every part, and the tie-out agrees after a fee 
     let b = (await loadProjectBalance(pool, ws.orgId, project.id, { asOf: '2026-04-10' })).balance;
     assert.equal(b.received_posted_cents, 150000);
     assert.equal(b.received_unposted_cents, 20000);
-    assert.equal(b.fees_accrued_cents, 6000 + 1200);
+    assert.equal(b.fees_accrued_cents, 6000);
     assert.equal(b.fees_posted_cents, 0);
     assert.equal(b.tie_out.difference_cents, 0);
     const run = await runFees(pool, { orgId: ws.orgId, userId: ws.users[1].id, throughDate: '2026-04-10' });
     assert.equal(run.body.posted_count, 1, JSON.stringify(run.body));
     b = (await loadProjectBalance(pool, ws.orgId, project.id, { asOf: '2026-04-10' })).balance;
-    assert.equal(b.fees_posted_cents, 7200);
-    assert.equal(b.available_cents, 150000 - 7200);
+    assert.equal(b.fees_posted_cents, 6000);
+    assert.equal(b.available_cents, 150000 - 6000);
     assert.equal(b.tie_out.difference_cents, 0);
   });
 });

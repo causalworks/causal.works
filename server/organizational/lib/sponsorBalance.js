@@ -203,7 +203,7 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
     const pid = Number(p.id);
     const pr = receipts.filter((r) => Number(r.project_id) === pid);
     const feePeriods = computeQuarterFees({
-      receipts: pr, rules: rules.filter((r) => Number(r.sponsored_project_id) === pid),
+      receipts: pr.filter((r) => r.posted), rules: rules.filter((r) => Number(r.sponsored_project_id) === pid),
       fallback: fallbackRule(p, p, settings), fyEndMonth: fyEndMonth || 12,
       startDate: p.start_date, endDate: p.end_date, throughDate: asOf,
     });

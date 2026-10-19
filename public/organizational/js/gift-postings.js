@@ -82,7 +82,10 @@
       const sp = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects', { method: 'GET' });
       sponsoredProjects = (sp && sp.res.ok && sp.data && sp.data.sponsored_projects) || [];
     }
-    renderRows(flagged.concat(untagged, rows, dis));
+    const recalls = ((out && out.res.ok && out.data && out.data.sponsor_recalls) || []).map((r) => ({
+      id: 'r' + r.id, recall: r, received_at: r.recall_date, constituent_name: r.project_name, amount_cents: r.amount_cents,
+    }));
+    renderRows(flagged.concat(untagged, rows, dis, recalls));
   }
 
   function renderRows(rows) {
@@ -103,6 +106,13 @@
           + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-accept" data-id="' + g.id + '">Not a gift</button> '
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-keep" data-id="' + g.id + '">Keep as gift</button></td></tr>';
       }
+      if (g.recall) {
+        const rc = g.recall;
+        return '<tr data-id="' + g.id + '"><td>Recall</td><td>' + esc(rc.recall_date || '') + '</td><td>' + esc(rc.project_name) + '</td><td>' + fmtUsd(rc.amount_cents) + '</td>'
+          + '<td style="font-size:0.8125rem;color:var(--text-secondary);">Funds taken back from the project: ' + esc(rc.reason) + '</td>'
+          + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-recall-post" data-id="' + rc.id + '">Post</button> '
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-recall-void" data-id="' + rc.id + '">Cancel</button></td></tr>';
+      }
       if (g.untagged) {
         const u = g.untagged;
         const opts = '<option value="">Choose project</option>' + sponsoredProjects.map((p) => '<option value="' + p.id + '">' + esc(p.name) + '</option>').join('');
@@ -111,7 +121,7 @@
           + '<td style="font-size:0.8125rem;color:var(--text-secondary);">This workspace is a fiscal sponsor and the gift is not tagged to a project.'
           + (u.in_books ? ' It is already in the books, so recode the entry first if it belongs to a project.' : '') + '</td>'
           + '<td style="white-space:nowrap;">' + (u.in_books ? '' : '<select class="organizational-select gp-untagged-project" style="max-width:150px;" data-id="' + u.id + '" aria-label="Project">' + opts + '</select> ')
-          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-untagged-own" data-id="' + u.id + '">Workspace\'s own</button></td></tr>';
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-untagged-own" data-id="' + u.id + '" title="The workspace\'s own gift, not for a project">Own gift</button></td></tr>';
       }
       const typeLabel = g.disbursement ? 'Disbursement' : isCashGrant ? 'Grant (cash)' : (isInKind ? 'In-kind' : 'Pledge');
       const details = g.disbursement
@@ -152,6 +162,17 @@
     };
     tbody.querySelectorAll('.gp-untagged-project').forEach((sel) => sel.addEventListener('change', () => {
       if (sel.value) reviewUntagged(sel.dataset.id, { sponsored_project_id: Number(sel.value) });
+    }));
+    tbody.querySelectorAll('.gp-recall-post').forEach((b) => b.addEventListener('click', async () => {
+      if (!window.confirm('Post this recall? It charges the project fund and credits the workspace.')) return;
+      const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsor-recalls/' + b.dataset.id + '/post', { method: 'POST', body: '{}' });
+      if (r && r.res.ok) await loadPending(); else window.alert((r && r.data && r.data.error) || 'Could not post the recall.');
+    }));
+    tbody.querySelectorAll('.gp-recall-void').forEach((b) => b.addEventListener('click', async () => {
+      const reason = window.prompt('Why is this recall being cancelled? (required)');
+      if (!reason || !reason.trim()) return;
+      const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsor-recalls/' + b.dataset.id + '/void', { method: 'POST', body: JSON.stringify({ reason }) });
+      if (r && r.res.ok) await loadPending(); else window.alert((r && r.data && r.data.error) || 'Could not cancel the recall.');
     }));
     tbody.querySelectorAll('.gp-untagged-own').forEach((b) => b.addEventListener('click', () => reviewUntagged(b.dataset.id, { own: true })));
     tbody.querySelectorAll('.organizational-giftpostings-review-btn').forEach((btn) => {

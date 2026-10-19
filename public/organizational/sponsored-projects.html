@@ -100,10 +100,15 @@
 
         <label for="organizational-sp-status">Status</label>
         <select id="organizational-sp-status">
+          <option value="applicant">Applicant</option>
+          <option value="accepted">Accepted</option>
           <option value="active">Active</option>
+          <option value="on_hold" disabled>On hold (use Put on hold)</option>
+          <option value="winding_down">Winding down</option>
+          <option value="ended">Ended</option>
+          <option value="lapsed">Lapsed</option>
           <option value="paused">Paused</option>
           <option value="completed">Completed</option>
-          <option value="winding_down">Winding down</option>
         </select>
 
         <div id="organizational-sp-edit-finances-section" hidden>
@@ -145,7 +150,9 @@
   <script src="/organizational/js/strings.js" defer></script>
   <script src="/organizational/js/sidebar.js" defer></script>
   <script src="/organizational/js/messages-placeholder.js" defer></script>
+  <script src="/organizational/js/contact-picker.js" defer></script>
   <script src="/organizational/js/sponsor-fund.js?v=1" defer></script>
+  <script src="/organizational/js/sponsor-money-out.js?v=1" defer></script>
   <script src="/organizational/js/sponsored-projects.js?v=2" defer></script>
   <div id="organizational-overlay-container"></div>
   <script>

@@ -6006,6 +6006,10 @@ body.organizational-number-colors .organizational-num-pos { color: var(--green) 
 .organizational-sp-fund-form label[hidden] { display: none; }
 .organizational-sp-fund-actions { display: flex; gap: 8px; align-items: center; grid-column: 1 / -1; }
 .organizational-sp-fund-list { list-style: none; margin: 0; padding: 0; font-size: 0.8125rem; }
+.organizational-sp-mo-hold { margin: 0 0 8px; font-size: 0.8125rem; color: var(--organizational-status-danger); }
+.organizational-sp-mo-links { margin: 0 0 8px; font-size: 0.8125rem; }
+.organizational-sp-mo-requests li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 0.5px solid var(--organizational-border-subtle, var(--border-subtle)); }
+.organizational-sp-mo-actions { display: inline-flex; gap: 4px; }
 @media (max-width: 600px) {
   .organizational-sp-fund-table th { white-space: normal; }
   .organizational-sp-fund-form { grid-template-columns: 1fr; }

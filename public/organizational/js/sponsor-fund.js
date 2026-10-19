@@ -171,6 +171,8 @@
       '<label>Fee income account ' + acctSel('fee_income_account_id', 'income') + '</label>' +
       '<label>Fee charged to projects (expense account) ' + acctSel('fee_expense_account_id', 'expense') + '</label>' +
       '<label>Program for fee income ' + progSel + '</label>' +
+      '<label>Recalled funds charged to (expense, optional) ' + acctSel('recall_expense_account_id', 'expense') + '</label>' +
+      '<label>Recalled funds income (optional) ' + acctSel('recall_income_account_id', 'income') + '</label>' +
       '<label>Default minimum fee a quarter ' + num('default_fee_minimum_cents', true, 'min="0"') + '</label>' +
       '<label>Second approval needed above ' + num('second_approval_threshold_cents', true, 'min="0"') + '</label>' +
       '<label>Hold a project when its report is overdue by (days) ' + num('overdue_report_hold_days', false, 'min="0"') + '</label>' +

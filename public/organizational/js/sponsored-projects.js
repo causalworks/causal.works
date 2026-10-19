@@ -35,6 +35,7 @@
   let myAccess = { write: {}, read: {} };
   const canMoney = () => !!(myAccess.write && myAccess.write.finance);
   const canReadFund = () => !!(myAccess.read && myAccess.read.sponsorship);
+  const moneyCtx = (project) => ({ slug: currentSlug, projectId: project.id, canMoney: canMoney(), canEnter: !!(myAccess.write && myAccess.write.sponsorship), isAdmin: myAccess.role === 'admin' });
 
   function showError(msg) {
     if (!errEl) return;
@@ -67,6 +68,11 @@
   function formatCurrency(amount) {
     if (amount === null || amount === undefined) return '';
     return window.formatMoneyCents(Math.round(Number(amount) * 100));
+  }
+
+  function statusLabel(status) {
+    const labels = { applicant: 'Applicant', accepted: 'Accepted', active: 'Active', on_hold: 'On hold', winding_down: 'Winding down', ended: 'Ended', lapsed: 'Lapsed', paused: 'Paused', completed: 'Completed' };
+    return labels[status] || status;
   }
 
   function sponsorshipModelLabel(model) {
@@ -103,8 +109,9 @@
         return '<div class="organizational-card" style="padding: 16px; margin-bottom: 12px;">' +
           '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
           '<div style="font-weight: 600; font-size: 1.0625rem;">' + escapeHtml(p.name) + '</div>' +
-          '<span class="organizational-badge">' + escapeHtml(p.status) + '</span>' +
+          '<span class="organizational-badge">' + escapeHtml(statusLabel(p.status)) + '</span>' +
           '</div>' +
+          (p.status === 'on_hold' ? '<div class="organizational-sp-mo-hold">On hold: ' + escapeHtml(p.hold_reason || '') + '</div>' : '') +
           '<div style="font-size: 0.9375rem; margin-bottom: 8px;">' + escapeHtml(p.description || '') + '</div>' +
           '<div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">' +
           (p.start_date ? 'Start: ' + formatDate(p.start_date) : '') +
@@ -283,6 +290,10 @@
     if (effectiveModel === 'model_a') {
       el.innerHTML = '<div id="organizational-sp-fund"></div>';
       if (window.OrganizationalSponsorFund) await window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
+      el.insertAdjacentHTML('beforeend', '<div id="organizational-sp-moneyout" style="margin-top:12px;"></div>');
+      if (window.OrganizationalSponsorMoneyOut) {
+        window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
+      }
       const progLabel = project.program_id ? escapeHtml(programName(project.program_id)) : null;
       el.insertAdjacentHTML('beforeend', '<p class="organizational-hint" style="margin: 0;"><em>Managed projects post through the sponsor\'s own regular expense accounts -- ' +
         (progLabel ? 'code bills and other expenses to <strong>' + progLabel + '</strong> (the linked program/activity above)' : 'link a program or activity above, then code bills to it') +
@@ -313,9 +324,13 @@
       el.innerHTML =
         '<div id="organizational-sp-fund"></div>' +
         disbursementRows +
+        '<div id="organizational-sp-moneyout" style="margin-top:12px;"></div>' +
         '<button type="button" class="organizational-btn organizational-btn-outline" id="organizational-sp-record-disbursement" style="font-size:0.8125rem;margin-top:6px;">Record disbursement</button>' +
         '<div id="organizational-sp-disbursement-form" hidden style="margin-top:10px;"></div>';
       if (window.OrganizationalSponsorFund) window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
+      if (window.OrganizationalSponsorMoneyOut) {
+        window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
+      }
       const btn = document.getElementById('organizational-sp-record-disbursement');
       if (btn) btn.addEventListener('click', function () { openDisbursementForm(project); });
       el.querySelectorAll('.organizational-sp-unpost-disb').forEach(function (unBtn) {
@@ -335,10 +350,10 @@
           const disbId = approveBtn.getAttribute('data-disb-id');
           approveBtn.disabled = true;
           try {
-            const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + project.id + '/disbursements/' + disbId + '/approve', {
-              method: 'POST', credentials: 'include',
-            });
-            if (!res.ok) { approveBtn.disabled = false; return; }
+            const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(moneyCtx(project),
+              '/sponsored-projects/' + project.id + '/disbursements/' + disbId + '/approve', {});
+            if (!data) { approveBtn.disabled = false; return; }
+            if (data.needs_second_approval) window.alert(data.message);
             loadProjectFinances(project);
           } catch (e) {
             approveBtn.disabled = false;
@@ -374,14 +389,8 @@
         notes: notesEl && notesEl.value ? notesEl.value : null,
       };
       try {
-        const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + project.id + '/disbursements', {
-          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-        });
-        const data = res.ok ? await res.json() : await res.json().catch(() => ({}));
-        if (!res.ok) {
-          if (errEl) { errEl.textContent = data.error || 'Could not save disbursement.'; errEl.style.display = ''; }
-          return;
-        }
+        const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(moneyCtx(project), '/sponsored-projects/' + project.id + '/disbursements', body);
+        if (!data) return;
         loadProjectFinances(project);
       } catch (e) {
         if (errEl) { errEl.textContent = 'Could not save disbursement.'; errEl.style.display = ''; }

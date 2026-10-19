@@ -28,11 +28,14 @@ function computeBalance(facts) {
   const recalls = facts.recalls || [];
   const recalledPosted = sum(recalls.filter((r) => r.status === 'posted'), (r) => r.amount_cents);
   const recallsPending = sum(recalls.filter((r) => r.status === 'pending'), (r) => r.amount_cents);
-  const pending = disbursementsPending + requestsPending + recallsPending;
+  const closings = facts.closings || [];
+  const closedPosted = sum(closings.filter((r) => r.status === 'posted'), (r) => r.amount_cents);
+  const closingsPending = sum(closings.filter((r) => r.status === 'pending'), (r) => r.amount_cents);
+  const pending = disbursementsPending + requestsPending + recallsPending + closingsPending;
   const otherSpending = Number(facts.otherSpendingCents || 0);
-  const available = receivedPosted - feesCharged - disbursedPosted - recalledPosted - otherSpending - pending;
+  const available = receivedPosted - feesCharged - disbursedPosted - recalledPosted - closedPosted - otherSpending - pending;
 
-  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted - recalledPosted - otherSpending;
+  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted - recalledPosted - closedPosted - otherSpending;
   const ledgerNet = facts.ledgerNetCents == null ? null : Number(facts.ledgerNetCents);
   const openPledge = Number(facts.openPledgeCents || 0);
   const difference = ledgerNet == null ? null : ledgerNet - expectedLedgerNet;
@@ -46,11 +49,13 @@ function computeBalance(facts) {
     fees_unposted_cents: Math.max(0, feesAccrued - feesPosted),
     disbursed_posted_cents: disbursedPosted,
     recalled_posted_cents: recalledPosted,
+    closing_transferred_cents: closedPosted,
     other_spending_cents: otherSpending,
     pending_cents: pending,
     pending_disbursements_cents: disbursementsPending,
     pending_requests_cents: requestsPending,
     pending_recalls_cents: recallsPending,
+    pending_closing_cents: closingsPending,
     available_cents: available,
     negative: available < 0,
     tie_out: {
@@ -165,7 +170,7 @@ async function loadOtherSpending(pool, orgId, programIds, upTo) {
        JOIN org_ledger_transactions t ON t.id = l.transaction_id
        JOIN org_accounts a ON a.id = l.account_id
       WHERE t.org_id = $1 AND t.status = 'posted' AND l.program_id = ANY($2::int[]) AND a.type = 'expense'
-        AND t.source NOT IN ('sponsor_fee', 'sponsor_recall')
+        AND t.source NOT IN ('sponsor_fee', 'sponsor_recall', 'sponsor_closing')
         AND NOT EXISTS (SELECT 1 FROM org_sponsored_project_disbursements d WHERE d.org_id = t.org_id AND d.ledger_transaction_id = t.id)
         AND ($3::date IS NULL OR t.transaction_date <= $3::date)
       GROUP BY l.program_id`, [orgId, programIds, upTo]);
@@ -176,6 +181,13 @@ async function loadRecalls(pool, orgId, projectIds, upTo) {
   const r = await pool.query(
     `SELECT id, sponsored_project_id, status, amount_cents FROM org_sponsor_recalls
       WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND status <> 'void' AND ($3::date IS NULL OR recall_date <= $3::date)`, [orgId, projectIds, upTo]);
+  return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) }));
+}
+
+async function loadClosings(pool, orgId, projectIds, upTo) {
+  const r = await pool.query(
+    `SELECT id, sponsored_project_id, status, amount_cents FROM org_sponsor_closings
+      WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND status <> 'void' AND ($3::date IS NULL OR closing_date <= $3::date)`, [orgId, projectIds, upTo]);
   return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) }));
 }
 
@@ -203,9 +215,9 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
   const projR = await pool.query(
     `SELECT p.*, s.default_admin_rate FROM org_sponsored_projects p LEFT JOIN org_settings s ON s.org_id = p.sponsor_org_id
       WHERE p.sponsor_org_id = $1 AND p.id = ANY($2::int[])`, [orgId, ids]);
-  const [settings, fyEndMonth, receipts, rules, postings, disb, requests, openPledges, recalls] = await Promise.all([
+  const [settings, fyEndMonth, receipts, rules, postings, disb, requests, openPledges, recalls, closings] = await Promise.all([
     loadSponsorSettings(pool, orgId), getFiscalYearEndMonth(pool, orgId), loadReceipts(pool, orgId, ids, upTo), loadFeeRules(pool, orgId, ids),
-    loadFeePostings(pool, orgId, ids, upTo), loadDisbursements(pool, orgId, ids, upTo), loadRequests(pool, orgId, ids, upTo), loadOpenPledges(pool, orgId, ids), loadRecalls(pool, orgId, ids, upTo),
+    loadFeePostings(pool, orgId, ids, upTo), loadDisbursements(pool, orgId, ids, upTo), loadRequests(pool, orgId, ids, upTo), loadOpenPledges(pool, orgId, ids), loadRecalls(pool, orgId, ids, upTo), loadClosings(pool, orgId, ids, upTo),
   ]);
   const programIds = [...new Set(projR.rows.map((p) => p.program_id).filter((x) => x != null).map(Number))];
   const [ledgerNet, otherSpending] = await Promise.all([loadLedgerNet(pool, orgId, programIds, upTo), loadOtherSpending(pool, orgId, programIds, upTo)]);
@@ -230,6 +242,7 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
       disbursements: disb.filter((d) => Number(d.sponsored_project_id) === pid),
       requests: requests.filter((r) => Number(r.sponsored_project_id) === pid),
       recalls: recalls.filter((r) => Number(r.sponsored_project_id) === pid),
+      closings: closings.filter((r) => Number(r.sponsored_project_id) === pid),
       otherSpendingCents: p.program_id != null ? (otherSpending.get(Number(p.program_id)) || 0) : 0,
       ledgerNetCents: p.program_id != null ? (ledgerNet.get(Number(p.program_id)) || 0) : null,
       openPledgeCents: openPledges.get(pid) || 0,

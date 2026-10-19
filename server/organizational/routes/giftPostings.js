@@ -101,8 +101,15 @@ function registerGiftPostingRoutes(app, pool) {
         `SELECT r.id, r.amount_cents, r.recall_date::text AS recall_date, r.reason, p.id AS project_id, p.name AS project_name
            FROM org_sponsor_recalls r JOIN org_sponsored_projects p ON p.id = r.sponsored_project_id
           WHERE r.org_id = $1 AND r.status = 'pending' ORDER BY r.recall_date, r.id`, [req.orgId]);
+      const cl = await pool.query(
+        `SELECT c.id, c.amount_cents, c.closing_date::text AS closing_date, c.reason, c.destination_kind, k.display_name AS destination_name,
+                p.id AS project_id, p.name AS project_name, p.disbursement_expense_account_id
+           FROM org_sponsor_closings c JOIN org_sponsored_projects p ON p.id = c.sponsored_project_id
+           LEFT JOIN org_constituents k ON k.id = c.destination_constituent_id
+          WHERE c.org_id = $1 AND c.status = 'pending' ORDER BY c.closing_date, c.id`, [req.orgId]);
       const fsR = await pool.query('SELECT fiscal_sponsorship_mode FROM org_settings WHERE org_id = $1', [req.orgId]);
       return res.json({
+        sponsor_closings: cl.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })),
         fiscal_sponsor: !!(fsR.rows[0] && fsR.rows[0].fiscal_sponsorship_mode),
         sponsor_recalls: rc.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })),
         sponsor_untagged: u.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, gift_type: x.gift_type,
@@ -282,8 +289,9 @@ function registerGiftPostingRoutes(app, pool) {
         if (g.rows[0].ledger_transaction_id) {
           return res.status(409).json({ error: 'This gift is already in the books under another program. Recode the entry in Transactions to the project\'s program, then tag the gift in Funding.', code: 'already_in_books' });
         }
-        const p = await pool.query('SELECT id, name FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
+        const p = await pool.query('SELECT id, name, status FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
         if (!p.rows.length) return res.status(400).json({ error: 'Choose a sponsored project from this workspace.' });
+        if (p.rows[0].status === 'ended' || p.rows[0].status === 'winding_down') return res.status(409).json({ code: 'project_closing', error: 'That project is closing and takes no new income.' });
         await pool.query('UPDATE org_gifts SET sponsored_project_id = $1, sponsor_untagged_reviewed_at = now(), sponsor_untagged_reviewed_by = $2 WHERE id = $3 AND org_id = $4', [projectId, userId, giftId, orgId]);
         await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
           fields: [{ fieldName: 'Sponsored project', oldValue: null, newValue: p.rows[0].name }] });

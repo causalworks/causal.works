@@ -7,6 +7,7 @@ const { loadSponsorSettings } = require('./sponsorBalance');
 const { projectDocument } = require('./sponsorDocuments');
 const { logAudit } = require('./auditLog');
 const { isoDate } = require('./sponsorFees');
+const { projectOpenRefusal, grantModelRefusal, effectiveModel } = require('./sponsorMoneyOut');
 
 const LETTER_METHODS = ['check', 'ach', 'wire'];
 const DEFAULT_LETTER_THRESHOLD = 500000;
@@ -96,15 +97,19 @@ async function createPropertyRelease(pool, { orgId, userId, projectId, giftId, r
   if (gift.held_account_type !== 'asset') {
     return { httpStatus: 409, body: { error: 'This donated item was booked as an expense when it came in, so there is nothing left to release. Only items kept as an asset can be released as a grant of property.' } };
   }
-  const p = await pool.query('SELECT status, hold_reason FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
-  if (p.rows[0].status === 'on_hold') return { httpStatus: 409, body: { code: 'project_on_hold', error: 'This project is on hold (' + (p.rows[0].hold_reason || '') + '). Releases are blocked until the hold is lifted.' } };
+  const p = await pool.query('SELECT * FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
+  const closed = projectOpenRefusal(p.rows[0]);
+  if (closed) return closed;
+  const grant = await grantModelRefusal(pool, { orgId, project: p.rows[0], stage: 'create' });
+  if (grant) return grant;
+  const payee = (await effectiveModel(pool, orgId, p.rows[0])) === 'model_c' ? p.rows[0].receiving_constituent_id : null;
   const existing = await pool.query(`SELECT 1 FROM org_sponsored_project_disbursements WHERE property_gift_id = $1 AND org_id = $2 AND status <> 'void'`, [giftId, orgId]);
   if (existing.rows.length) return { httpStatus: 409, body: { error: 'This donated item is already being released.' } };
   try {
     const r = await pool.query(
-      `INSERT INTO org_sponsored_project_disbursements (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, kind, property_gift_id)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', 'property', $7) RETURNING id, disbursement_date, amount_cents, status, kind`,
-      [orgId, projectId, date, Number(gift.amount_cents), (notes ? String(notes).trim() + ': ' : '') + 'Donated property: ' + (gift.in_kind_description || 'gift #' + gift.id), userId, giftId]);
+      `INSERT INTO org_sponsored_project_disbursements (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, kind, property_gift_id, payee_constituent_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', 'property', $7, $8) RETURNING id, disbursement_date, amount_cents, status, kind`,
+      [orgId, projectId, date, Number(gift.amount_cents), (notes ? String(notes).trim() + ': ' : '') + 'Donated property: ' + (gift.in_kind_description || 'gift #' + gift.id), userId, giftId, payee]);
     await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_sponsored_project_disbursements', recordId: r.rows[0].id, metadata: { kind: 'property', gift_id: giftId } });
     return { httpStatus: 201, body: { disbursement: { ...r.rows[0], disbursement_date: isoDate(r.rows[0].disbursement_date) } } };
   } catch (e) {

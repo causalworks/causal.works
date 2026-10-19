@@ -38,10 +38,10 @@ function monthBounds(month) {
 // Money held for the project at a date: received and in the books, less fees charged, money paid out, recalls and other spending.
 function heldCents(b) {
   return b.received_posted_cents - Math.max(b.fees_accrued_cents, b.fees_posted_cents) - b.disbursed_posted_cents
-    - (b.recalled_posted_cents || 0) - (b.other_spending_cents || 0);
+    - (b.recalled_posted_cents || 0) - (b.closing_transferred_cents || 0) - (b.other_spending_cents || 0);
 }
 function spentCents(b) {
-  return b.disbursed_posted_cents + (b.recalled_posted_cents || 0) + (b.other_spending_cents || 0);
+  return b.disbursed_posted_cents + (b.recalled_posted_cents || 0) + (b.closing_transferred_cents || 0) + (b.other_spending_cents || 0);
 }
 
 // Figures for a period from two historical balances (the day before it starts and its last day).

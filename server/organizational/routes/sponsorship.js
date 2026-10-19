@@ -11,7 +11,8 @@ const { logAudit, reqMeta } = require('../lib/auditLog');
 const { validateRule, isoDate } = require('../lib/sponsorFees');
 const { loadProjectBalance, loadSponsorSettings } = require('../lib/sponsorBalance');
 const { previewFees, runFees, voidFeePosting } = require('../lib/sponsorFeePosting');
-const { createRequest, reviewRequest, placeHold, liftHold, createRecall, postRecall, voidRecall } = require('../lib/sponsorMoneyOut');
+const { createRequest, reviewRequest, placeHold, liftHold, createRecall, postRecall, voidRecall, setGrantEntity, attachGrantAgreement, effectiveModel } = require('../lib/sponsorMoneyOut');
+const { releaseHistory, createClosing, postClosing, voidClosing, DESTINATIONS } = require('../lib/sponsorGrants');
 const { leadMayTouch } = require('../middleware/requireWriteAccess');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -344,11 +345,84 @@ function registerSponsorshipRoutes(app, pool) {
       const out = await reviewRequest(pool, {
         orgId: req.orgId, userId: uid(req), role: req.coopOrgRole, projectId: project.id, requestId,
         action: String(body.action || ''), reason: body.reason, override: body.override ? { requested: true, reason: body.override_reason } : null,
+        grantAgreementDocumentId: body.grant_agreement_document_id || null,
       });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST .../payment-requests/:id/review:', e.message);
       return res.status(500).json({ error: 'Could not save the decision' });
+    }
+  });
+
+  // Pre-approved grant model: receiving entity, taxpayer form, grant agreements, release history
+  app.get(P + '/sponsored-projects/:id/releases', ...read, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const entity = project.receiving_constituent_id
+        ? (await pool.query('SELECT id, display_name FROM org_constituents WHERE id = $1 AND org_id = $2', [project.receiving_constituent_id, req.orgId])).rows[0] || null : null;
+      return res.json({
+        model: await effectiveModel(pool, req.orgId, project),
+        receiving_entity: entity, w9_on_file: !!project.w9_on_file, w9_document_id: project.w9_document_id, w9_received_at: isoDate(project.w9_received_at),
+        releases: await releaseHistory(pool, req.orgId, project.id),
+      });
+    } catch (e) {
+      console.error('GET .../releases:', e.message);
+      return res.status(500).json({ error: 'Could not load the release history' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/grant-entity', ...moneyWrite, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await setGrantEntity(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, input: req.body || {} });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../grant-entity:', e.message);
+      return res.status(500).json({ error: 'Could not save the receiving entity' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/disbursements/:disbId/grant-agreement', ...base, requireWriteAccess('sponsorship'), async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      if (!leadMayTouch(req, [project.program_id])) return res.status(404).json({ error: 'Sponsored project not found' });
+      const out = await attachGrantAgreement(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, disbursementId: posInt(req.params.disbId), documentId: req.body && req.body.document_id });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../grant-agreement:', e.message);
+      return res.status(500).json({ error: 'Could not attach the grant agreement' });
+    }
+  });
+
+  // Closing
+  app.get(P + '/sponsored-projects/:id/closing', ...read, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const r = await pool.query(
+        `SELECT c.id, c.destination_kind, c.destination_constituent_id, k.display_name AS destination_name, c.amount_cents, c.closing_date::text AS closing_date,
+                c.reason, c.document_id, c.status, c.ledger_transaction_id, c.void_reason, c.created_at
+           FROM org_sponsor_closings c LEFT JOIN org_constituents k ON k.id = c.destination_constituent_id
+          WHERE c.org_id = $1 AND c.sponsored_project_id = $2 ORDER BY c.created_at DESC`, [req.orgId, project.id]);
+      return res.json({ closings: r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })), destinations: DESTINATIONS });
+    } catch (e) {
+      console.error('GET .../closing:', e.message);
+      return res.status(500).json({ error: 'Could not load the closing' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/closing', ...moneyWrite, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await createClosing(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, input: req.body || {} });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../closing:', e.message);
+      return res.status(500).json({ error: 'Could not record the closing' });
     }
   });
 
@@ -417,6 +491,32 @@ function registerSponsorshipRoutes(app, pool) {
     } catch (e) {
       console.error('POST /sponsor-recalls/:id/post:', e.message);
       return res.status(500).json({ error: 'Could not post the recall' });
+    }
+  });
+
+  app.post(P + '/sponsor-closings/:closingId/post', ...acctWrite, async (req, res) => {
+    const closingId = posInt(req.params.closingId);
+    if (!closingId) return res.status(400).json({ error: 'Invalid closing ID' });
+    const b = req.body || {};
+    try {
+      const out = await postClosing(pool, { orgId: req.orgId, userId: uid(req), closingId, postingDate: b.posting_date ? String(b.posting_date) : null,
+        bankAccountId: posInt(b.bank_account_id), expenseAccountId: posInt(b.expense_account_id) });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST /sponsor-closings/:id/post:', e.message);
+      return res.status(500).json({ error: 'Could not post the closing transfer' });
+    }
+  });
+
+  app.post(P + '/sponsor-closings/:closingId/void', ...acctWrite, async (req, res) => {
+    const closingId = posInt(req.params.closingId);
+    if (!closingId) return res.status(400).json({ error: 'Invalid closing ID' });
+    try {
+      const out = await voidClosing(pool, { orgId: req.orgId, userId: uid(req), closingId, reason: req.body && req.body.reason });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST /sponsor-closings/:id/void:', e.message);
+      return res.status(500).json({ error: 'Could not cancel the closing' });
     }
   });
 

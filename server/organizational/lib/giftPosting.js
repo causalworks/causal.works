@@ -8,9 +8,12 @@ const SPONSORED_RESTRICTION = 'temporarily_restricted';
 
 async function sponsoredGiftCoding(pool, orgId, sponsoredProjectId) {
   if (sponsoredProjectId == null) return null;
-  const r = await pool.query('SELECT id, name, program_id FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [sponsoredProjectId, orgId]);
+  const r = await pool.query('SELECT id, name, program_id, status FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [sponsoredProjectId, orgId]);
   const p = r.rows[0];
   if (!p) return null;
+  if (p.status === 'ended') {
+    return { error: 'The sponsored project ' + p.name + ' has ended and takes no new income. Record the gift for the project\'s successor, or as the workspace\'s own.', code: 'sponsored_project_ended' };
+  }
   if (p.program_id == null) {
     return { error: 'This gift is for the sponsored project ' + p.name + ', which has no program yet. Link the project to a program, then post the gift.', code: 'sponsored_project_no_program' };
   }

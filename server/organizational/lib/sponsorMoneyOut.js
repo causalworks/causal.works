@@ -48,6 +48,31 @@ async function balanceRefusal(pool, { orgId, projectId, amountCents, alreadyCoun
   };
 }
 
+async function effectiveModel(pool, orgId, project) {
+  if (project.sponsorship_model) return project.sponsorship_model;
+  const r = await pool.query('SELECT sponsorship_model::text AS m FROM org_settings WHERE org_id = $1', [orgId]);
+  return r.rows[0] ? r.rows[0].m : null;
+}
+
+// Pre-approved grant model: money is released only as grants to the project's named legal entity, with its taxpayer form
+// on file, and each release carries a signed grant agreement before it is approved.
+async function grantModelRefusal(pool, { orgId, project, payeeId, agreementDocumentId, stage }) {
+  if ((await effectiveModel(pool, orgId, project)) !== 'model_c') return null;
+  if (!project.receiving_constituent_id) {
+    return refuse(409, 'no_receiving_entity', 'This project uses the pre-approved grant model. Name the legal entity that receives its grants first.');
+  }
+  if (!project.w9_on_file) {
+    return refuse(409, 'w9_missing', 'Get the receiving entity\'s taxpayer identification form (W-9) on file before releasing money.');
+  }
+  if (payeeId != null && Number(payeeId) !== Number(project.receiving_constituent_id)) {
+    return refuse(409, 'payee_not_entity', 'Under the pre-approved grant model, money goes only to the project\'s receiving entity.');
+  }
+  if (stage === 'approve' && !agreementDocumentId) {
+    return refuse(409, 'grant_agreement_missing', 'Attach the signed grant agreement for this release before approving it.');
+  }
+  return null;
+}
+
 async function loadProjectRow(pool, orgId, projectId) {
   const r = await pool.query('SELECT * FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
   return r.rows[0] || null;
@@ -97,6 +122,8 @@ async function createRequest(pool, { orgId, userId, projectId, input, linkRef })
     if (!d.rows.length) return refuse(400, 'bad_document', 'Attach the invoice or receipt to this project first, then choose it here.');
   }
   const neededBy = input.needed_by && DATE_RE.test(String(input.needed_by)) ? String(input.needed_by) : null;
+  const grant = await grantModelRefusal(pool, { orgId, project, payeeId, stage: 'create' });
+  if (grant) return grant;
   const bal = await balanceRefusal(pool, { orgId, projectId, amountCents });
   if (bal.refusal) return bal.refusal;
   const warning = await budgetWarning(pool, orgId, project, amountCents);
@@ -111,7 +138,7 @@ async function createRequest(pool, { orgId, userId, projectId, input, linkRef })
   return { httpStatus: 201, body: { request: r.rows[0], budget_warning: warning } };
 }
 
-async function reviewRequest(pool, { orgId, userId, role, projectId, requestId, action, reason, override }) {
+async function reviewRequest(pool, { orgId, userId, role, projectId, requestId, action, reason, override, grantAgreementDocumentId }) {
   const rq = await pool.query('SELECT * FROM org_sponsor_payment_requests WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3', [requestId, orgId, projectId]);
   const req = rq.rows[0];
   if (!req) return refuse(404, 'not_found', 'Payment request not found');
@@ -138,16 +165,22 @@ async function reviewRequest(pool, { orgId, userId, role, projectId, requestId, 
   const project = await loadProjectRow(pool, orgId, projectId);
   const closed = projectOpenRefusal(project);
   if (closed) return closed;
+  const agreementDoc = grantAgreementDocumentId ? await projectDocumentId(pool, orgId, projectId, grantAgreementDocumentId) : null;
+  if (grantAgreementDocumentId && !agreementDoc) return refuse(400, 'bad_document', 'Attach the grant agreement to this project first, then choose it here.');
+  const grant = await grantModelRefusal(pool, { orgId, project, payeeId: req.payee_constituent_id, agreementDocumentId: agreementDoc, stage: 'approve' });
+  if (grant) return grant;
   const amountCents = Number(req.amount_cents);
   const bal = await balanceRefusal(pool, { orgId, projectId, amountCents, alreadyCountedCents: amountCents, override, role });
   if (bal.refusal) return bal.refusal;
 
   const ins = await pool.query(
     `INSERT INTO org_sponsored_project_disbursements
-       (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, payment_request_id, override_reason, override_by, override_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, $9, $10) RETURNING id`,
+       (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, payment_request_id, override_reason, override_by, override_at,
+        payee_constituent_id, grant_agreement_document_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, $9, $10, $11, $12) RETURNING id`,
     [orgId, projectId, req.needed_by || new Date().toISOString().slice(0, 10), amountCents, req.purpose, req.created_by, requestId,
-     bal.overridden ? bal.reason : null, bal.overridden ? userId : null, bal.overridden ? new Date().toISOString() : null]);
+     bal.overridden ? bal.reason : null, bal.overridden ? userId : null, bal.overridden ? new Date().toISOString() : null,
+     req.payee_constituent_id, agreementDoc]);
   const disbId = ins.rows[0].id;
   await pool.query(
     `UPDATE org_sponsor_payment_requests SET status = 'approved', reviewer_id = $1, reviewed_at = now(), decision_reason = $2, disbursement_id = $3,
@@ -171,15 +204,29 @@ async function createDisbursement(pool, { orgId, userId, role, projectId, input,
   const amountCents = Number.parseInt(String(input.amount_cents), 10);
   if (!date || !DATE_RE.test(date)) return refuse(400, 'date_required', 'Enter the payment date.');
   if (!Number.isInteger(amountCents) || amountCents < 1) return refuse(400, 'amount_required', 'Enter an amount greater than zero.');
+  let payeeId = input.payee_constituent_id != null && input.payee_constituent_id !== '' ? Number.parseInt(String(input.payee_constituent_id), 10) : null;
+  if (payeeId != null) {
+    const c = await pool.query('SELECT id FROM org_constituents WHERE id = $1 AND org_id = $2', [payeeId, orgId]);
+    if (!c.rows.length) return refuse(400, 'payee_required', 'Choose a payee from this workspace\'s contacts.');
+  }
+  const grant = await grantModelRefusal(pool, { orgId, project, payeeId, stage: 'create' });
+  if (grant) return grant;
+  if (payeeId == null && (await effectiveModel(pool, orgId, project)) === 'model_c') payeeId = Number(project.receiving_constituent_id);
+  let agreementDoc = null;
+  if (input.grant_agreement_document_id) {
+    agreementDoc = await projectDocumentId(pool, orgId, projectId, input.grant_agreement_document_id);
+    if (!agreementDoc) return refuse(400, 'bad_document', 'Attach the grant agreement to this project first, then choose it here.');
+  }
   const bal = await balanceRefusal(pool, { orgId, projectId, amountCents, override, role });
   if (bal.refusal) return bal.refusal;
   const r = await pool.query(
     `INSERT INTO org_sponsored_project_disbursements
-       (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, override_reason, override_by, override_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END)
-     RETURNING id, disbursement_date, amount_cents, notes, status, created_at`,
+       (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, override_reason, override_by, override_at,
+        payee_constituent_id, grant_agreement_document_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, $9, $10)
+     RETURNING id, disbursement_date, amount_cents, notes, status, created_at, payee_constituent_id, grant_agreement_document_id`,
     [orgId, projectId, date, amountCents, input.notes ? String(input.notes).trim() : null, userId,
-     bal.overridden ? bal.reason : null, bal.overridden ? userId : null]);
+     bal.overridden ? bal.reason : null, bal.overridden ? userId : null, payeeId, agreementDoc]);
   await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_sponsored_project_disbursements', recordId: r.rows[0].id,
     metadata: { sponsored_project_id: projectId, amount_cents: amountCents, override_reason: bal.overridden ? bal.reason : null } });
   return { httpStatus: 201, body: { disbursement: r.rows[0] } };
@@ -199,6 +246,8 @@ async function approveDisbursement(pool, { orgId, userId, role, projectId, disbu
   const project = await loadProjectRow(pool, orgId, projectId);
   const closed = projectOpenRefusal(project);
   if (closed) return closed;
+  const grant = await grantModelRefusal(pool, { orgId, project, payeeId: d.payee_constituent_id, agreementDocumentId: d.grant_agreement_document_id, stage: 'approve' });
+  if (grant) return grant;
   const amountCents = Number(d.amount_cents);
   let overrideReason = null;
   if (!skipBalance && d.kind !== 'property') {
@@ -228,6 +277,62 @@ async function approveDisbursement(pool, { orgId, userId, role, projectId, disbu
   await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_sponsored_project_disbursements', recordId: disbursementId,
     fields: [{ fieldName: 'status', oldValue: 'pending_approval', newValue: 'approved' }], metadata: { override_reason: overrideReason } });
   return { httpStatus: 200, body: u.rows[0] };
+}
+
+async function projectDocumentId(pool, orgId, projectId, documentId) {
+  const n = Number.parseInt(String(documentId), 10);
+  if (!Number.isInteger(n) || n < 1) return null;
+  const r = await pool.query('SELECT id FROM org_documents WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3 AND archived_at IS NULL', [n, orgId, projectId]);
+  return r.rows[0] ? r.rows[0].id : null;
+}
+
+async function attachGrantAgreement(pool, { orgId, userId, projectId, disbursementId, documentId }) {
+  const d = await pool.query('SELECT id, status, grant_agreement_document_id FROM org_sponsored_project_disbursements WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3', [disbursementId, orgId, projectId]);
+  if (!d.rows.length) return refuse(404, 'not_found', 'Disbursement not found');
+  if (d.rows[0].status !== 'pending_approval') return refuse(409, 'not_pending_approval', 'The grant agreement can be changed only while the release waits for approval.');
+  const doc = await projectDocumentId(pool, orgId, projectId, documentId);
+  if (!doc) return refuse(400, 'bad_document', 'Attach the signed grant agreement to this project first, then choose it here.');
+  await pool.query('UPDATE org_sponsored_project_disbursements SET grant_agreement_document_id = $1 WHERE id = $2', [doc, disbursementId]);
+  await pool.query(`UPDATE org_documents SET sponsor_doc_type = 'agreement' WHERE id = $1 AND org_id = $2 AND sponsor_doc_type IS NULL`, [doc, orgId]);
+  await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_sponsored_project_disbursements', recordId: disbursementId,
+    fields: [{ fieldName: 'grant agreement', oldValue: d.rows[0].grant_agreement_document_id, newValue: doc }] });
+  return { httpStatus: 200, body: { id: disbursementId, grant_agreement_document_id: doc } };
+}
+
+// Receiving entity and its taxpayer form, for the pre-approved grant model
+async function setGrantEntity(pool, { orgId, userId, projectId, input }) {
+  const p = await loadProjectRow(pool, orgId, projectId);
+  if (!p) return refuse(404, 'not_found', 'Sponsored project not found');
+  const fields = [];
+  let entity = p.receiving_constituent_id;
+  let w9Doc = p.w9_document_id;
+  let w9At = p.w9_received_at ? isoDate(p.w9_received_at) : null;
+  if (input.receiving_constituent_id !== undefined) {
+    const n = input.receiving_constituent_id ? Number.parseInt(String(input.receiving_constituent_id), 10) : null;
+    if (n != null) {
+      const c = await pool.query('SELECT id FROM org_constituents WHERE id = $1 AND org_id = $2', [n, orgId]);
+      if (!c.rows.length) return refuse(400, 'bad_contact', 'Choose the receiving entity from this workspace\'s contacts.');
+    }
+    if (Number(n) !== Number(entity)) {
+      fields.push({ fieldName: 'receiving entity', oldValue: entity, newValue: n });
+      entity = n;
+      if (input.w9_document_id === undefined) { w9Doc = null; w9At = null; }
+    }
+  }
+  if (input.w9_document_id !== undefined) {
+    const doc = input.w9_document_id ? await projectDocumentId(pool, orgId, projectId, input.w9_document_id) : null;
+    if (input.w9_document_id && !doc) return refuse(400, 'bad_document', 'Upload the W-9 to this project first, then choose it here.');
+    if (doc && !entity) return refuse(400, 'no_receiving_entity', 'Name the receiving entity first.');
+    w9At = doc ? (input.w9_received_at && DATE_RE.test(String(input.w9_received_at)) ? String(input.w9_received_at) : new Date().toISOString().slice(0, 10)) : null;
+    if (Number(doc) !== Number(w9Doc)) fields.push({ fieldName: 'W-9', oldValue: w9Doc, newValue: doc });
+    w9Doc = doc;
+    if (doc) await pool.query(`UPDATE org_documents SET sponsor_doc_type = 'tax_form' WHERE id = $1 AND org_id = $2 AND sponsor_doc_type IS NULL`, [doc, orgId]);
+  }
+  await pool.query(
+    `UPDATE org_sponsored_projects SET receiving_constituent_id = $1, w9_document_id = $2, w9_on_file = $3, w9_received_at = $4, updated_at = now()
+      WHERE id = $5 AND sponsor_org_id = $6`, [entity, w9Doc, !!w9Doc, w9At, projectId, orgId]);
+  if (fields.length) await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_sponsored_projects', recordId: projectId, fields });
+  return { httpStatus: 200, body: { id: projectId, receiving_constituent_id: entity, w9_on_file: !!w9Doc, w9_document_id: w9Doc, w9_received_at: w9At } };
 }
 
 // Holds
@@ -332,6 +437,7 @@ async function voidRecall(pool, { orgId, userId, recallId, reason }) {
 }
 
 module.exports = {
+  effectiveModel, grantModelRefusal, attachGrantAgreement, setGrantEntity, projectDocumentId,
   REQUEST_METHODS, projectOpenRefusal, balanceRefusal, budgetWarning, createRequest, reviewRequest,
   createDisbursement, approveDisbursement, placeHold, liftHold, createRecall, postRecall, voidRecall,
 };

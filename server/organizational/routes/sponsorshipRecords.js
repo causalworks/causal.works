@@ -19,6 +19,7 @@ const { isoDate } = require('../lib/sponsorFees');
 const { generateStatement, yearEndSheet, yearEndCsv } = require('../lib/sponsorStatements');
 const { donorLetters, donorLetterTemplate, attachDonorLetter, createPropertyRelease } = require('../lib/sponsorGifts');
 const { loadOrgDocInfo } = require('../lib/orgLetterhead');
+const { informationReturnSheet, informationReturnCsv } = require('../lib/sponsorGrants');
 
 const APPROVAL_KINDS = ['letter_of_inquiry', 'proposal', 'pledge', 'agreement', 'solicitation', 'publicity'];
 
@@ -254,6 +255,19 @@ function registerSponsorshipRecordRoutes(app, pool) {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="sponsored-projects-' + fy + '.csv"');
       res.send(yearEndCsv(sheet));
+      return null;
+    }
+    return { httpStatus: 200, body: sheet };
+  }));
+
+  app.get(P + '/sponsor-reports/information-returns', ...staffRead, wrap('GET /sponsor-reports/information-returns', async (req, res) => {
+    const year = Number.parseInt(String(req.query.year || ''), 10);
+    if (!Number.isInteger(year) || year < 1900 || year > 2200) return { httpStatus: 400, body: { error: 'Choose the calendar year.' } };
+    const sheet = await informationReturnSheet(pool, req.orgId, year);
+    if (req.query.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="grant-releases-' + year + '.csv"');
+      res.send(informationReturnCsv(sheet));
       return null;
     }
     return { httpStatus: 200, body: sheet };

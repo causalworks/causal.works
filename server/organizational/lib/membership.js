@@ -4,13 +4,13 @@
 // settings, tier prices, terms with their payments, and each dues member's derived status.
 
 const S = require('./membershipStatus');
-const { hasRoleCondition } = require('./contactRoles');
+const { hasRoleCondition, addContactRoles } = require('./contactRoles');
 
 const SETTINGS_FIELDS = [
   'year_mode', 'fixed_start_month', 'fixed_start_day', 'renewal_window_days', 'proration_mode', 'grace_days',
   'join_requires_approval', 'recognition_mode', 'deferred_dues_account_id', 'contribution_account_id',
   'dues_revenue_account_id', 'default_program_id', 'directory_fields', 'join_form_enabled', 'form_fields',
-  'extra_gift_enabled', 'auto_renew_default', 'challenge_required',
+  'extra_gift_enabled', 'auto_renew_default',
 ];
 
 const SETTINGS_DEFAULTS = {
@@ -18,7 +18,7 @@ const SETTINGS_DEFAULTS = {
   join_requires_approval: false, recognition_mode: 'spread', deferred_dues_account_id: null,
   contribution_account_id: null, dues_revenue_account_id: null, default_program_id: null,
   directory_fields: [], join_form_enabled: false, form_fields: [], extra_gift_enabled: false,
-  auto_renew_default: false, challenge_required: false,
+  auto_renew_default: false,
 };
 
 function today() {
@@ -193,7 +193,83 @@ function renewalsFrom(rows, opts) {
     .sort((a, b) => a.days_to_expiry - b.days_to_expiry);
 }
 
+// --- Input parsing ---
+
+function cents(body, key) {
+  const c = body[key + '_cents'];
+  if (c !== undefined && c !== null && c !== '') {
+    const n = Number(c);
+    return Number.isInteger(n) && n >= 0 ? { value: n } : { error: key.replace(/_/g, ' ') + ' must be a whole number of cents, zero or more.' };
+  }
+  const d = body[key];
+  if (d !== undefined && d !== null && String(d).trim() !== '') {
+    const x = Number(String(d).replace(/[$,\s]/g, ''));
+    return Number.isFinite(x) && x >= 0 ? { value: Math.round(x * 100) } : { error: key.replace(/_/g, ' ') + ' must be an amount of zero or more.' };
+  }
+  return { value: null };
+}
+
+function day(v) {
+  const d = S.toDay(v);
+  return d && !Number.isNaN(Date.parse(d + 'T00:00:00Z')) ? d : null;
+}
+
+function text(v) {
+  if (v === undefined || v === null) return null;
+  const t = String(v).trim();
+  return t || null;
+}
+
+// --- New terms ---
+
+// Dates, price and contribution part for a new term on a tier, or { error }.
+async function planTerm(pool, orgId, tier, contactKind, b, baseTerm) {
+  if (tier.archived_at) return { error: 'That tier is archived. Pick a current tier.' };
+  if (tier.applies_to === 'individual' && contactKind === 'organization') return { error: 'That tier is for individuals. Pick a tier for organizations.' };
+  if (tier.applies_to === 'organization' && contactKind === 'individual') return { error: 'That tier is for organizations. Pick a tier for individuals.' };
+  if (tier.eligibility_required && b.eligibility_confirmed !== true) return { error: 'Tick the eligibility statement to confirm it applies.' };
+  const settings = await getSettings(pool, orgId);
+  const asOf = day(b.on) || today();
+  let dates;
+  const startGiven = day(b.starts_on);
+  if (baseTerm) dates = S.renewalTermDates(S.toDay(baseTerm.ends_on), asOf, settings);
+  else dates = S.joinTermDates(startGiven || asOf, settings);
+  if (startGiven && baseTerm) dates = { ...dates, starts_on: startGiven, ends_on: day(b.ends_on) || S.addDays(S.addMonths(startGiven, 12), -1), year_start: startGiven };
+  if (day(b.ends_on)) dates.ends_on = day(b.ends_on);
+  if (dates.ends_on < dates.starts_on) return { error: 'The end date must be on or after the start date.' };
+  const listPrice = await tierPriceOn(pool, tier.id, dates.starts_on);
+  if (listPrice == null) return { error: 'That tier has no price yet. Set a price on the tier first.' };
+  const followsOn = baseTerm && dates.starts_on === S.addDays(S.toDay(baseTerm.ends_on), 1);
+  let price = followsOn ? listPrice : S.proratedPriceCents(listPrice, dates.starts_on, dates.year_start, settings);
+  const chosen = cents(b, 'price');
+  if (chosen.error) return { error: chosen.error };
+  if (tier.pay_what_you_can) {
+    if (chosen.value == null) return { error: 'Enter the amount for this pay-what-you-can tier.' };
+    if (tier.min_price_cents != null && chosen.value < Number(tier.min_price_cents)) {
+      return { error: 'The lowest amount for this tier is ' + (Number(tier.min_price_cents) / 100).toFixed(2) + '.' };
+    }
+    price = chosen.value;
+  } else if (chosen.value != null && chosen.value !== price) {
+    return { error: 'This tier has a set price. Record a discount on the payment, or waive part of it, instead of changing the price.' };
+  }
+  const benefit = tier.benefit_value_cents != null ? Number(tier.benefit_value_cents)
+    : (tier.pay_what_you_can ? Number(tier.suggested_price_cents ?? tier.min_price_cents ?? price) : price);
+  return { dates, price, contribution: Math.max(0, price - benefit), settings };
+}
+
+async function insertTerm(client, { orgId, userId, contactId, tier, plan, source, renewsTermId, autoRenew }) {
+  const r = await client.query(
+    `INSERT INTO org_membership_terms (org_id, constituent_id, tier_id, starts_on, ends_on, price_cents, contribution_cents, source,
+                                       auto_renew, renews_term_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+    [orgId, contactId, tier.id, plan.dates.starts_on, plan.dates.ends_on, plan.price, plan.contribution, source,
+     autoRenew !== undefined ? !!autoRenew : !!plan.settings.auto_renew_default, renewsTermId || null, userId || null]);
+  await addContactRoles(client, orgId, contactId, ['dues_member']);
+  return r.rows[0];
+}
+
 module.exports = {
+  cents, day, text, planTerm, insertTerm,
   SETTINGS_FIELDS, SETTINGS_DEFAULTS, today, getSettings, tierPriceOn, listTiers, tierForBudget,
   loadTerms, decorateTerm, statusByContact, parseListFilters, listDuesMembers, renewalsFrom,
 };

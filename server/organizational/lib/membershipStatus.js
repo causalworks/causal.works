@@ -173,11 +173,12 @@ function isSettled(term, today) {
   return false;
 }
 
-// The state of one term on a given day. 'upcoming' is a settled term that has not started.
+// The state of one term on a given day. 'upcoming' is a settled term that has not started. A term ended by staff
+// counts as ended from its end date (or at once when it has none).
 function termState(term, today, rawSettings) {
   const settings = normalizeSettings(rawSettings);
   const day = toDay(today);
-  if (term.status_override === 'ended') return 'ended';
+  if (term.status_override === 'ended' && (!term.ended_on || day >= toDay(term.ended_on))) return 'ended';
   const starts = toDay(term.starts_on);
   const ends = toDay(term.ends_on);
   if (!isSettled(term, day)) return day > ends ? 'lapsed' : 'pending';

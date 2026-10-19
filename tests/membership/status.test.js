@@ -160,3 +160,10 @@ test('a monthly instalment plan counts as settled while instalments are paid, an
   assert.equal(M.termState(failed, '2026-03-16', ROLLING), 'pending');
   assert.equal(M.termState({ ...t, instalment_plan: null }, '2026-03-01', ROLLING), 'pending');
 });
+
+test('a term ended by staff counts as ended from its end date', () => {
+  const t = { id: 1, starts_on: '2026-01-01', ends_on: '2026-12-31', price_cents: 0, payments: [], status_override: 'ended', status_reason: 'Moved', ended_on: '2026-06-01' };
+  assert.equal(M.termState(t, '2026-05-31', ROLLING), 'active');
+  assert.equal(M.termState(t, '2026-06-01', ROLLING), 'ended');
+  assert.equal(M.memberStatus([t], '2026-05-31', ROLLING).status, 'active');
+});

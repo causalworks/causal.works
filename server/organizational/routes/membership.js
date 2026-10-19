@@ -6,7 +6,7 @@
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, requireReadAccess } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, canRead } = require('../middleware/requireWriteAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../lib/fiscalYear');
@@ -16,6 +16,8 @@ const J = require('../lib/membershipJoin');
 const Pay = require('../lib/membershipPayments');
 const { addContactRoles } = require('../lib/contactRoles');
 const Msg = require('../lib/membershipMessages');
+const Rep = require('../lib/membershipReports');
+const Imp = require('../lib/membershipImport');
 
 const { cents, day, text } = M;
 
@@ -888,6 +890,47 @@ function registerMembershipRoutes(app, pool) {
     } catch (e) {
       console.error('POST membership/bulk-email:', e.message);
       return fail(res, 500, 'Could not send the email.');
+    }
+  });
+
+  // --- Reports ---
+
+  app.get(`${B}/reports/:name`, ...summaryRead, async (req, res) => {
+    try {
+      const out = await Rep.runReport(pool, req.orgId, req.params.name, req.query || {}, { detail: canRead(req, 'membership') });
+      if (out.error) return fail(res, out.status || 400, out.error);
+      if (req.query.format === 'csv') {
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="membership-${req.params.name}-${M.today()}.csv"`);
+        return res.send(Rep.toCsv(out));
+      }
+      return res.json(out);
+    } catch (e) {
+      console.error('GET membership/reports/:name:', e.message);
+      return fail(res, 500, 'Could not run the report.');
+    }
+  });
+
+  // --- CSV import (preview, then confirm) ---
+
+  app.post(`${B}/import/preview`, ...adminFinance, async (req, res) => {
+    try {
+      const p = await Imp.buildPreview(pool, req.orgId, (req.body || {}).csv);
+      if (p.error) return fail(res, 400, p.error);
+      return res.json(Imp.summary(p));
+    } catch (e) {
+      console.error('POST membership/import/preview:', e.message);
+      return fail(res, 500, 'Could not read the import file.');
+    }
+  });
+
+  app.post(`${B}/import`, ...adminFinance, async (req, res) => {
+    try {
+      const out = await Imp.applyImport(pool, { orgId: req.orgId, userId: userIdOf(req), csv: (req.body || {}).csv });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST membership/import:', e.message);
+      return fail(res, 500, 'Could not import the file. Nothing was saved.');
     }
   });
 

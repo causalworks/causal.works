@@ -17,6 +17,7 @@ const AREAS = {
   compliance:  { who: 'finance and admins', roles: ADMIN_FINANCE, manager: 'manage_compliance' },
   sponsorship: { who: 'finance, admins and the project\'s program lead', roles: [...ADMIN_FINANCE, 'program'], manager: 'manage_sponsorship' },
   structure:   { who: 'finance, admins and the Structure manager', roles: ADMIN_FINANCE, manager: 'manage_structure' },
+  membership:  { who: 'finance, admins, fundraising and the Membership manager', roles: [...ADMIN_FINANCE, 'fundraising'], manager: 'manage_membership' },
   admin:       { who: 'admins', roles: ['admin'] },
 };
 
@@ -25,6 +26,8 @@ const READ_AREAS = {
   audit_log:     { who: 'finance and admins', roles: ADMIN_FINANCE },
   finance_admin: { who: 'finance and admins', roles: ADMIN_FINANCE },
   org_summary:   { who: 'finance, admins and board members', roles: [...ADMIN_FINANCE, 'board'] },
+  membership:    { who: 'finance, admins, fundraising, the Membership manager and people with access to donor details', roles: [...ADMIN_FINANCE, 'fundraising'], manager: 'manage_membership', permissions: ['donor_details', 'manage_donors'] },
+  membership_summary: { who: 'finance, admins, fundraising, board members, the Membership manager and people with access to donor details', roles: [...ADMIN_FINANCE, 'fundraising', 'board'], manager: 'manage_membership', permissions: ['donor_details', 'manage_donors'] },
   sponsorship:   { who: 'finance, admins, board members, the Sponsorship manager and the project\'s program lead', roles: [...ADMIN_FINANCE, 'board', 'program'], manager: 'manage_sponsorship' },
 };
 
@@ -32,7 +35,9 @@ function canRead(req, area) {
   const rule = READ_AREAS[area];
   if (!rule) return false;
   if (rule.roles.includes(req.coopOrgRole)) return true;
-  return !!(rule.manager && (req.accessPermissions || []).includes(rule.manager));
+  const perms = req.accessPermissions || [];
+  if (rule.permissions && rule.permissions.some((p) => perms.includes(p))) return true;
+  return !!(rule.manager && perms.includes(rule.manager));
 }
 
 function requireReadAccess(area) {

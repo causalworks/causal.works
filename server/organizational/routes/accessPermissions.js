@@ -9,7 +9,7 @@ const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { canWrite, canRead, AREAS, READ_AREAS, boardApproverAllowed } = require('../middleware/requireWriteAccess');
 
 const READ_PERMISSIONS = ['reports', 'accounting_read', 'donor_details'];
-const MANAGER_PERMISSIONS = ['manage_budget', 'manage_personnel', 'manage_funding', 'manage_compliance', 'manage_sponsorship', 'manage_structure', 'manage_donors'];
+const MANAGER_PERMISSIONS = ['manage_budget', 'manage_personnel', 'manage_funding', 'manage_compliance', 'manage_sponsorship', 'manage_structure', 'manage_donors', 'manage_membership'];
 const PERMISSIONS = [...READ_PERMISSIONS, ...MANAGER_PERMISSIONS];
 const FULL_ACCESS_ROLES = ['admin', ...FINANCE_ROLES];
 const AUDIT_FIELDS = ['org_user_id', 'permission', 'reason', 'ends_at', 'revoked_at'];

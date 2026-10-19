@@ -2987,6 +2987,22 @@ body.organizational-app[data-organizational-active="budget"] .organizational-org
 .organizational-badge.organizational-badge-grace_period { background: #fef3c7; color: #92400e; }
 .organizational-badge.organizational-badge-terminated { background: #f3f4f6; color: #4b5563; }
 .organizational-badge.organizational-badge-pending_first_payment { background: #ede9fe; color: #5b21b6; }
+.organizational-badge.organizational-badge-pending { background: #ede9fe; color: #5b21b6; }
+.organizational-badge.organizational-badge-grace { background: #fef3c7; color: #92400e; }
+.organizational-badge.organizational-badge-ended { background: #f3f4f6; color: #4b5563; }
+
+.organizational-membership-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.organizational-membership-form { border: 1px solid var(--border, #e5e7eb); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; }
+.organizational-membership-form[hidden] { display: none; }
+.organizational-membership-form .organizational-panel-fields { grid-template-columns: 1fr 1fr; }
+.organizational-membership-section { margin: 16px 0 6px; font-size: 0.875rem; font-weight: 600; }
+.organizational-membership-muted { color: var(--text-secondary); }
+.organizational-membership-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+@media (max-width: 640px) {
+  .organizational-membership-form .organizational-panel-fields { grid-template-columns: 1fr; }
+  .organizational-membership-toolbar { flex-direction: column; align-items: stretch; }
+  .organizational-membership-toolbar .organizational-input { width: 100% !important; }
+}
 
 .organizational-badge.organizational-badge-doc-permanent { background: #d1fae5; color: #065f46; }
 .organizational-badge.organizational-badge-doc-retain_until { background: #f3f4f6; color: #374151; }
@@ -6105,3 +6121,5 @@ body.organizational-pub { background: var(--organizational-surface, var(--surfac
 .organizational-pub-msg { margin: 0; font-size: 0.8125rem; }
 .organizational-pub-hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 .organizational-pub-inline { display: inline-flex; gap: 6px; align-items: center; }
+body.organizational-pub [hidden] { display: none !important; }
+.organizational-pub-form label.organizational-pub-inline { flex-direction: row; display: flex; }

@@ -157,7 +157,7 @@
   }
 
   function documentRowHtml(doc) {
-    const visBadge = doc.visibility === 'admins_only' ? ' <span class="organizational-badge">Admins only</span>' : '';
+    const visBadge = doc.visibility === 'admins_only' ? ' <span class="organizational-badge">Admins only</span>' : doc.visibility === 'dues_members' ? ' <span class="organizational-badge">Dues members</span>' : '';
     return '<tr data-doc-id="' + doc.id + '"><td style="width:34%;font-weight:500;">' + docTitleLink(doc) + '</td>'
       + '<td style="color:var(--text-secondary);">' + docMeta(doc) + '</td>'
       + '<td style="white-space:nowrap;">' + retentionBadge(doc) + visBadge + '</td>'

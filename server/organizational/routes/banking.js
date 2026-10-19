@@ -816,11 +816,14 @@ function registerBankingRoutes(app, pool) {
           .map((r) => ({ id: r.id, grant_id: r.grant_id, grant_name: r.grant_name, amount_cents: String(r.amount_cents) }));
 
         const duesR = await pool.query(
-          `SELECT p.id, p.amount_cents, p.payment_date, m.first_name, m.last_name, t.id AS tier_id, t.name AS tier_name, t.revenue_account_id
+          `SELECT p.id, p.amount_cents, p.payment_date, c.display_name, t.id AS tier_id, t.name AS tier_name,
+                  COALESCE(t.revenue_account_id, ms.dues_revenue_account_id) AS revenue_account_id
            FROM org_membership_payments p
-           JOIN org_members m ON m.id = p.member_id
-           LEFT JOIN org_membership_tiers t ON t.id = m.tier_id
-           WHERE m.org_id = $1 AND p.posting_status = 'unposted'
+           JOIN org_constituents c ON c.id = p.constituent_id
+           JOIN org_membership_terms mt ON mt.id = p.term_id
+           LEFT JOIN org_membership_tiers t ON t.id = mt.tier_id
+           LEFT JOIN org_membership_settings ms ON ms.org_id = p.org_id
+           WHERE p.org_id = $1 AND p.kind = 'payment' AND p.posting_status = 'unposted'
              AND p.amount_cents BETWEEN $2 AND $3
              AND p.payment_date::date BETWEEN $4 AND $5
            ORDER BY ABS(p.payment_date::date - $6::date)`,
@@ -828,10 +831,10 @@ function registerBankingRoutes(app, pool) {
         );
         candidates.membership_dues = duesR.rows
           .filter((r) => r.revenue_account_id != null)
-          .map((r) => ({ id: r.id, member_name: `${r.first_name} ${r.last_name}`.trim(), tier_name: r.tier_name, payment_date: r.payment_date, amount_cents: String(r.amount_cents) }));
+          .map((r) => ({ id: r.id, member_name: r.display_name, tier_name: r.tier_name, payment_date: r.payment_date, amount_cents: String(r.amount_cents) }));
         candidates.membership_dues_excluded_no_account = duesR.rows
           .filter((r) => r.revenue_account_id == null)
-          .map((r) => ({ id: r.id, member_name: `${r.first_name} ${r.last_name}`.trim(), tier_id: r.tier_id, tier_name: r.tier_name, amount_cents: String(r.amount_cents) }));
+          .map((r) => ({ id: r.id, member_name: r.display_name, tier_id: r.tier_id, tier_name: r.tier_name, amount_cents: String(r.amount_cents) }));
 
         const expected = await findExpectedGifts(pool, { orgId, amountCents, date: String(line.statement_date).slice(0, 10), text: `${line.payee_raw || ''} ${line.description_raw || ''}` });
         candidates.pledge_installments = expected.filter((e) => e.kind === 'pledge_installment')

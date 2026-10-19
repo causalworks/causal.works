@@ -22,9 +22,12 @@ const { registerSponsoredProjectsRoutes } = require('./routes/sponsored-projects
 const { registerSponsorshipRoutes } = require('./routes/sponsorship');
 const { registerSponsorshipRecordRoutes } = require('./routes/sponsorshipRecords');
 const { registerPublicRoutes } = require('./public');
+const { registerPublicMembershipRoutes } = require('./public/membership');
+const { registerPaymentWebhookRoutes } = require('./public/payments');
+const { registerEmailWebhookRoutes } = require('./public/email');
 const { registerPublicSettingsRoutes } = require('./routes/publicSettings');
 const { registerComplianceRoutes } = require('./routes/compliance');
-const registerMembershipRoutes = require('./routes/membership');
+const { registerMembershipRoutes } = require('./routes/membership');
 const { registerOrgInviteAcceptRoutes } = require('./routes/inviteAccept');
 const { registerOrganizationalPersonnelRoutes } = require('./routes/personnel');
 const { registerOrganizationalScheduleItemRoutes } = require('./routes/schedule-items');
@@ -62,6 +65,7 @@ const { registerRecurringSchedulesRoutes } = require('./routes/recurringSchedule
 const { registerConversionBalancesRoutes } = require('./routes/conversionBalances');
 const { registerFinancialStatementRoutes } = require('./routes/financialStatements');
 const { registerGiftPostingRoutes } = require('./routes/giftPostings');
+const { registerDuesPostingRoutes } = require('./routes/duesPostings');
 const { registerIndirectCostRecoveryRoutes } = require('./routes/indirectCostRecovery');
 const { wrapPoolWithOrgScoping } = require('./lib/scopedPool');
 
@@ -89,9 +93,12 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerSponsorshipRoutes(app, pool);
   registerSponsorshipRecordRoutes(app, pool);
   registerPublicRoutes(app, pool);
+  registerPublicMembershipRoutes(app, pool);
+  registerPaymentWebhookRoutes(app, pool);
+  registerEmailWebhookRoutes(app, pool);
   registerPublicSettingsRoutes(app, pool);
   registerComplianceRoutes(app, pool);
-  app.use('/api/organizational/:slug/membership', registerMembershipRoutes(app, pool));
+  registerMembershipRoutes(app, pool);
   registerOrgInviteAcceptRoutes(app, pool);
   registerOrganizationalPersonnelRoutes(app, pool);
   registerOrganizationalScheduleItemRoutes(app, pool);
@@ -129,6 +136,7 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerConversionBalancesRoutes(app, pool);
   registerFinancialStatementRoutes(app, pool);
   registerGiftPostingRoutes(app, pool);
+  registerDuesPostingRoutes(app, pool);
   registerIndirectCostRecoveryRoutes(app, pool);
 }
 

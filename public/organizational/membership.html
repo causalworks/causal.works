@@ -12,13 +12,12 @@
 </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>causalworks</title>
+  <title>Membership — causalworks</title>
   <meta name="theme-color" content="#800020">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/shared/css/tokens.css">
-
   <link rel="stylesheet" href="/organizational/css/organizational.css">
 </head>
 <body class="organizational-app" data-organizational-active="membership">
@@ -27,245 +26,255 @@
   <div class="organizational-workspace">
     <div id="organizational-sidebar-mount"></div>
     <div class="organizational-workspace-main">
-      <main class="organizational-main">
+      <main class="organizational-main organizational-main-wide">
         <p id="organizational-org-error" class="organizational-error" hidden></p>
         <div id="organizational-org-loading" class="organizational-empty">Loading membership…</div>
 
         <div id="organizational-org-dashboard" hidden>
           <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Membership</h1>
-          <p class="organizational-subtitle">Manage your organization's dues-paying members</p>
 
-          <div class="organizational-page">
-
-  <div class="organizational-summary-cards">
-    <div class="organizational-summary-card">
-      <div class="organizational-summary-label">Active Members</div>
-      <div class="organizational-summary-value" id="membership-total-active">-</div>
-    </div>
-    <div class="organizational-summary-card">
-      <div class="organizational-summary-label">Lapsed</div>
-      <div class="organizational-summary-value" id="membership-total-lapsed">-</div>
-    </div>
-    <div class="organizational-summary-card">
-      <div class="organizational-summary-label">Grace Period</div>
-      <div class="organizational-summary-value" id="membership-total-grace">-</div>
-    </div>
-    <div class="organizational-summary-card">
-      <div class="organizational-summary-label">Dues (This Fiscal Year)</div>
-      <div class="organizational-summary-value" id="membership-dues-year">-</div>
-    </div>
-    <div class="organizational-summary-card">
-      <div class="organizational-summary-label">Renewals (30 days)</div>
-      <div class="organizational-summary-value" id="membership-renewals-30">-</div>
-    </div>
-  </div>
-
-  <div class="organizational-tabs">
-    <button class="organizational-tab active" data-membership-tab="members" onclick="showMembershipTab('members')">Members</button>
-    <button class="organizational-tab" data-membership-tab="tiers" onclick="showMembershipTab('tiers')">Tiers</button>
-    <button class="organizational-tab" data-membership-tab="renewals" onclick="showMembershipTab('renewals')">Renewals</button>
-    <button class="organizational-tab" data-membership-tab="payments" onclick="showMembershipTab('payments')">Payments</button>
-  </div>
-
-  <div id="membership-tab-members" class="organizational-tab-content active">
-    <div class="organizational-toolbar">
-      <button type="button" class="organizational-btn-primary" onclick="openAddMemberModal()">+ Add Member</button>
-      <div class="organizational-filters">
-        <select id="membership-tier-filter" onchange="loadMembers()">
-          <option value="">All Tiers</option>
-        </select>
-        <select id="membership-status-filter" onchange="loadMembers()">
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="grace_period">Grace Period</option>
-          <option value="lapsed">Lapsed</option>
-          <option value="terminated">Terminated</option>
-          <option value="pending_first_payment">Pending Payment</option>
-        </select>
-        <input type="text" id="membership-search" placeholder="Search..." onkeyup="if(event.key==='Enter') loadMembers()">
-      </div>
-    </div>
-    <div id="membership-members-list" class="organizational-list">
-      <div class="organizational-loading">Loading members…</div>
-    </div>
-  </div>
-
-  <div id="membership-tab-tiers" class="organizational-tab-content">
-    <div class="organizational-toolbar">
-      <button type="button" class="organizational-btn-primary" onclick="openAddTierModal()">+ Add Tier</button>
-    </div>
-    <div id="membership-tiers-list" class="organizational-list">
-      <div class="organizational-loading">Loading tiers…</div>
-    </div>
-  </div>
-
-  <div id="membership-tab-renewals" class="organizational-tab-content">
-    <div class="organizational-toolbar">
-      <select id="membership-renewals-days" onchange="loadRenewals()">
-        <option value="30">Next 30 days</option>
-        <option value="60">Next 60 days</option>
-        <option value="90">Next 90 days</option>
-      </select>
-      <button type="button" class="organizational-btn-secondary" onclick="sendRenewalReminders()">Send Reminders</button>
-    </div>
-    <div id="membership-renewals-list" class="organizational-list">
-      <div class="organizational-loading">Loading renewals…</div>
-    </div>
-  </div>
-
-  <div id="membership-tab-payments" class="organizational-tab-content">
-    <div class="organizational-toolbar">
-      <div class="organizational-summary-inline">
-        <span>Dues received this month: <strong id="membership-dues-month">-</strong></span>
-      </div>
-    </div>
-    <div id="membership-payments-list" class="organizational-list">
-      <div class="organizational-loading">Loading payments…</div>
-    </div>
-  </div>
-</div>
-
-<div id="membership-add-member-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" hidden>
-  <div class="organizational-modal organizational-modal-structured" onclick="event.stopPropagation()">
-    <div class="organizational-modal-header">
-      <h2>Add Member</h2>
-      <button type="button" class="organizational-modal-close" onclick="closeAddMemberModal()">✕</button>
-    </div>
-    <div class="organizational-modal-body">
-      <form id="membership-add-member-form">
-        <div class="organizational-form-group">
-          <label>First Name *</label>
-          <input type="text" name="first_name" required>
-        </div>
-        <div class="organizational-form-group">
-          <label>Last Name *</label>
-          <input type="text" name="last_name" required>
-        </div>
-        <div class="organizational-form-group">
-          <label>Email *</label>
-          <input type="email" name="email" required>
-        </div>
-        <div class="organizational-form-group">
-          <label>Tier</label>
-          <select name="tier_id" id="membership-add-tier-select">
-            <option value="">Select tier</option>
-          </select>
-        </div>
-        <div class="organizational-form-group">
-          <label>Phone</label>
-          <input type="text" name="phone">
-        </div>
-        <div class="organizational-form-group">
-          <label>Mailing Address</label>
-          <textarea name="mailing_address" rows="3"></textarea>
-        </div>
-        <div class="organizational-form-group">
-          <label>Period Start</label>
-          <input type="date" name="current_period_start">
-        </div>
-        <div class="organizational-form-group">
-          <label>Period End</label>
-          <input type="date" name="current_period_end">
-        </div>
-        <div class="organizational-form-group">
-          <label>Status</label>
-          <select name="status">
-            <option value="pending_first_payment">Pending Payment</option>
-            <option value="active">Active</option>
-            <option value="grace_period">Grace Period</option>
-          </select>
-        </div>
-        <div class="organizational-form-group">
-          <label>Notes</label>
-          <textarea name="notes" rows="2"></textarea>
-        </div>
-      </form>
-    </div>
-    <div class="organizational-modal-footer">
-      <button type="button" class="organizational-btn organizational-btn-outline" onclick="closeAddMemberModal()">Cancel</button>
-      <button type="button" class="organizational-btn-primary" onclick="submitAddMember()">Add Member</button>
-    </div>
-  </div>
-</div>
-
-<div id="membership-add-tier-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" hidden>
-  <div class="organizational-modal organizational-modal-structured" onclick="event.stopPropagation()">
-    <div class="organizational-modal-header">
-      <h2>Add Tier</h2>
-      <button type="button" class="organizational-modal-close" onclick="closeAddTierModal()">✕</button>
-    </div>
-    <div class="organizational-modal-body">
-      <form id="membership-add-tier-form">
-        <div class="organizational-form-group">
-          <label>Name *</label>
-          <input type="text" name="name" required>
-        </div>
-        <div class="organizational-form-group">
-          <label>Description</label>
-          <textarea name="description" rows="2"></textarea>
-        </div>
-        <div class="organizational-form-group">
-          <label>Dues Amount (cents) *</label>
-          <input type="number" name="dues_amount_cents" required min="0">
-          <small class="organizational-hint">e.g., 10000 for $100.00</small>
-        </div>
-        <div class="organizational-form-group">
-          <label>Currency</label>
-          <input type="text" name="dues_currency" value="USD">
-        </div>
-        <div class="organizational-form-group">
-          <label>Renewal Period</label>
-          <select name="renewal_period">
-            <option value="annual">Annual</option>
-            <option value="biennial">Biennial</option>
-            <option value="monthly">Monthly</option>
-            <option value="lifetime">Lifetime</option>
-          </select>
-        </div>
-        <div class="organizational-form-group">
-          <label>Benefits (markdown)</label>
-          <textarea name="benefits_markdown" rows="3"></textarea>
-        </div>
-        <div class="organizational-form-group">
-          <label>Display Order</label>
-          <input type="number" name="display_order" value="0">
-        </div>
-      </form>
-    </div>
-    <div class="organizational-modal-footer">
-      <button type="button" class="organizational-btn organizational-btn-outline" onclick="closeAddTierModal()">Cancel</button>
-      <button type="button" class="organizational-btn-primary" onclick="submitAddTier()">Add Tier</button>
-    </div>
-  </div>
-</div>
-
-<div id="membership-member-detail-modal" class="organizational-modal-overlay" role="dialog" aria-modal="true" hidden>
-  <div class="organizational-modal organizational-modal-structured organizational-modal-large" onclick="event.stopPropagation()">
-    <div class="organizational-modal-header">
-      <h2 id="membership-member-detail-name">Member Detail</h2>
-      <button type="button" class="organizational-modal-close" onclick="closeMemberDetailModal()">✕</button>
-    </div>
-    <div class="organizational-modal-body">
-      <div id="membership-member-detail-content"></div>
-    </div>
-    <div class="organizational-modal-footer">
-      <button type="button" class="organizational-btn organizational-btn-outline" onclick="closeMemberDetailModal()">Close</button>
-    </div>
-  </div>
-</div>
-
+          <div class="organizational-tabs" role="tablist">
+            <button type="button" class="organizational-tab" data-membership-tab="members" hidden>Dues members</button>
+            <button type="button" class="organizational-tab" data-membership-tab="renewals" hidden>Renewals</button>
+            <button type="button" class="organizational-tab" data-membership-tab="summary">Summary</button>
+            <button type="button" class="organizational-tab" data-membership-tab="tiers">Tiers</button>
+            <button type="button" class="organizational-tab" data-membership-tab="emails" hidden>Emails</button>
+            <button type="button" class="organizational-tab" data-membership-tab="reports">Reports</button>
+            <button type="button" class="organizational-tab" data-membership-tab="import" hidden>Import</button>
+            <button type="button" class="organizational-tab" data-membership-tab="settings" hidden>Settings</button>
           </div>
+
+          <section id="membership-tab-members" class="organizational-tab-content">
+            <div class="organizational-grants-head organizational-membership-toolbar" style="margin-top:12px;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <input type="text" id="membership-search" class="organizational-input" placeholder="Search name or email…" style="width:220px;">
+                <select id="membership-filter-status" class="organizational-input" style="width:140px;">
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="grace">Grace</option>
+                  <option value="lapsed">Lapsed</option>
+                  <option value="ended">Ended</option>
+                </select>
+                <select id="membership-filter-tier" class="organizational-input" style="width:160px;"><option value="">All tiers</option></select>
+                <select id="membership-filter-kind" class="organizational-input" style="width:180px;">
+                  <option value="">People and organizations</option>
+                  <option value="individual">People</option>
+                  <option value="organization">Organizations</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <a href="#" id="membership-export" class="organizational-btn organizational-btn-secondary" hidden>Export CSV</a>
+                <button type="button" class="organizational-btn organizational-btn-primary" id="membership-add" hidden>+ Add dues member</button>
+              </div>
+            </div>
+            <section class="organizational-card" id="membership-join-requests" style="margin-top:12px;" hidden>
+              <h2 class="organizational-membership-section" style="margin-top:0;">Join requests waiting for approval</h2>
+              <div class="organizational-table-wrap"><table class="organizational-table" aria-label="Join requests"><tbody id="membership-join-tbody"></tbody></table></div>
+            </section>
+            <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Dues members">
+                  <thead><tr><th>Name</th><th>Status</th><th>Tier</th><th>Term ends</th><th>Owed</th><th>Last contact</th></tr></thead>
+                  <tbody id="membership-members-tbody"><tr class="organizational-table-empty"><td colspan="6">Loading…</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="membership-tab-renewals" class="organizational-tab-content">
+            <div class="organizational-grants-head organizational-membership-toolbar" style="margin-top:12px;flex-wrap:wrap;gap:8px;">
+              <label class="organizational-hint">Ends within
+                <select id="renewals-days" class="organizational-input" style="width:110px;">
+                  <option value="30">30 days</option><option value="60" selected>60 days</option><option value="90">90 days</option><option value="180">180 days</option>
+                </select></label>
+              <label class="organizational-hint">Tier <select id="renewals-tier" class="organizational-input" style="width:160px;"><option value="">All tiers</option></select></label>
+              <label class="organizational-hint">No contact for
+                <select id="renewals-contact" class="organizational-input" style="width:120px;">
+                  <option value="">Any</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option>
+                </select></label>
+            </div>
+            <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Renewals">
+                  <thead><tr><th>Name</th><th>Status</th><th>Tier</th><th>Term ends</th><th>Days</th><th>Renewal</th><th>Last contact</th></tr></thead>
+                  <tbody id="membership-renewals-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="membership-tab-summary" class="organizational-tab-content">
+            <div class="organizational-membership-cards" id="membership-summary-cards" style="margin-top:12px;"></div>
+            <h2 class="organizational-membership-section">Active by tier</h2>
+            <div class="organizational-table-wrap"><table class="organizational-table" aria-label="Active by tier"><tbody id="membership-summary-tiers"></tbody></table></div>
+          </section>
+
+          <section id="membership-tab-tiers" class="organizational-tab-content">
+            <div class="organizational-grants-head" style="margin-top:12px;justify-content:space-between;gap:8px;">
+              <label class="organizational-hint"><input type="checkbox" id="tiers-show-archived"> Show archived</label>
+              <button type="button" class="organizational-btn organizational-btn-primary" id="membership-tier-add" hidden>+ New tier</button>
+            </div>
+            <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Tiers">
+                  <thead><tr><th>Tier</th><th>For</th><th>Price</th><th>Seats</th><th>Benefits</th><th></th></tr></thead>
+                  <tbody id="membership-tiers-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="membership-tab-emails" class="organizational-tab-content">
+            <h2 class="organizational-membership-section">Scheduled emails</h2>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Email templates">
+                  <thead><tr><th>Email</th><th>When</th><th>Subject</th><th>On</th><th></th></tr></thead>
+                  <tbody id="membership-templates-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+            <form id="membership-bulk" class="organizational-card" style="margin-top:16px;max-width:720px;" hidden>
+              <div class="organizational-membership-section" style="margin-top:0;">Email a group of dues members</div>
+              <div class="organizational-panel-fields">
+                <label class="organizational-label">Status<select name="status" class="organizational-select"><option value="">Any</option><option value="active">Active</option><option value="pending">Pending</option><option value="grace">Grace</option><option value="lapsed">Lapsed</option></select></label>
+                <label class="organizational-label">Tier<select name="tier_id" class="organizational-select" id="membership-bulk-tier"><option value="">Any</option></select></label>
+                <label class="organizational-label">Tag<input name="tags" class="organizational-input" placeholder="Any"></label>
+                <label class="organizational-label">Address contains<input name="location" class="organizational-input" placeholder="Town, state or postcode"></label>
+                <label class="organizational-label organizational-panel-field-full">Subject *<input name="subject" class="organizational-input" maxlength="300"></label>
+                <label class="organizational-label organizational-panel-field-full">Message *<textarea name="body" class="organizational-input" rows="6"></textarea></label>
+              </div>
+              <p class="organizational-hint">Merge fields: {{first_name}}, {{name}}, {{tier}}, {{ends_on}}, {{amount_due}}, {{renew_link}}. An unsubscribe link is added, and people who unsubscribed are left out.</p>
+              <p class="organizational-hint" id="membership-bulk-msg"></p>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="membership-bulk-count">Count recipients</button>
+              <button type="submit" class="organizational-btn organizational-btn-primary">Send</button>
+            </form>
+            <h2 class="organizational-membership-section">Sent emails</h2>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Sent emails">
+                  <thead><tr><th>Date</th><th>To</th><th>Email</th><th>Status</th></tr></thead>
+                  <tbody id="membership-messages-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="membership-tab-reports" class="organizational-tab-content">
+            <div class="organizational-grants-head organizational-membership-toolbar" style="margin-top:12px;gap:8px;flex-wrap:wrap;">
+              <select id="membership-report-name" class="organizational-input" style="width:220px;">
+                <option value="joins">Joins and renewals by month</option>
+                <option value="retention">Retention</option>
+                <option value="revenue">Revenue by tier</option>
+                <option value="aging">Unpaid dues by age</option>
+                <option value="growth">Growth by month</option>
+                <option value="lapses">Why memberships ended</option>
+              </select>
+              <label class="organizational-hint">From <input type="date" id="membership-report-from" class="organizational-input" style="width:160px;"></label>
+              <label class="organizational-hint">To <input type="date" id="membership-report-to" class="organizational-input" style="width:160px;"></label>
+              <a href="#" id="membership-report-csv" class="organizational-btn organizational-btn-secondary">CSV</a>
+            </div>
+            <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
+              <div class="organizational-table-wrap"><table class="organizational-table" aria-label="Report"><thead id="membership-report-head"></thead><tbody id="membership-report-body"></tbody></table></div>
+            </section>
+            <div id="membership-report-detail"></div>
+          </section>
+
+          <section id="membership-tab-import" class="organizational-tab-content">
+            <form id="membership-import" class="organizational-card" style="margin-top:12px;max-width:820px;">
+              <p class="organizational-hint">CSV columns: name (or first_name and last_name), email, phone, mailing_address, kind (person or organization), tier, start_date, end_date (optional), amount_paid (optional). Rows match existing contacts by email. Nothing is saved until you confirm.</p>
+              <input type="file" id="membership-import-file" accept=".csv,text/csv">
+              <p class="organizational-hint" id="membership-import-msg"></p>
+              <div id="membership-import-preview"></div>
+              <button type="button" class="organizational-btn organizational-btn-primary" id="membership-import-confirm" hidden>Import</button>
+            </form>
+          </section>
+
+          <section id="membership-tab-settings" class="organizational-tab-content">
+            <form id="membership-settings-form" class="organizational-card" style="margin-top:12px;max-width:720px;">
+              <div class="organizational-panel-fields">
+                <label class="organizational-label">Membership year
+                  <select name="year_mode" class="organizational-select"><option value="rolling">Rolling: 12 months from joining</option><option value="fixed">Fixed year</option></select></label>
+                <label class="organizational-label" data-fixed>Year starts (month and day)
+                  <span style="display:flex;gap:6px;"><input name="fixed_start_month" type="number" min="1" max="12" class="organizational-input" style="width:70px;"><input name="fixed_start_day" type="number" min="1" max="31" class="organizational-input" style="width:70px;"></span></label>
+                <label class="organizational-label">Renewal window (days before the next term)
+                  <input name="renewal_window_days" type="number" min="0" max="366" class="organizational-input"></label>
+                <label class="organizational-label" data-fixed>Joining mid-year
+                  <select name="proration_mode" class="organizational-select"><option value="none">Full price</option><option value="monthly">Price for the months left</option></select></label>
+                <label class="organizational-label">Grace period (days after a term ends)
+                  <input name="grace_days" type="number" min="0" max="366" class="organizational-input"></label>
+                <label class="organizational-label">Dues revenue
+                  <select name="recognition_mode" class="organizational-select"><option value="spread">Spread evenly over the term</option><option value="at_receipt">At receipt</option></select>
+                  <span class="organizational-hint">Check this choice with your accountant before the first posting.</span></label>
+                <label class="organizational-label">Dues revenue account<select name="dues_revenue_account_id" class="organizational-select" data-accounts="income"></select></label>
+                <label class="organizational-label">Dues received in advance (liability)<select name="deferred_dues_account_id" class="organizational-select" data-accounts="liability"></select></label>
+                <label class="organizational-label">Contribution part of dues<select name="contribution_account_id" class="organizational-select" data-accounts="income"></select></label>
+                <label class="organizational-label">Default program<select name="default_program_id" class="organizational-select" data-programs></select></label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="auto_renew_default"> New terms renew automatically</label>
+                <div class="organizational-panel-field-full organizational-membership-section">Public join form</div>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="join_form_enabled"> Accept joins from the public form</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="join_requires_approval"> Staff approve each join before the membership starts</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="extra_gift_enabled"> Offer an extra gift on the form</label>
+                <div class="organizational-panel-field-full" style="font-size:0.875rem;">Also ask for:
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="phone"> Phone</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="mailing_address"> Mailing address</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="annual_budget"> Annual budget (organizations)</label>
+                </div>
+                <p class="organizational-hint organizational-panel-field-full" id="membership-public-links"></p>
+                <div class="organizational-panel-field-full organizational-membership-section">Directory</div>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="directory_enabled"> Show a directory of dues members who opt in</label>
+                <div class="organizational-panel-field-full" style="font-size:0.875rem;">Fields people may choose to show (name is always shown):
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="tier"> Tier</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="kind"> Person or organization</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="website"> Website</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="mailing_address"> Address</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="email"> Email</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-dir-field="phone"> Phone</label>
+                </div>
+                <div class="organizational-panel-field-full organizational-membership-section">Card payments</div>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="card_payments_enabled"> Take card payments online</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="monthly_instalments_enabled"> Offer monthly payments</label>
+                <label class="organizational-label">Mode
+                  <select name="payment_mode" class="organizational-select"><option value="test">Test (no real money)</option><option value="live">Live</option></select></label>
+              </div>
+              <p id="membership-settings-msg" class="organizational-hint" hidden></p>
+              <button type="submit" class="organizational-btn organizational-btn-primary">Save settings</button>
+            </form>
+            <form id="membership-payment-account" class="organizational-card" style="margin-top:12px;max-width:720px;">
+              <div class="organizational-membership-section" style="margin-top:0;">Card payment account (Stripe)</div>
+              <p class="organizational-hint" id="membership-payment-state"></p>
+              <div class="organizational-panel-fields">
+                <label class="organizational-label">Mode
+                  <select name="mode" class="organizational-select"><option value="test">Test</option><option value="live">Live</option></select></label>
+                <label class="organizational-label">Secret key<input name="secret_key" class="organizational-input" autocomplete="off" placeholder="Leave blank to keep the saved key"></label>
+                <label class="organizational-label">Webhook signing secret<input name="webhook_secret" class="organizational-input" autocomplete="off" placeholder="Leave blank to keep the saved secret"></label>
+              </div>
+              <p class="organizational-hint" id="membership-webhook-url"></p>
+              <p id="membership-payment-msg" class="organizational-hint" hidden></p>
+              <button type="submit" class="organizational-btn organizational-btn-primary">Save card payment account</button>
+            </form>
+          </section>
         </div>
       </main>
     </div>
   </div>
 
+  <div id="membership-panel-overlay" class="organizational-panel-overlay"></div>
+  <aside id="membership-panel" class="organizational-grant-panel organizational-grant-panel--wide" aria-label="Dues member">
+    <div class="organizational-panel-header">
+      <h3 id="membership-panel-title">Dues member</h3>
+      <button type="button" id="membership-panel-close" class="organizational-panel-close" aria-label="Close panel">✕</button>
+    </div>
+    <div id="membership-panel-error" class="organizational-panel-error" hidden></div>
+    <div class="organizational-panel-body" id="membership-panel-body"></div>
+  </aside>
+
   <script src="/organizational/js/time-utils.js"></script>
   <script src="/organizational/js/utils.js"></script>
-  <script src="/organizational/js/select-search.js"></script>
   <script src="/organizational/js/strings.js" defer></script>
   <script src="/organizational/js/sidebar.js" defer></script>
-  <script src="/organizational/js/messages-placeholder.js" defer></script>
+  <script src="/organizational/js/table-sort.js" defer></script>
   <script src="/organizational/js/membership.js" defer></script>
   <div id="organizational-overlay-container"></div>
   <script>
@@ -274,14 +283,11 @@
     });
   </script>
   <script>
-    // Load header chrome
     fetch('/organizational/header.html').then(r => r.text()).then(html => {
       document.getElementById('app-header').innerHTML = html;
       document.body.style.visibility = 'visible';
     });
   </script>
-  <script src="/organizational/js/reports-index.js" defer></script>
-  <script src="/organizational/js/module-reports-link.js" defer></script>
   <script src="/shared/js/idle-logout.js"></script>
 </body>
 </html>

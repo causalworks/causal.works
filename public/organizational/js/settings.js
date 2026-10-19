@@ -638,7 +638,7 @@
 
   const PERM_LABELS = { reports: 'Reports only', accounting_read: 'All Accounting (read-only)', donor_details: 'Donor details (read-only)',
     manage_budget: 'Budget manager', manage_personnel: 'Personnel (extra, for a Budget manager)', manage_funding: 'Funding manager (grants and funder organizations)', manage_donors: 'Donors manager (individual donors)',
-    manage_compliance: 'Compliance manager', manage_sponsorship: 'Sponsorship manager', manage_structure: 'Structure manager' };
+    manage_compliance: 'Compliance manager', manage_sponsorship: 'Sponsorship manager', manage_structure: 'Structure manager', manage_membership: 'Membership manager' };
   let accessData = null;
   let accessTarget = null;
 

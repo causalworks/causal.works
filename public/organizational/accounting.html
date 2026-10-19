@@ -41,6 +41,7 @@
             <button type="button" class="organizational-tab" data-section="purchases">Purchases</button>
             <button type="button" class="organizational-tab" data-section="sales">Sales</button>
             <button type="button" class="organizational-tab" data-section="gift-postings">Gift Postings</button>
+            <button type="button" class="organizational-tab" data-section="dues-postings" id="organizational-accounting-dues-tab" hidden>Dues Postings</button>
             <span class="organizational-tab-divider" aria-hidden="true"></span>
             <span id="organizational-accounting-more-wrap" style="position:relative;display:flex;">
               <button type="button" class="organizational-tab" id="organizational-accounting-more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
@@ -1005,6 +1006,47 @@
 
           </div>
 
+          <!-- ============================= Dues Postings tab ============================= -->
+          <div id="organizational-accounting-tab-dues-postings" hidden>
+            <p class="organizational-hint" style="margin:8px 0 16px;">
+              Dues payments and refunds recorded in Membership wait here until you post them. Each month's recognition run
+              moves dues received in advance into dues revenue; preview it, then confirm.
+            </p>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Dues to post">
+                  <thead><tr><th>Date</th><th>Dues member</th><th>Kind</th><th>Amount</th><th>Term</th><th></th></tr></thead>
+                  <tbody id="organizational-duespostings-tbody"><tr class="organizational-table-empty"><td colspan="6">Nothing is waiting to be posted.</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="organizational-card" id="organizational-duespostings-post-panel" hidden style="padding:12px 16px;margin-top:12px;"></section>
+            <h2 class="organizational-membership-section">Recognition</h2>
+            <div class="organizational-grants-head" style="margin-top:0;gap:8px;flex-wrap:wrap;">
+              <label class="organizational-hint">Month <input type="month" id="organizational-duespostings-month" class="organizational-input" style="width:160px;"></label>
+              <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-duespostings-run-btn">Confirm recognition</button>
+            </div>
+            <p class="organizational-hint" id="organizational-duespostings-run-msg"></p>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Recognition preview">
+                  <thead><tr><th>Dues member</th><th>Tier</th><th>Term</th><th>Amount</th></tr></thead>
+                  <tbody id="organizational-duespostings-recognition-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+            <h2 class="organizational-membership-section">Posted</h2>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Posted dues">
+                  <thead><tr><th>Date</th><th>Dues member</th><th>Kind</th><th>Amount</th><th>Split</th><th></th></tr></thead>
+                  <tbody id="organizational-duespostings-posted-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+            <p class="organizational-hint" id="organizational-duespostings-runs"></p>
+          </div>
+
         </div>
       </main>
     </div>
@@ -1093,6 +1135,7 @@
   <script src="/organizational/js/board-designations.js" defer></script>
   <script src="/organizational/js/find-recode.js" defer></script>
   <script src="/organizational/js/gift-postings.js" defer></script>
+  <script src="/organizational/js/dues-postings.js" defer></script>
   <script src="/organizational/js/settings-1099.js" defer></script>
   <script src="/organizational/js/settings-index.js" defer></script>
   <script src="/organizational/js/accounting-settings.js" defer></script>

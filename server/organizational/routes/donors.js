@@ -651,25 +651,20 @@ function registerOrganizationalDonorRoutes(app, pool) {
         [constituentId, orgId]
       );
 
-      const email = constituentCheck.rows[0].email;
-      let dues = [];
-      if (email) {
-        const duesR = await pool.query(
-          `SELECT mp.id, mp.amount_cents, mp.currency, mp.payment_date AS received_at,
-                  mp.payment_method, mp.notes, mp.created_at
-           FROM org_membership_payments mp
-           INNER JOIN org_members m ON m.id = mp.member_id
-           WHERE m.org_id = $1 AND LOWER(m.email) = LOWER($2)
-           ORDER BY mp.payment_date DESC`,
-          [orgId, email]
-        );
-        dues = duesR.rows.map(d => ({
-          ...d,
-          gift_type: 'membership_dues',
-          source: 'membership_dues',
-          amount_dollars: Number(d.amount_cents) / 100,
-        }));
-      }
+      const duesR = await pool.query(
+        `SELECT mp.id, mp.amount_cents, mp.currency, mp.payment_date AS received_at,
+                mp.method AS payment_method, mp.notes, mp.created_at
+         FROM org_membership_payments mp
+         WHERE mp.org_id = $1 AND mp.constituent_id = $2 AND mp.kind = 'payment' AND mp.posting_status <> 'void'
+         ORDER BY mp.payment_date DESC`,
+        [orgId, constituentId]
+      );
+      const dues = duesR.rows.map(d => ({
+        ...d,
+        gift_type: 'membership_dues',
+        source: 'membership_dues',
+        amount_dollars: Number(d.amount_cents) / 100,
+      }));
 
       const gifts = r.rows.map(row => ({ ...rowToGift(row), source: 'gift' }));
       const combined = [...gifts, ...dues].sort((a, b) =>

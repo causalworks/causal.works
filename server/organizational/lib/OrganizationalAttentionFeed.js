@@ -3,6 +3,7 @@
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('./fiscalYear');
 const { loadProjectBalances } = require('./sponsorBalance');
 const { needsAgreement } = require('./sponsorOverview');
+const { listDuesMembers, renewalsFrom } = require('./membership');
 
 function dayDiff(isoDate) {
   if (!isoDate) return null;
@@ -110,24 +111,16 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     [orgId]
   );
   if (settingsR.rows[0] && settingsR.rows[0].membership_enabled) {
-    const membersR = await pool.query(
-      `SELECT id, first_name, last_name, current_period_end::text AS current_period_end
-       FROM org_members
-       WHERE org_id = $1 AND status IN ('active', 'grace_period')`,
-      [orgId]
-    );
-    for (const m of membersR.rows) {
-      const renewIn = dayDiff(m.current_period_end);
-      if (renewIn != null && renewIn >= 0 && renewIn <= 60) {
-        const memberName = [m.first_name, m.last_name].filter(Boolean).join(' ') || 'Member';
-        items.push({
-          type: 'membership',
-          urgency_days: renewIn,
-          title: `${memberName}'s membership renews ${m.current_period_end}`,
-          due_date: m.current_period_end,
-          href: `${base}/membership?focus=${m.id}`,
-        });
-      }
+    const rows = await listDuesMembers(pool, orgId, { active: 'true' });
+    for (const m of renewalsFrom(rows, { days: 60 })) {
+      if (m.days_to_expiry < 0) continue;
+      items.push({
+        type: 'membership',
+        urgency_days: m.days_to_expiry,
+        title: `${m.display_name || 'A dues member'}'s membership renews ${m.term.ends_on}`,
+        due_date: m.term.ends_on,
+        href: `${base}/membership?focus=${m.id}`,
+      });
     }
   }
 

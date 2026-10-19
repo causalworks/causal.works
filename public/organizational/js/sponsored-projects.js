@@ -1,41 +1,53 @@
-  (function () {
+/* sponsored-projects.js — the Sponsorship screen: four numbers at the top, tabs (Projects, Money out, Intake, Reports,
+   Agreements), the settings gear, and the project page with its sub-tabs. Every tab and sub-tab has its own address:
+   ?tab=<tab>, ?project=<id>&view=<view>. The money, records and settings pieces come from sponsor-fund.js,
+   sponsor-money-out.js and sponsor-records.js. */
+(function () {
+  'use strict';
+
   const errEl = document.getElementById('organizational-org-error');
   const loadingEl = document.getElementById('organizational-org-loading');
   const dashEl = document.getElementById('organizational-org-dashboard');
+  const stripEl = document.getElementById('organizational-sp-strip');
+  const tabsEl = document.getElementById('organizational-sp-tabs');
+  const listEl = document.getElementById('organizational-sp-list');
+  const addBtn = document.getElementById('organizational-sp-add-btn');
+  const projectEl = document.getElementById('organizational-sp-project');
+  const viewEl = document.getElementById('organizational-sp-view');
+  const panel = document.getElementById('organizational-sp-panel');
+  const panelOverlay = document.getElementById('organizational-sp-panel-overlay');
+  const panelTitle = document.getElementById('organizational-sp-panel-title');
+  const panelBody = document.getElementById('organizational-sp-panel-body');
 
-  const spList = document.getElementById('organizational-sp-list');
-  const spAddBtn = document.getElementById('organizational-sp-add-btn');
-  const spModal = document.getElementById('organizational-sp-modal');
-  const spForm = document.getElementById('organizational-sp-form');
-  const spEditId = document.getElementById('organizational-sp-edit-id');
-  const spName = document.getElementById('organizational-sp-name');
-  const spDescription = document.getElementById('organizational-sp-description');
-  const spStartDate = document.getElementById('organizational-sp-start-date');
-  const spEndDate = document.getElementById('organizational-sp-end-date');
-  const spContactName = document.getElementById('organizational-sp-contact-name');
-  const spContactEmail = document.getElementById('organizational-sp-contact-email');
-  const spBudget = document.getElementById('organizational-sp-budget');
-  const spSponsorshipModel = document.getElementById('organizational-sp-sponsorship-model');
-  const spProgram = document.getElementById('organizational-sp-program');
-  const spAdminRate = document.getElementById('organizational-sp-admin-rate');
-  const spNextReportDue = document.getElementById('organizational-sp-next-report-due');
-  const spStatus = document.getElementById('organizational-sp-status');
-  const spCancel = document.getElementById('organizational-sp-cancel');
-  const spSave = document.getElementById('organizational-sp-save');
+  const TABS = ['projects', 'money-out', 'intake', 'reports', 'agreements', 'settings'];
+  const TAB_TITLES = { projects: 'Projects', 'money-out': 'Money out', intake: 'Intake', reports: 'Reports', agreements: 'Agreements', settings: 'Settings' };
+  const VIEWS = ['overview', 'money-in', 'money-out', 'agreement', 'reports', 'lead-link', 'history'];
+  const STATUS_LABELS = { applicant: 'Applicant', accepted: 'Accepted', active: 'Active', on_hold: 'On hold', winding_down: 'Winding down', ended: 'Ended', lapsed: 'Lapsed', paused: 'Paused', completed: 'Completed' };
+  const MODEL_LABELS = { model_c: 'Pre-approved grant', model_a: 'Comprehensive', other: 'Other' };
+  const OPEN_STATUSES = ['applicant', 'accepted', 'active', 'on_hold', 'winding_down', 'lapsed', 'paused'];
 
-  let programsCache = [];
+  const esc = (s) => window.escapeHtml(s);
+  const money = (c) => window.formatMoneyCents(Number(c) || 0);
 
-  const spDetailModal = document.getElementById('organizational-sp-detail-modal');
-  const spDetailTitle = document.getElementById('organizational-sp-detail-title');
-  const spDetailContent = document.getElementById('organizational-sp-detail-content');
-  const spDetailClose = document.getElementById('organizational-sp-detail-close');
-
-  let currentSlug = '';
-  let orgDefaultModel = '';
+  let slug = '';
+  let org = null;
   let myAccess = { write: {}, read: {} };
+  let programs = [];
+  let projects = [];
+  let overview = null;
+  let state = { tab: 'projects', project: null, view: 'overview' };
+
   const canMoney = () => !!(myAccess.write && myAccess.write.finance);
+  const canEnter = () => !!(myAccess.write && myAccess.write.sponsorship);
   const canReadFund = () => !!(myAccess.read && myAccess.read.sponsorship);
-  const moneyCtx = (project) => ({ slug: currentSlug, projectId: project.id, canMoney: canMoney(), canEnter: !!(myAccess.write && myAccess.write.sponsorship), isAdmin: myAccess.role === 'admin' });
+  const isLead = () => myAccess.role === 'program';
+  const canStaff = () => canEnter() && !isLead();
+  const whoWrites = (area) => (myAccess.write_who && myAccess.write_who[area]) || 'someone with access';
+  const whoReads = (area) => (area === 'sponsorship' ? 'finance, admins, board members, the Sponsorship manager and the project\'s program lead' : 'finance and admins');
+
+  function api(path, opts) {
+    return window.apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + path, opts || { method: 'GET' });
+  }
 
   function showError(msg) {
     if (!errEl) return;
@@ -43,634 +55,644 @@
     errEl.hidden = !msg;
   }
 
-  function parseSponsoredProjectsPath() {
-    const m = (window.location.pathname || '').match(/^\/organizational\/o\/([^/]+)\/sponsored-projects\/?$/);
-    if (!m) return { slug: '' };
-    const slug = decodeURIComponent(m[1]);
-    return { slug };
-  }
-
-  function escapeHtml(s) {
-    return String(s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function formatDate(iso) {
+  function fmtDate(iso) {
     if (!iso) return '';
-    const d = new Date(iso);
+    const d = new Date(String(iso).length === 10 ? iso + 'T00:00:00' : iso);
     if (Number.isNaN(d.getTime())) return '';
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
-  function formatCurrency(amount) {
-    if (amount === null || amount === undefined) return '';
-    return window.formatMoneyCents(Math.round(Number(amount) * 100));
+  function statusLabel(s) { return STATUS_LABELS[s] || s || ''; }
+  function modelLabel(m) { return MODEL_LABELS[m] || 'Not set'; }
+
+  function feeLabel(f) {
+    if (!f) return '';
+    if (f.kind === 'flat') return money(f.flat_cents) + ' a quarter';
+    if (f.kind === 'tiered') return 'Tiered';
+    return f.rate != null ? Number(f.rate) + '%' : 'Not set';
   }
 
-  function statusLabel(status) {
-    const labels = { applicant: 'Applicant', accepted: 'Accepted', active: 'Active', on_hold: 'On hold', winding_down: 'Winding down', ended: 'Ended', lapsed: 'Lapsed', paused: 'Paused', completed: 'Completed' };
-    return labels[status] || status;
+  function projectHref(id, view) {
+    return '/organizational/o/' + encodeURIComponent(slug) + '/sponsored-projects?project=' + id + (view && view !== 'overview' ? '&view=' + view : '');
   }
 
-  function sponsorshipModelLabel(model) {
-    const labels = { model_c: 'Pre-approved grant', model_a: 'Comprehensive', other: 'Other' };
-    return labels[model] || 'Not set';
-  }
-
-  function programName(programId) {
-    if (!programId) return 'Not linked';
-    const p = programsCache.find((x) => Number(x.id) === Number(programId));
-    return p ? (p.name || 'Program ' + programId) : 'Not linked';
-  }
-
-  async function loadSponsoredProjects() {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects', {
-        credentials: 'include',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      const data = res.ok ? await res.json() : {};
-      if (!res.ok) {
-        spList.innerHTML = '<p class="organizational-empty">Could not load sponsored projects.</p>';
-        return;
-      }
-      const projects = Array.isArray(data.sponsored_projects) ? data.sponsored_projects : [];
-      if (projects.length === 0) {
-        spList.innerHTML = '<p class="organizational-empty">No sponsored projects yet. Add one to get started.</p>';
-        return;
-      }
-      const rows = projects.map(function (p) {
-        return '<div class="organizational-card" style="padding: 16px; margin-bottom: 12px;">' +
-          '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
-          '<div style="font-weight: 600; font-size: 1.0625rem;">' + escapeHtml(p.name) + '</div>' +
-          '<span class="organizational-badge">' + escapeHtml(statusLabel(p.status)) + '</span>' +
-          '</div>' +
-          (p.status === 'on_hold' ? '<div class="organizational-sp-mo-hold">On hold: ' + escapeHtml(p.hold_reason || '') + '</div>' : '') +
-          (!p.agreement_signed_at && ['accepted', 'active', 'on_hold', 'winding_down'].indexOf(p.status) !== -1 ? '<div class="organizational-sp-mo-hold">No signed agreement</div>' : '') +
-          '<div style="font-size: 0.9375rem; margin-bottom: 8px;">' + escapeHtml(p.description || '') + '</div>' +
-          '<div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">' +
-          (p.start_date ? 'Start: ' + formatDate(p.start_date) : '') +
-          (p.start_date && p.end_date ? ' · ' : '') +
-          (p.end_date ? 'End: ' + formatDate(p.end_date) : '') +
-          '</div>' +
-          '<div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 12px;">' +
-          'Contact: ' + escapeHtml(p.contact_lead_name || '') +
-          (p.contact_lead_name && p.contact_lead_email ? ' · ' : '') +
-          (p.contact_lead_email ? '<a href="mailto:' + escapeHtml(p.contact_lead_email) + '">' + escapeHtml(p.contact_lead_email) + '</a>' : '') +
-          '</div>' +
-          '<div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 12px;">' +
-          'Budget: ' + formatCurrency(p.annual_budget_estimate) +
-          '</div>' +
-          '<div style="margin-top: 12px;">' +
-          '<button type="button" class="organizational-btn organizational-btn-outline organizational-sp-view-btn" data-sp-id="' + p.id + '" style="padding: 4px 12px; font-size: 0.8125rem; margin-right: 8px;">View</button>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline organizational-sp-edit-btn" data-sp-id="' + p.id + '" style="padding: 4px 12px; font-size: 0.8125rem; margin-right: 8px;">Edit</button>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline organizational-sp-delete-btn" data-sp-id="' + p.id + '" style="padding: 4px 12px; font-size: 0.8125rem;">Delete</button>' +
-          '</div></div>';
-      }).join('');
-      spList.innerHTML = rows;
-
-      spList.querySelectorAll('.organizational-sp-view-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const id = this.getAttribute('data-sp-id');
-          const project = projects.find(function (p) { return Number(p.id) === Number(id); });
-          if (project) viewProjectDetail(project);
-        });
-      });
-
-      spList.querySelectorAll('.organizational-sp-edit-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const id = this.getAttribute('data-sp-id');
-          const project = projects.find(function (p) { return Number(p.id) === Number(id); });
-          if (project) openSpModal(project);
-        });
-      });
-
-      spList.querySelectorAll('.organizational-sp-delete-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const id = this.getAttribute('data-sp-id');
-          if (confirm('Delete this sponsored project?')) {
-            deleteSponsoredProject(id);
-          }
-        });
-      });
-    } catch (e) {
-      console.error('loadSponsoredProjects:', e);
-      spList.innerHTML = '<p class="organizational-empty">Could not load sponsored projects.</p>';
-    }
-  }
-
-  function viewProjectDetail(project) {
-    if (!spDetailModal) return;
-    if (spDetailTitle) spDetailTitle.textContent = project.name;
-    if (spDetailContent) {
-      spDetailContent.innerHTML = '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Description</h4>' +
-        '<p style="margin: 0;">' + escapeHtml(project.description || 'No description') + '</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Timeline</h4>' +
-        '<p style="margin: 0;">Start: ' + formatDate(project.start_date) + '<br>' +
-        'End: ' + (project.end_date ? formatDate(project.end_date) : 'Ongoing') + '</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Contact</h4>' +
-        '<p style="margin: 0;">' + escapeHtml(project.contact_lead_name || '') + '<br>' +
-        (project.contact_lead_email ? '<a href="mailto:' + escapeHtml(project.contact_lead_email) + '">' + escapeHtml(project.contact_lead_email) + '</a>' : '') + '</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Budget</h4>' +
-        '<p style="margin: 0;">' + formatCurrency(project.annual_budget_estimate) + ' annually</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Status</h4>' +
-        '<p style="margin: 0;">' + escapeHtml(project.status) + '</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Fiscal sponsorship</h4>' +
-        '<p style="margin: 0;">Model: ' + escapeHtml(sponsorshipModelLabel(project.effective_sponsorship_model)) +
-        (project.sponsorship_model ? '' : ' <span class="organizational-hint">(organization default)</span>') + '<br>' +
-        'Fee rate: ' + (project.effective_admin_rate != null ? Number(project.effective_admin_rate) + '%' : 'Not set') +
-        (project.current_fee_kind ? ' <span class="organizational-hint">(fee rule' + (project.current_fee_kind !== 'percent' ? ', ' + escapeHtml(project.current_fee_kind) : '') + ')</span>'
-          : project.admin_rate != null ? '' : ' <span class="organizational-hint">(organization default)</span>') + '<br>' +
-        'Budget program: ' + escapeHtml(programName(project.program_id)) + '</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Project finances &amp; reports</h4>' +
-        '<div id="organizational-sp-view-summary"><p class="organizational-hint" style="margin: 0;"><em>Loading…</em></p></div>' +
-        '<div id="organizational-sp-view-documents" style="margin-top:8px;"><p class="organizational-hint" style="margin:0;"><em>Loading reports…</em></p></div>' +
-        '<p class="organizational-hint" style="margin: 4px 0 0 0;">Open Edit to record a disbursement, approve one, or attach a new sponsee report.</p></div>' +
-        '<div style="margin-bottom: 16px;">' +
-        '<h4 style="margin: 0 0 8px 0;">Project notes</h4>' +
-        '<p style="margin: 0;">' + escapeHtml(project.notes_markdown || 'No notes') + '</p></div>';
-      loadViewSummary(project);
-      loadProjectDocuments(project.id, 'organizational-sp-view-documents');
-    }
-    spDetailModal.hidden = false;
-    spDetailModal.classList.add('organizational-modal-open');
-  }
-
-  async function loadViewSummary(project) {
-    const el = document.getElementById('organizational-sp-view-summary');
-    if (!el) return;
-    if (!canReadFund()) { el.innerHTML = '<p class="organizational-hint" style="margin:0;">The project balance is for finance, admins, board members and the project\'s lead.</p>'; return; }
-    if (window.OrganizationalSponsorFund) {
-      await window.OrganizationalSponsorFund.renderBalance(el, { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
-      el.insertAdjacentHTML('beforeend', '<p style="margin:6px 0 0;">Next report due: <strong>' + (project.next_report_due ? formatDate(project.next_report_due) : 'Not set') + '</strong></p>');
-      return;
-    }
-    try {
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + project.id + '/tracking', { credentials: 'include' });
-      const data = res.ok ? await res.json() : null;
-      const s = data && data.summary;
-      el.innerHTML = s
-        ? '<p style="margin:0;">Received: <strong>' + formatCurrency(s.total_received_cents / 100) + '</strong> · ' +
-          'Disbursed: <strong>' + formatCurrency(s.total_disbursed_cents / 100) + '</strong> · ' +
-          'Balance: <strong>' + formatCurrency(s.balance_cents / 100) + '</strong><br>' +
-          'Next report due: <strong>' + (project.next_report_due ? formatDate(project.next_report_due) : 'Not set') + '</strong></p>'
-        : '<p class="organizational-error" style="margin:0;">Could not load tracking data.</p>';
-    } catch (e) {
-      console.error('loadViewSummary:', e);
-      el.innerHTML = '<p class="organizational-error" style="margin:0;">Could not load tracking data.</p>';
-    }
-  }
-
-  async function loadProjectDocuments(projectId, targetElId) {
-    const el = document.getElementById(targetElId || 'organizational-sp-documents');
-    if (!el) return;
-    try {
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/documents?sponsored_project_id=' + encodeURIComponent(projectId), { credentials: 'include' });
-      const data = res.ok ? await res.json() : null;
-      const docs = data && Array.isArray(data.documents) ? data.documents : [];
-      el.innerHTML = docs.length
-        ? '<ul style="margin:0;padding-left:20px;">' + docs.map(function (d) {
-            return '<li><a href="/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/documents/' + d.id + '/download">' + escapeHtml(d.title) + '</a></li>';
-          }).join('') + '</ul>'
-        : '<p class="organizational-hint" style="margin:0;">No reports attached yet.</p>';
-    } catch (e) {
-      console.error('loadProjectDocuments:', e);
-      el.innerHTML = '<p class="organizational-error">Could not load reports.</p>';
-    }
-  }
-
-  function wireReportAttachForm(projectId) {
-    const staleBtn = document.getElementById('organizational-sp-attach-btn');
-    if (!staleBtn) return;
-    const btn = staleBtn.cloneNode(true);
-    staleBtn.parentNode.replaceChild(btn, staleBtn);
-    btn.addEventListener('click', async function () {
-      const fileInput = document.getElementById('organizational-sp-attach-file');
-      if (!fileInput || !fileInput.files[0]) return;
-      const fd = new FormData();
-      fd.append('category', 'sponsee_report');
-      fd.append('sponsored_project_id', projectId);
-      fd.append('title', fileInput.files[0].name);
-      fd.append('file', fileInput.files[0]);
-      btn.disabled = true;
-      try {
-        const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/documents', {
-          method: 'POST', credentials: 'include', body: fd,
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(function () { return {}; });
-          throw new Error(data.error || 'Could not attach report');
-        }
-        fileInput.value = '';
-        await loadProjectDocuments(projectId);
-      } catch (err) {
-        alert(err.message || 'Could not attach report');
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  }
-
-  async function loadProjectFinances(project) {
-    const el = document.getElementById('organizational-sp-finances');
-    if (!el) return;
-    const effectiveModel = project.effective_sponsorship_model;
-    if (effectiveModel === 'model_a') {
-      el.innerHTML = '<div id="organizational-sp-fund"></div>';
-      if (window.OrganizationalSponsorFund) await window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
-      el.insertAdjacentHTML('beforeend', '<div id="organizational-sp-moneyout" style="margin-top:12px;"></div>');
-      if (window.OrganizationalSponsorMoneyOut) {
-        window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
-      }
-      renderRecords(project);
-      const progLabel = project.program_id ? escapeHtml(programName(project.program_id)) : null;
-      el.insertAdjacentHTML('beforeend', '<p class="organizational-hint" style="margin: 0;"><em>Managed projects post through the sponsor\'s own regular expense accounts -- ' +
-        (progLabel ? 'code bills and other expenses to <strong>' + progLabel + '</strong> (the linked program/activity above)' : 'link a program or activity above, then code bills to it') +
-        ', same as any other program. Those costs show above as other spending in the books.</em></p>');
-      return;
-    }
-    try {
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + project.id + '/tracking', { credentials: 'include' });
-      const data = res.ok ? await res.json() : null;
-      if (!data) { el.innerHTML = '<p class="organizational-error">Could not load tracking data.</p>'; return; }
-      const disbursements = Array.isArray(data.disbursements) ? data.disbursements : [];
-      const disbursementRows = disbursements.length
-        ? disbursements.map(function (d) {
-            const isPending = d.status === 'pending_approval';
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.8125rem;">' +
-              '<span>' + formatDate(d.disbursement_date) + ' — ' + formatCurrency(d.amount_cents / 100) +
-              (d.admin_fee_cents ? ' (fee ' + formatCurrency(d.admin_fee_cents / 100) + ')' : '') + '</span>' +
-              '<span class="organizational-badge">' + escapeHtml(d.status) + '</span>' +
-              (d.status === 'approved'
-                ? (d.ledger_transaction_id
-                  ? '<span style="color:var(--green);font-weight:600;">Posted to the books</span> <button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-sp-unpost-disb" data-disb-id="' + d.id + '">Unpost</button>'
-                  : '<span style="color:var(--amber);font-weight:600;" title="Accounting posts it from Gift Postings">Waiting for Accounting to post</span>')
-                : '') +
-              (isPending ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-sp-approve-disb" data-disb-id="' + d.id + '">Approve</button>' : '') +
-              '</div>';
-          }).join('')
-        : '<p class="organizational-hint" style="margin:4px 0;">No disbursements recorded yet.</p>';
-      el.innerHTML =
-        '<div id="organizational-sp-fund"></div>' +
-        disbursementRows +
-        '<div id="organizational-sp-moneyout" style="margin-top:12px;"></div>' +
-        '<button type="button" class="organizational-btn organizational-btn-outline" id="organizational-sp-record-disbursement" style="font-size:0.8125rem;margin-top:6px;">Record disbursement</button>' +
-        '<div id="organizational-sp-disbursement-form" hidden style="margin-top:10px;"></div>';
-      if (window.OrganizationalSponsorFund) window.OrganizationalSponsorFund.renderBalance(document.getElementById('organizational-sp-fund'), { slug: currentSlug, projectId: project.id, canMoney: canMoney() });
-      if (window.OrganizationalSponsorMoneyOut) {
-        window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
-      }
-      renderRecords(project);
-      const btn = document.getElementById('organizational-sp-record-disbursement');
-      if (btn) btn.addEventListener('click', function () { openDisbursementForm(project); });
-      el.querySelectorAll('.organizational-sp-unpost-disb').forEach(function (unBtn) {
-        unBtn.addEventListener('click', async function () {
-          const reason = window.prompt('Why is this disbursement being unposted? The entry in the books is reversed and the disbursement goes back to Accounting.');
-          if (!reason) return;
-          unBtn.disabled = true;
-          const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/disbursement/' + unBtn.getAttribute('data-disb-id') + '/unpost', {
-            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason }),
-          });
-          if (!res.ok) { let msg = 'Could not unpost.'; try { msg = (await res.json()).error || msg; } catch (e) {  } alert(msg); unBtn.disabled = false; return; }
-          loadProjectFinances(project);
-        });
-      });
-      el.querySelectorAll('.organizational-sp-approve-disb').forEach(function (approveBtn) {
-        approveBtn.addEventListener('click', async function () {
-          const disbId = approveBtn.getAttribute('data-disb-id');
-          approveBtn.disabled = true;
-          try {
-            const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(moneyCtx(project),
-              '/sponsored-projects/' + project.id + '/disbursements/' + disbId + '/approve', {});
-            if (!data) { approveBtn.disabled = false; return; }
-            if (data.needs_second_approval) window.alert(data.message);
-            loadProjectFinances(project);
-          } catch (e) {
-            approveBtn.disabled = false;
-          }
-        });
-      });
-    } catch (e) {
-      console.error('loadProjectFinances:', e);
-      el.innerHTML = '<p class="organizational-error">Could not load tracking data.</p>';
-    }
-  }
-
-  function openDisbursementForm(project) {
-    const formEl = document.getElementById('organizational-sp-disbursement-form');
-    if (!formEl) return;
-    formEl.hidden = false;
-    formEl.innerHTML =
-      '<label>Disbursement date <input type="date" id="organizational-sp-disb-date"></label><br>' +
-      '<label>Amount paid to sponsee <input type="number" min="0" step="0.01" id="organizational-sp-disb-amount"></label><br>' +
-      '<label>Notes <input type="text" id="organizational-sp-disb-notes"></label><br>' +
-      '<button type="button" class="organizational-btn" id="organizational-sp-disb-save" style="margin-top:6px;">Save</button>' +
-      '<span id="organizational-sp-disb-error" class="organizational-error" style="display:none;margin-left:8px;"></span>';
-
-    const saveBtn = document.getElementById('organizational-sp-disb-save');
-    if (saveBtn) saveBtn.addEventListener('click', async function () {
-      const dateEl = document.getElementById('organizational-sp-disb-date');
-      const amountEl = document.getElementById('organizational-sp-disb-amount');
-      const notesEl = document.getElementById('organizational-sp-disb-notes');
-      const errEl = document.getElementById('organizational-sp-disb-error');
-      const body = {
-        disbursement_date: dateEl && dateEl.value ? dateEl.value : null,
-        amount_cents: amountEl && amountEl.value ? Math.round(Number(amountEl.value) * 100) : null,
-        notes: notesEl && notesEl.value ? notesEl.value : null,
-      };
-      try {
-        const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(moneyCtx(project), '/sponsored-projects/' + project.id + '/disbursements', body);
-        if (!data) return;
-        loadProjectFinances(project);
-      } catch (e) {
-        if (errEl) { errEl.textContent = 'Could not save disbursement.'; errEl.style.display = ''; }
-      }
-    });
-  }
-
-  function closeSpDetailModal() {
-    if (!spDetailModal) return;
-    spDetailModal.classList.remove('organizational-modal-open');
-    spDetailModal.hidden = true;
-  }
-
-  function openSpModal(project) {
-    if (!spModal) return;
-    const editing = project && project.id;
-    if (spEditId) spEditId.value = editing ? String(project.id) : '';
-    if (spName) spName.value = project ? project.name : '';
-    if (spDescription) spDescription.value = project ? project.description || '' : '';
-    if (spStartDate) spStartDate.value = project && project.start_date ? project.start_date.slice(0, 10) : '';
-    if (spEndDate) spEndDate.value = project && project.end_date ? project.end_date.slice(0, 10) : '';
-    if (spContactName) spContactName.value = project ? project.contact_lead_name || '' : '';
-    if (spContactEmail) spContactEmail.value = project ? project.contact_lead_email || '' : '';
-    if (spBudget) spBudget.value = project && project.annual_budget_estimate !== null ? project.annual_budget_estimate : '';
-    if (spSponsorshipModel) spSponsorshipModel.value = project && project.sponsorship_model ? project.sponsorship_model : '';
-    if (spProgram) spProgram.value = project && project.program_id ? String(project.program_id) : '';
-    if (spAdminRate) spAdminRate.value = project && project.admin_rate !== null && project.admin_rate !== undefined ? project.admin_rate : '';
-    if (spAdminRate) {
-      spAdminRate.disabled = !!(project && project.current_fee_kind);
-      spAdminRate.title = spAdminRate.disabled ? 'This project has a fee rule. Change the fee in the project\'s balance section.' : '';
-    }
-    if (spNextReportDue) spNextReportDue.value = project && project.next_report_due ? project.next_report_due.slice(0, 10) : '';
-    if (spStatus) spStatus.value = project ? project.status : 'active';
-    updateProgramHint();
-
-    const financesSection = document.getElementById('organizational-sp-edit-finances-section');
-    const reportsSection = document.getElementById('organizational-sp-edit-reports-section');
-    if (financesSection) financesSection.hidden = !editing;
-    if (reportsSection) reportsSection.hidden = !editing;
-    if (editing) {
-      const summaryEl = document.getElementById('organizational-sp-reports-summary');
-      if (summaryEl) {
-        summaryEl.innerHTML = '<p style="margin:0 0 8px 0;">Next report due: <strong>' +
-          (project.next_report_due ? formatDate(project.next_report_due) : 'Not set') + '</strong>' +
-          (project.last_report_received_at ? ' · Last received: ' + formatDate(project.last_report_received_at) : '') + '</p>';
-      }
-      loadProjectFinances(project);
-      loadProjectDocuments(project.id);
-      wireReportAttachForm(project.id);
-    }
-
-    spModal.hidden = false;
-    spModal.classList.add('organizational-modal-open');
-    if (spName) spName.focus();
-  }
-
-  function updateProgramHint() {
-    const hintEl = document.getElementById('organizational-sp-program-hint');
-    if (!hintEl || !spSponsorshipModel) return;
-    const effectiveModel = spSponsorshipModel.value || orgDefaultModel;
-    hintEl.hidden = effectiveModel !== 'model_a';
-  }
-
-  function closeSpModal() {
-    if (!spModal) return;
-    spModal.classList.remove('organizational-modal-open');
-    spModal.hidden = true;
-    if (spForm) spForm.reset();
-    if (spEditId) spEditId.value = '';
-  }
-
-  async function saveSponsoredProject(e) {
-    e.preventDefault();
-    const editId = spEditId && spEditId.value ? Number(spEditId.value) : 0;
-    const isEdit = Number.isInteger(editId) && editId > 0;
-
-    const body = {
-      name: spName ? spName.value : '',
-      description: spDescription ? spDescription.value : '',
-      start_date: spStartDate && spStartDate.value ? spStartDate.value : null,
-      end_date: spEndDate && spEndDate.value ? spEndDate.value : null,
-      contact_lead_name: spContactName ? spContactName.value : '',
-      contact_lead_email: spContactEmail ? spContactEmail.value : '',
-      annual_budget_estimate: spBudget && spBudget.value ? Number(spBudget.value) : null,
-      sponsorship_model: spSponsorshipModel && spSponsorshipModel.value ? spSponsorshipModel.value : null,
-      program_id: spProgram && spProgram.value ? Number(spProgram.value) : null,
-      admin_rate: spAdminRate && spAdminRate.value ? Number(spAdminRate.value) : null,
-      next_report_due: spNextReportDue && spNextReportDue.value ? spNextReportDue.value : null,
-      status: spStatus ? spStatus.value : 'active'
+  // ---------- Address ----------
+  function readUrl() {
+    const sp = new URLSearchParams(window.location.search);
+    const id = Number(sp.get('project') || sp.get('focus'));
+    const tab = sp.get('tab');
+    const view = sp.get('view');
+    return {
+      tab: TABS.indexOf(tab) !== -1 ? tab : 'projects',
+      project: Number.isInteger(id) && id > 0 ? id : null,
+      view: VIEWS.indexOf(view) !== -1 ? view : 'overview',
     };
+  }
 
-    if (spSave) spSave.disabled = true;
-    try {
-      const base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects';
-      const url = isEdit ? base + '/' + editId : base;
-      const method = isEdit ? 'PATCH' : 'POST';
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch(url, {
-        method: method,
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify(body)
-      });
-      clearTimeout(timeoutId);
-      const data = res.ok ? await res.json() : {};
-      if (!res.ok) {
-        showError(data.error || 'Could not save sponsored project.');
-        return;
-      }
-      showError('');
-      closeSpModal();
-      await loadSponsoredProjects();
-    } catch (e) {
-      console.error('saveSponsoredProject:', e);
-      showError('Could not save sponsored project.');
-    } finally {
-      if (spSave) spSave.disabled = false;
+  function writeUrl(push) {
+    const sp = new URLSearchParams();
+    if (state.project) {
+      sp.set('project', String(state.project));
+      if (state.view !== 'overview') sp.set('view', state.view);
+    } else if (state.tab !== 'projects') {
+      sp.set('tab', state.tab);
+    }
+    const qs = sp.toString();
+    const url = window.location.pathname + (qs ? '?' + qs : '');
+    if (url === window.location.pathname + window.location.search) return;
+    if (push) window.history.pushState(null, '', url); else window.history.replaceState(null, '', url);
+  }
+
+  function go(next, push) {
+    state = { ...state, ...next };
+    writeUrl(push !== false);
+    render();
+  }
+
+  // ---------- Slide-in panel ----------
+  function openPanel(title) {
+    panelTitle.textContent = title;
+    panelBody.innerHTML = '';
+    panel.classList.add('organizational-panel-is-open');
+    panelOverlay.classList.add('organizational-panel-is-open');
+    return panelBody;
+  }
+
+  function closePanel() {
+    panel.classList.remove('organizational-panel-is-open');
+    panelOverlay.classList.remove('organizational-panel-is-open');
+    panelBody.innerHTML = '';
+  }
+
+  // ---------- Data ----------
+  async function loadProjects() {
+    const out = await api('/sponsored-projects');
+    projects = (out && out.res.ok && out.data.sponsored_projects) || [];
+    if (canReadFund()) {
+      const ov = await api('/sponsorship/overview');
+      overview = ov && ov.res.ok ? ov.data : null;
     }
   }
 
-  async function deleteSponsoredProject(id) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsored-projects/' + id, {
-        method: 'DELETE',
-        credentials: 'include',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) {
-        showError('Could not delete sponsored project.');
-        return;
-      }
-      showError('');
-      await loadSponsoredProjects();
-    } catch (e) {
-      console.error('deleteSponsoredProject:', e);
-      showError('Could not delete sponsored project.');
-    }
+  function rowFor(id) {
+    return overview ? overview.projects.find((p) => p.id === Number(id)) || null : null;
   }
 
-  function wireSpModal() {
-    if (spModal) {
-      spModal.addEventListener('click', function (e) {
-        if (e.target === spModal) closeSpModal();
-      });
-    }
-    if (spCancel) spCancel.addEventListener('click', closeSpModal);
-    if (spAddBtn) spAddBtn.addEventListener('click', function () { openSpModal(null); });
-    if (spForm) spForm.addEventListener('submit', saveSponsoredProject);
-    if (spSponsorshipModel) spSponsorshipModel.addEventListener('change', updateProgramHint);
-    if (spDetailClose) spDetailClose.addEventListener('click', closeSpDetailModal);
-    if (spDetailModal) {
-      spDetailModal.addEventListener('click', function (e) {
-        if (e.target === spDetailModal) closeSpDetailModal();
-      });
-    }
-    document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape') return;
-      if (spModal && spModal.classList.contains('organizational-modal-open')) closeSpModal();
-      if (spDetailModal && spDetailModal.classList.contains('organizational-modal-open')) closeSpDetailModal();
+  // ---------- Top strip ----------
+  function statItem(label, value, sub, href) {
+    const inner = '<div class="organizational-budget-stat-label">' + esc(label) + '</div>' +
+      '<div class="organizational-budget-stat-value">' + esc(value) + '</div>' +
+      '<div class="organizational-budget-stat-secondary">' + esc(sub || '') + '</div>';
+    return '<div class="organizational-budget-stat-item">' + (href ? '<a class="organizational-sp-stat-link" href="' + esc(href) + '">' + inner + '</a>' : inner) + '</div>';
+  }
+
+  function renderStrip() {
+    if (!overview) { stripEl.hidden = true; return; }
+    const t = overview.totals;
+    stripEl.hidden = false;
+    stripEl.innerHTML =
+      statItem('Held for projects', money(t.held_cents), 'in the books') +
+      statItem('Available to spend', money(t.available_cents), 'after money committed') +
+      statItem('Fees due to run', money(t.fees_due_cents), 'quarters ended', myAccess.can_read_accounting ? '/organizational/o/' + encodeURIComponent(slug) + '/gift-postings' : null) +
+      statItem('Need attention', String(t.attention_count), 'hold, negative, report, agreement', '?tab=projects&attention=1');
+    const att = stripEl.querySelectorAll('.organizational-sp-stat-link')[myAccess.can_read_accounting ? 1 : 0];
+    if (att) att.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('organizational-sp-filter-attention').checked = true;
+      setFiltersOpen(true);
+      go({ tab: 'projects', project: null });
     });
   }
 
-  async function loadPrograms(slug) {
-    try {
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(slug) + '/programs', { credentials: 'include' });
-      const data = res.ok ? await res.json() : {};
-      programsCache = Array.isArray(data.programs) ? data.programs : [];
-      if (spProgram) {
-        const prev = spProgram.value;
-        spProgram.innerHTML = '<option value="">No program linked</option>';
-        const topLevel = programsCache.filter((p) => p.parent_id == null);
-        topLevel.forEach((p) => {
-          const activities = programsCache.filter((a) => a.parent_id === p.id);
-          const group = document.createElement('optgroup');
-          group.label = p.name || 'Program ' + p.id;
-          const programOpt = document.createElement('option');
-          programOpt.value = String(p.id);
-          programOpt.textContent = '(the program itself, no specific activity)';
-          group.appendChild(programOpt);
-          activities.forEach((a) => {
-            const o = document.createElement('option');
-            o.value = String(a.id);
-            o.textContent = a.name || 'Activity ' + a.id;
-            group.appendChild(o);
-          });
-          spProgram.appendChild(group);
-        });
-        if (prev) spProgram.value = prev;
-      }
-    } catch (e) {
-      console.error('loadPrograms:', e);
-    }
+  // ---------- Tabs ----------
+  function render() {
+    const inProject = !!state.project;
+    const active = inProject ? 'projects' : state.tab;
+    tabsEl.querySelectorAll('[data-section]').forEach((b) => b.classList.toggle('active', b.dataset.section === active));
+    TABS.forEach((t) => {
+      const pane = document.getElementById('organizational-sp-tab-' + t);
+      if (pane) pane.hidden = inProject || t !== active;
+    });
+    projectEl.hidden = !inProject;
+    stripEl.hidden = inProject || !overview;
+    const title = document.getElementById('organizational-org-title');
+    if (title) title.textContent = inProject ? 'Sponsorship' : 'Sponsorship | ' + TAB_TITLES[active];
+    if (inProject) return renderProject();
+    if (active === 'projects') return renderGrid();
+    if (active === 'money-out') return renderMoneyOut();
+    if (active === 'intake') return renderWorkspacePart('intake', ['applications', 'approvals']);
+    if (active === 'reports') return renderWorkspacePart('reports', ['calendar', 'year-end', 'information-returns'], '<p class="organizational-hint organizational-sp-intro"><a href="/organizational/o/' + encodeURIComponent(slug) + '/reports">All reports across modules</a></p>');
+    if (active === 'agreements') return renderAgreements();
+    if (active === 'settings') return renderSettings();
+    return null;
   }
 
-  function renderRecords(project) {
-    const host = document.getElementById('organizational-sp-moneyout');
-    if (!host || !window.OrganizationalSponsorRecords) return;
-    host.insertAdjacentHTML('afterend', '<div id="organizational-sp-records" style="margin-top:12px;"></div>');
-    const ctx = moneyCtx(project);
-    window.OrganizationalSponsorRecords.renderProject(document.getElementById('organizational-sp-records'), {
-      slug: currentSlug, projectId: project.id, canStaff: ctx.canEnter && myAccess.role !== 'program', canEnter: ctx.canEnter, isAdmin: ctx.isAdmin,
+  function wireTabs() {
+    tabsEl.querySelectorAll('[data-section]').forEach((b) => b.addEventListener('click', () => go({ tab: b.dataset.section, project: null })));
+    document.getElementById('organizational-sp-subtabs').querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => go({ view: b.dataset.view })));
+    document.getElementById('organizational-sp-back').addEventListener('click', (e) => { e.preventDefault(); go({ project: null, tab: 'projects' }); });
+    window.addEventListener('popstate', () => { state = readUrl(); render(); });
+    panelOverlay.addEventListener('click', closePanel);
+    document.getElementById('organizational-sp-panel-close').addEventListener('click', closePanel);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && panel.classList.contains('organizational-panel-is-open')) closePanel(); });
+  }
+
+  function applyTabAccess() {
+    const hide = (section, yes) => { const b = tabsEl.querySelector('[data-section="' + section + '"]'); if (b) b.hidden = yes; };
+    const staffView = canReadFund() && !isLead();
+    hide('money-out', !canReadFund());
+    hide('intake', !staffView);
+    hide('reports', !staffView);
+    hide('agreements', !staffView);
+    hide('settings', !staffView);
+    if (!canReadFund() || (isLead() && state.tab !== 'money-out')) state.tab = state.tab === 'money-out' && canReadFund() ? state.tab : 'projects';
+    const hist = document.querySelector('#organizational-sp-subtabs [data-view="history"]');
+    if (hist) hist.hidden = !(myAccess.read && myAccess.read.audit_log);
+    document.querySelectorAll('#organizational-sp-subtabs [data-view]').forEach((b) => { if (b.dataset.view !== 'overview' && !canReadFund()) b.hidden = true; });
+    const ll = document.querySelector('#organizational-sp-subtabs [data-view="lead-link"]');
+    if (ll && isLead()) ll.hidden = true;
+  }
+
+  // ---------- Projects tab ----------
+  function setFiltersOpen(open) {
+    const box = document.getElementById('organizational-sp-filters');
+    const btn = document.getElementById('organizational-sp-filter-btn');
+    box.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  }
+
+  function filterValues() {
+    return {
+      q: document.getElementById('organizational-sp-filter-q').value.trim().toLowerCase(),
+      status: document.getElementById('organizational-sp-filter-status').value,
+      model: document.getElementById('organizational-sp-filter-model').value,
+      attention: document.getElementById('organizational-sp-filter-attention').checked,
+    };
+  }
+
+  function flagChips(row, skipHold) {
+    if (!row) return '';
+    const f = row.flags;
+    const chips = [];
+    if (f.hold && !skipHold) chips.push(['danger', 'On hold']);
+    if (f.negative) chips.push(['danger', 'Negative']);
+    if (f.report_overdue) chips.push(['danger', 'Report overdue']);
+    if (f.agreement_missing) chips.push(['warn', 'No agreement']);
+    if (f.good_standing === false) chips.push(['warn', 'Not in good standing']);
+    return chips.map((c) => '<span class="organizational-sp-chip organizational-sp-chip-' + c[0] + '">' + esc(c[1]) + '</span>').join('');
+  }
+
+  function renderGrid() {
+    const showMoney = !!overview;
+    const filterBtn = document.getElementById('organizational-sp-filter-btn');
+    if (!projects.length) {
+      filterBtn.hidden = true;
+      setFiltersOpen(false);
+      listEl.innerHTML = '<p class="organizational-empty organizational-sp-empty-line">No sponsored projects yet.</p>';
+      return;
+    }
+    filterBtn.hidden = false;
+    const f = filterValues();
+    const rows = projects.filter((p) => {
+      const r = rowFor(p.id);
+      if (f.status === 'open' && OPEN_STATUSES.indexOf(p.status) === -1) return false;
+      if (f.status && f.status !== 'open' && p.status !== f.status) return false;
+      if (f.model && p.effective_sponsorship_model !== f.model) return false;
+      if (f.attention && !(r && r.attention)) return false;
+      if (f.q) {
+        const hay = (p.name + ' ' + ((r && r.lead_name) || p.contact_lead_name || '')).toLowerCase();
+        if (hay.indexOf(f.q) === -1) return false;
+      }
+      return true;
+    }).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    const head = '<tr><th>Project</th><th>Model</th><th>Status</th><th>Lead</th>' +
+      (showMoney ? '<th class="organizational-sp-num">Held</th><th class="organizational-sp-num">Available</th><th class="organizational-sp-num">Fee</th>' : '') +
+      '<th>Next report</th>' + (showMoney ? '<th>Flags</th>' : '') + '</tr>';
+    const body = rows.map((p) => {
+      const r = rowFor(p.id);
+      return '<tr class="organizational-sp-row" data-id="' + p.id + '" tabindex="0">' +
+        '<td class="organizational-sp-name" title="' + esc(p.name) + '"><a href="' + esc(projectHref(p.id)) + '">' + esc(p.name) + '</a></td>' +
+        '<td>' + esc(modelLabel(p.effective_sponsorship_model)) + '</td>' +
+        '<td>' + esc(statusLabel(p.status)) + '</td>' +
+        '<td class="organizational-sp-name" title="' + esc((r && r.lead_name) || p.contact_lead_name || '') + '">' + esc((r && r.lead_name) || p.contact_lead_name || '') + '</td>' +
+        (showMoney ? '<td class="organizational-sp-num">' + (r ? money(r.held_cents) : '') + '</td>' +
+          '<td class="organizational-sp-num' + (r && r.available_cents < 0 ? ' organizational-sp-fund-negative' : '') + '">' + (r ? money(r.available_cents) : '') + '</td>' +
+          '<td class="organizational-sp-num">' + (r ? esc(feeLabel(r.fee)) : '') + '</td>' : '') +
+        '<td>' + esc(fmtDate(r ? r.next_report_due : p.next_report_due)) + '</td>' +
+        (showMoney ? '<td class="organizational-sp-flags">' + flagChips(r) + '</td>' : '') + '</tr>';
+    }).join('');
+    listEl.innerHTML = '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table organizational-sp-grid" aria-label="Sponsored projects"><thead>' + head + '</thead><tbody>' +
+      (body || '<tr class="organizational-table-empty"><td colspan="9">No projects match the filters.</td></tr>') + '</tbody></table></div></section>';
+    listEl.querySelectorAll('.organizational-sp-row').forEach((tr) => {
+      const open = (e) => {
+        if (e && (e.metaKey || e.ctrlKey)) return;
+        if (e) e.preventDefault();
+        go({ project: Number(tr.dataset.id), view: 'overview' });
+      };
+      tr.addEventListener('click', open);
+      tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(e); });
     });
   }
 
-  async function loadMyAccess(slug) {
-    try {
-      const out = await window.apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/my-access', { method: 'GET' });
-      if (out && out.res.ok && out.data) myAccess = out.data.access || out.data;
-    } catch (e) {
-      console.error('loadMyAccess:', e);
+  function wireFilters() {
+    document.getElementById('organizational-sp-filter-btn').addEventListener('click', () => setFiltersOpen(document.getElementById('organizational-sp-filters').hidden));
+    ['organizational-sp-filter-q', 'organizational-sp-filter-status', 'organizational-sp-filter-model', 'organizational-sp-filter-attention'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', renderGrid);
+    });
+    if (new URLSearchParams(window.location.search).get('attention') === '1') {
+      document.getElementById('organizational-sp-filter-attention').checked = true;
+      setFiltersOpen(true);
     }
   }
 
-  async function loadOrgInfo(slug) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(slug), { 
-        credentials: 'include',
-        signal: controller.signal
+  // ---------- Money out tab ----------
+  async function renderMoneyOut() {
+    const el = document.getElementById('organizational-sp-tab-money-out');
+    el.innerHTML = '<p class="organizational-empty">Loading…</p>';
+    const out = await api('/sponsorship/money-out');
+    if (!out || !out.res.ok) { el.innerHTML = '<p class="organizational-error">' + esc((out && out.data && out.data.error) || 'Could not load money out.') + '</p>'; return; }
+    const d = out.data;
+    const link = (r) => '<a href="' + esc(projectHref(r.sponsored_project_id, 'money-out')) + '">' + esc(r.project_name) + '</a>';
+    const table = (title, head, rows, empty, foot) => '<h2 class="organizational-subheading">' + esc(title) + '</h2><section class="organizational-card organizational-card-flush">' +
+      (rows.length ? '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr>' + head.map((x) => '<th' + (x.num ? ' class="organizational-sp-num"' : '') + '>' + esc(x.label || x) + '</th>').join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+        : '<p class="organizational-empty organizational-sp-card-foot">' + esc(empty) + '</p>') + (foot ? '<p class="organizational-hint organizational-sp-card-foot">' + foot + '</p>' : '') + '</section>';
+    const REQ = { submitted: 'Submitted', in_review: 'In review', needs_info: 'Needs information' };
+    const gp = myAccess.can_read_accounting ? ' <a href="/organizational/o/' + encodeURIComponent(slug) + '/gift-postings">Open Gift Postings</a>.' : '';
+    el.innerHTML =
+      table('Payment requests', ['Asked', 'Project', 'Payee', 'For', { label: 'Amount', num: true }, 'Status'], d.requests.map((r) => '<tr><td>' + esc(fmtDate(r.created_at)) + '</td><td>' + link(r) + '</td><td>' + esc(r.payee_name || '') + '</td><td class="organizational-sp-name" title="' + esc(r.purpose) + '">' + esc(r.purpose) + '</td><td class="organizational-sp-num">' + money(r.amount_cents) + '</td><td>' + esc(REQ[r.status] || r.status) + '</td></tr>'),
+        'No payment requests waiting.', 'Approve, ask for more or reject on the project\'s Money out tab.') +
+      table('Disbursements waiting', ['Date', 'Project', 'Notes', { label: 'Amount', num: true }, 'Waiting for'], d.disbursements.map((r) => '<tr><td>' + esc(fmtDate(r.disbursement_date)) + '</td><td>' + link(r) + '</td><td class="organizational-sp-name" title="' + esc(r.notes || '') + '">' + esc(r.notes || '') + '</td><td class="organizational-sp-num">' + money(r.amount_cents) + '</td><td>' + (r.status === 'pending_approval' ? 'Approval' : 'Accounting to post') + '</td></tr>'),
+        'No disbursements waiting.', 'Accounting posts approved payments from Gift Postings.' + gp) +
+      table('Recalls', ['Date', 'Project', 'Reason', { label: 'Amount', num: true }, 'Status'], d.recalls.map((r) => '<tr><td>' + esc(fmtDate(r.recall_date)) + '</td><td>' + link(r) + '</td><td class="organizational-sp-name" title="' + esc(r.reason) + '">' + esc(r.reason) + '</td><td class="organizational-sp-num">' + money(r.amount_cents) + '</td><td>' + esc(({ pending: 'Waiting for Accounting', posted: 'Posted', void: 'Cancelled' })[r.status] || r.status) + '</td></tr>'),
+        'No recalls in the last 90 days.') +
+      (d.closings.length ? table('Closings', ['Date', 'Project', { label: 'Amount', num: true }, 'Status'], d.closings.map((r) => '<tr><td>' + esc(fmtDate(r.closing_date)) + '</td><td>' + link(r) + '</td><td class="organizational-sp-num">' + money(r.amount_cents) + '</td><td>Waiting for Accounting</td></tr>'), '') : '');
+  }
+
+  // ---------- Intake, Reports, Agreements ----------
+  function renderWorkspacePart(tab, parts, footHtml) {
+    const pane = document.getElementById('organizational-sp-tab-' + tab);
+    if (!window.OrganizationalSponsorRecords) return;
+    pane.innerHTML = '<div></div>' + (footHtml || '');
+    const el = pane.firstChild;
+    window.OrganizationalSponsorRecords.renderWorkspace(el, {
+      slug, canStaff: canStaff(), programs: programs.filter((p) => !p.parent_id), parts, projectHref, openPanel, closePanel,
+      onProjectsChanged: async () => { await loadProjects(); renderStrip(); },
+    });
+  }
+
+  function renderAgreements() {
+    const missing = overview ? overview.projects.filter((p) => p.flags.agreement_missing) : [];
+    const el = document.getElementById('organizational-sp-agreements-missing');
+    el.innerHTML = '<h2 class="organizational-subheading">Projects without a signed agreement</h2><section class="organizational-card organizational-card-flush">' +
+      (missing.length ? '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Project</th><th>Status</th><th>Lead</th></tr></thead><tbody>' +
+        missing.map((p) => '<tr><td><a href="' + esc(projectHref(p.id, 'agreement')) + '">' + esc(p.name) + '</a></td><td>' + esc(statusLabel(p.status)) + '</td><td>' + esc(p.lead_name || '') + '</td></tr>').join('') + '</tbody></table></div>'
+        : '<p class="organizational-empty organizational-sp-card-foot">Every accepted project has a signed agreement.</p>') + '</section>';
+    if (window.OrganizationalSponsorRecords) {
+      window.OrganizationalSponsorRecords.renderWorkspace(document.getElementById('organizational-sp-agreements-templates'), {
+        slug, canStaff: canStaff(), programs: [], parts: ['templates'], projectHref, openPanel, closePanel,
       });
-      clearTimeout(timeoutId);
-      const data = res.ok ? await res.json() : {};
-      if (!res.ok) {
-        showError('Could not load organization.');
-        return;
-      }
-      const org = data.org;
-      orgDefaultModel = org && org.sponsorship_model ? org.sponsorship_model : '';
-      if (org && window.OrganizationalSidebar && typeof window.OrganizationalSidebar.setWorkspaceName === 'function') {
-        window.OrganizationalSidebar.setWorkspaceName(org.display_name || '—');
-      }
-      if (org && window.OrganizationalHeader && typeof window.OrganizationalHeader.setOrg === 'function') {
-        window.OrganizationalHeader.setOrg(org.display_name || '—');
-      }
-
-      if (!org.fiscal_sponsorship_mode) {
-        showError('Fiscal sponsorship mode is not enabled for this organization. Enable it in Settings to manage sponsored projects.');
-        spAddBtn.hidden = true;
-      }
-    } catch (e) {
-      console.error('loadOrgInfo:', e);
     }
   }
 
+  // ---------- Settings ----------
+  async function renderSettings() {
+    const el = document.getElementById('organizational-sp-settings');
+    if (window.OrganizationalSponsorFund) window.OrganizationalSponsorFund.renderSettings(el, { slug, canMoney: canMoney(), who: whoWrites('finance') });
+    renderPublicSettings(document.getElementById('organizational-sp-public-settings'));
+  }
+
+  async function renderPublicSettings(el) {
+    const isAdmin = myAccess.role === 'admin';
+    const head = '<h2 class="organizational-subheading">Public pages and lead links</h2>';
+    const leadLine = '<p class="organizational-hint organizational-sp-card-foot">Lead links last 180 days and can be turned off on the project. Each project\'s public page is turned on under its Lead link and public page tab.</p>';
+    if (!isAdmin) {
+      el.innerHTML = head + '<section class="organizational-card">' + leadLine + '<p class="organizational-hint organizational-sp-card-foot">The optional spam check on public forms is set by admins.</p></section>';
+      return;
+    }
+    const out = await api('/public-settings');
+    const s = (out && out.res.ok && out.data.settings) || {};
+    el.innerHTML = head + '<section class="organizational-card">' + leadLine +
+      '<p class="organizational-hint organizational-sp-card-foot">Optional spam check on public forms: when a verify address and secret are saved, every public form must pass the check. Leave empty to turn it off.</p>' +
+      '<div class="organizational-sp-fund-form">' +
+      '<label>Verify address <input class="organizational-input" type="url" data-p="url" placeholder="https://" value="' + esc(s.challenge_verify_url || '') + '"></label>' +
+      '<label>Site key <input class="organizational-input" type="text" data-p="key" value="' + esc(s.challenge_site_key || '') + '"></label>' +
+      '<label>Secret <input class="organizational-input" type="password" data-p="secret" autocomplete="new-password" placeholder="' + (s.has_secret ? 'saved; type to replace' : '') + '"></label>' +
+      '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-p="save">Save</button><span class="organizational-hint" data-p="msg"></span></div></div></section>';
+    el.querySelector('[data-p="save"]').addEventListener('click', async () => {
+      const body = { challenge_verify_url: el.querySelector('[data-p="url"]').value.trim() || null, challenge_site_key: el.querySelector('[data-p="key"]').value.trim() || null };
+      const secret = el.querySelector('[data-p="secret"]').value;
+      if (secret) body.challenge_secret = secret;
+      if (!body.challenge_verify_url) body.challenge_secret = '';
+      const r = await api('/public-settings', { method: 'PUT', body: JSON.stringify(body) });
+      el.querySelector('[data-p="msg"]').textContent = r && r.res.ok ? 'Saved.' : ((r && r.data && r.data.error) || 'Could not save.');
+    });
+  }
+
+  // ---------- Project page ----------
+  async function renderProject() {
+    const id = state.project;
+    const p = projects.find((x) => Number(x.id) === Number(id));
+    if (!p) {
+      document.getElementById('organizational-sp-project-name').textContent = 'Project not found';
+      document.getElementById('organizational-sp-project-meta').textContent = '';
+      document.getElementById('organizational-sp-project-available').textContent = '';
+      document.getElementById('organizational-sp-project-strip').innerHTML = '';
+      viewEl.innerHTML = '<p class="organizational-empty">This project does not exist in this workspace, or you cannot see it.</p>';
+      return;
+    }
+    const r = rowFor(id);
+    document.getElementById('organizational-sp-project-name').textContent = p.name;
+    document.getElementById('organizational-sp-project-name').title = p.name;
+    document.getElementById('organizational-sp-project-meta').innerHTML =
+      '<span class="organizational-sp-chip">' + esc(statusLabel(p.status)) + '</span> ' + esc(modelLabel(p.effective_sponsorship_model)) +
+      ((r && r.lead_name) || p.contact_lead_name ? ' · Lead: ' + esc((r && r.lead_name) || p.contact_lead_name) : '') + ' ' + flagChips(r, true);
+    document.querySelectorAll('#organizational-sp-subtabs [data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view));
+    const availEl = document.getElementById('organizational-sp-project-available');
+    const strip = document.getElementById('organizational-sp-project-strip');
+    availEl.textContent = '';
+    strip.innerHTML = '';
+    if (canReadFund()) {
+      const bal = await api('/sponsored-projects/' + id + '/balance');
+      const b = bal && bal.res.ok ? bal.data.balance : null;
+      if (b && state.project === id) {
+        availEl.textContent = money(b.available_cents);
+        availEl.classList.toggle('organizational-sp-fund-negative', b.negative);
+        strip.innerHTML =
+          statItem('Received', money(b.received_posted_cents), b.received_unposted_cents ? money(b.received_unposted_cents) + ' not yet in the books' : 'in the books') +
+          statItem('Fees', money(Math.max(b.fees_accrued_cents, b.fees_posted_cents)), b.fees_unposted_cents ? money(b.fees_unposted_cents) + ' not yet run' : 'all posted') +
+          statItem('Paid out', money(b.disbursed_posted_cents + b.recalled_posted_cents + b.closing_transferred_cents + b.other_spending_cents), b.pending_cents ? money(b.pending_cents) + ' committed' : 'nothing committed') +
+          statItem('Available', money(b.available_cents), b.negative ? 'negative' : 'to spend');
+      }
+    }
+    if (state.project !== id) return;
+    const ctx = { slug, projectId: p.id, canMoney: canMoney(), canEnter: canEnter(), isAdmin: myAccess.role === 'admin', canStaff: canStaff() };
+    const refresh = async () => { await loadProjects(); renderStrip(); renderProject(); };
+    const box = (key) => '<div class="organizational-sp-view-block" data-v="' + key + '"></div>';
+    const at = (key) => viewEl.querySelector('[data-v="' + key + '"]');
+    const view = state.view;
+    if (view !== 'overview' && !canReadFund()) { go({ view: 'overview' }, false); return; }
+
+    if (view === 'overview') {
+      viewEl.innerHTML = box('facts') + (canReadFund() ? '<h3 class="organizational-sp-head">Balance</h3>' + box('balance') + '<h3 class="organizational-sp-head">Hold and standing</h3>' + box('hold') + box('standing')
+        : '<p class="organizational-hint">The balance and records are for ' + esc(whoReads('sponsorship')) + '.</p>');
+      renderFacts(at('facts'), p);
+      if (canReadFund()) {
+        window.OrganizationalSponsorFund.renderBalance(at('balance'), { ...ctx, parts: ['balance'] });
+        at('hold').innerHTML = p.status === 'on_hold'
+          ? '<p class="organizational-sp-mo-hold"><strong>On hold</strong>: ' + esc(p.hold_reason || '') + '. Payments and requests are blocked.' + (p.hold_kind === 'report_overdue' ? ' Lifts by itself when the report is received.' : '') + '</p>'
+          : '<p class="organizational-sp-rec-line">Not on hold.' + (canMoney() ? ' Holds are placed and lifted under <a href="' + esc(projectHref(p.id, 'money-out')) + '">Money out</a>.' : '') + '</p>';
+        window.OrganizationalSponsorRecords.renderProject(at('standing'), { ...ctx, parts: ['standing'], onChange: refresh });
+      }
+    } else if (view === 'money-in') {
+      viewEl.innerHTML = '<h3 class="organizational-sp-head">Gifts to this project</h3>' + box('gifts') + '<h3 class="organizational-sp-head">Fee</h3>' + box('fee') + box('letters');
+      renderGifts(at('gifts'), p);
+      window.OrganizationalSponsorFund.renderBalance(at('fee'), { ...ctx, parts: ['fee'] });
+      window.OrganizationalSponsorRecords.renderProject(at('letters'), { ...ctx, parts: ['letters', 'property'], onChange: refresh });
+    } else if (view === 'money-out') {
+      viewEl.innerHTML = box('disbursements') + box('moneyout');
+      renderDisbursements(at('disbursements'), p, refresh);
+      window.OrganizationalSponsorMoneyOut.render(at('moneyout'), { ...ctx, onChange: refresh });
+    } else if (view === 'agreement') {
+      viewEl.innerHTML = box('records');
+      window.OrganizationalSponsorRecords.renderProject(at('records'), { ...ctx, parts: ['agreement', 'documents', 'approvals'], onChange: refresh });
+    } else if (view === 'reports') {
+      viewEl.innerHTML = box('records');
+      window.OrganizationalSponsorRecords.renderProject(at('records'), { ...ctx, parts: ['reports', 'statements'], onChange: refresh });
+    } else if (view === 'lead-link') {
+      viewEl.innerHTML = box('records');
+      if (!canStaff()) { at('records').innerHTML = '<p class="organizational-hint">Lead links and the public page are managed by ' + esc(whoWrites('sponsorship')) + ', not program leads.</p>'; return; }
+      window.OrganizationalSponsorRecords.renderProject(at('records'), { ...ctx, parts: ['links', 'public'], onChange: refresh });
+    } else if (view === 'history') {
+      viewEl.innerHTML = box('history');
+      renderHistory(at('history'), p);
+    }
+  }
+
+  function renderFacts(el, p) {
+    const fact = (label, value) => '<div class="organizational-sp-fact"><span class="organizational-sp-fact-label">' + esc(label) + '</span><span>' + value + '</span></div>';
+    const prog = programs.find((x) => Number(x.id) === Number(p.program_id));
+    el.innerHTML = '<div class="organizational-sp-facts">' +
+      fact('Started', esc(fmtDate(p.start_date) || 'Not set')) +
+      fact('Ends', esc(p.end_date ? fmtDate(p.end_date) : 'Ongoing')) +
+      fact('Program', esc(prog ? prog.name : 'Not linked')) +
+      fact('Yearly budget', p.annual_budget_estimate != null ? esc(money(Math.round(Number(p.annual_budget_estimate) * 100))) : 'Not set') +
+      fact('Next report due', esc(fmtDate(p.next_report_due) || 'Not set')) +
+      fact('Documents', String(p.document_count || 0)) +
+      '</div>' +
+      (p.description ? '<p class="organizational-sp-rec-line organizational-sp-description">' + esc(p.description) + '</p>' : '') +
+      (canEnter() ? '<p class="organizational-sp-rec-line"><a href="#" data-a="edit">Edit details</a></p>' : '<p class="organizational-hint">Details are changed by ' + esc(whoWrites('sponsorship')) + '.</p>');
+    const edit = el.querySelector('[data-a="edit"]');
+    if (edit) edit.addEventListener('click', (e) => { e.preventDefault(); openProjectForm(p); });
+  }
+
+  async function renderGifts(el, p) {
+    const out = await api('/sponsored-projects/' + p.id + '/tracking');
+    const gifts = (out && out.res.ok && out.data.gifts) || [];
+    const POSTING = { posted: 'In the books', unposted: 'Waiting for Accounting', not_applicable: 'Not posted', void: 'Voided' };
+    el.innerHTML = gifts.length
+      ? '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Received</th><th>Type</th><th>Campaign</th><th class="organizational-sp-num">Amount</th><th>Fee</th><th>Books</th></tr></thead><tbody>' +
+        gifts.map((g) => '<tr><td>' + esc(fmtDate(g.received_at)) + '</td><td>' + esc(String(g.gift_type || '').replace(/_/g, ' ')) + '</td><td>' + esc(g.campaign || '') + '</td><td class="organizational-sp-num">' + money(g.amount_cents) + '</td><td>' +
+          (g.sponsor_fee_exempt ? '<span title="' + esc(g.sponsor_fee_exempt_reason || '') + '">Exempt</span>' : '') + '</td><td>' + esc(POSTING[g.posting_status] || g.posting_status) + '</td></tr>').join('') +
+        '</tbody></table></div></section>'
+      : '<p class="organizational-empty">No gifts tagged to this project yet. Gifts are tagged to a project when they are recorded in Funding.</p>';
+  }
+
+  async function renderDisbursements(el, p, refresh) {
+    const out = await api('/sponsored-projects/' + p.id + '/tracking');
+    if (!out || !out.res.ok) { el.innerHTML = '<p class="organizational-error">Could not load disbursements.</p>'; return; }
+    const list = out.data.disbursements || [];
+    const legacy = p.effective_sponsorship_model !== 'model_a';
+    const ctx = { slug, projectId: p.id, canMoney: canMoney(), canEnter: canEnter(), isAdmin: myAccess.role === 'admin' };
+    el.innerHTML = '<h3 class="organizational-sp-head">Disbursements</h3>' + (list.length
+      ? '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Date</th><th>Notes</th><th class="organizational-sp-num">Amount</th><th>Status</th><th></th></tr></thead><tbody>' +
+        list.map((d) => '<tr><td>' + esc(fmtDate(d.disbursement_date)) + '</td><td class="organizational-sp-name" title="' + esc(d.notes || '') + '">' + esc(d.notes || '') + '</td><td class="organizational-sp-num">' + money(d.amount_cents) + '</td><td>' +
+          (d.status === 'approved' ? (d.ledger_transaction_id ? 'Posted' : 'Waiting for Accounting') : d.status === 'pending_approval' ? 'Waiting for approval' : esc(d.status)) + '</td><td>' +
+          (d.status === 'pending_approval' && canEnter() ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-approve="' + d.id + '">Approve</button>' : '') +
+          (d.status === 'approved' && d.ledger_transaction_id && myAccess.can_write_accounting ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-unpost="' + d.id + '">Unpost</button>' : '') + '</td></tr>').join('') +
+        '</tbody></table></div></section>'
+      : '<p class="organizational-empty">No disbursements yet.</p>') +
+      (legacy && canEnter() ? '<p class="organizational-sp-rec-line"><a href="#" data-a="record">Record a disbursement</a></p>' : '');
+    el.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(ctx, '/sponsored-projects/' + p.id + '/disbursements/' + b.dataset.approve + '/approve', {});
+      if (!data) { b.disabled = false; return; }
+      if (data.needs_second_approval) window.alert(data.message);
+      refresh();
+    }));
+    el.querySelectorAll('[data-unpost]').forEach((b) => b.addEventListener('click', async () => {
+      const reason = window.prompt('Why is this disbursement being unposted? The entry in the books is reversed and the disbursement goes back to Accounting. (required)');
+      if (!reason || !reason.trim()) return;
+      b.disabled = true;
+      const r = await api('/gift-postings/disbursement/' + b.dataset.unpost + '/unpost', { method: 'POST', body: JSON.stringify({ reason }) });
+      if (!r || !r.res.ok) { window.alert((r && r.data && r.data.error) || 'Could not unpost.'); b.disabled = false; return; }
+      refresh();
+    }));
+    const rec = el.querySelector('[data-a="record"]');
+    if (rec) rec.addEventListener('click', (e) => { e.preventDefault(); openDisbursementForm(p, ctx, refresh); });
+  }
+
+  function openDisbursementForm(p, ctx, refresh) {
+    const body = openPanel('Record a disbursement');
+    body.innerHTML = '<div class="organizational-panel-fields">' +
+      '<label class="organizational-label">Date * <input class="organizational-input" type="date" data-f="date" value="' + new Date().toISOString().slice(0, 10) + '"></label>' +
+      '<label class="organizational-label">Amount paid * <input class="organizational-input" type="number" min="0" step="0.01" data-f="amount"></label>' +
+      '<label class="organizational-label organizational-panel-field-full">Notes <input class="organizational-input" type="text" data-f="notes"></label></div>' +
+      '<p class="organizational-panel-error" data-f="err" hidden></p>' +
+      '<div class="organizational-panel-actions"><button type="button" class="organizational-btn organizational-btn-outline" data-f="cancel">Cancel</button><button type="button" class="organizational-btn" data-f="save">Save</button></div>';
+    const f = (n) => body.querySelector('[data-f="' + n + '"]');
+    f('cancel').addEventListener('click', closePanel);
+    f('save').addEventListener('click', async () => {
+      const data = await window.OrganizationalSponsorMoneyOut.sendWithOverride(ctx, '/sponsored-projects/' + p.id + '/disbursements', {
+        disbursement_date: f('date').value || null, amount_cents: f('amount').value ? Math.round(Number(f('amount').value) * 100) : null, notes: f('notes').value || null,
+      });
+      if (!data) return;
+      closePanel();
+      refresh();
+    });
+  }
+
+  async function renderHistory(el, p) {
+    const out = await api('/sponsored-projects/' + p.id + '/history', { method: 'GET', skip403Redirect: true });
+    if (!out || !out.res.ok) { el.innerHTML = '<p class="organizational-hint">' + esc((out && out.data && out.data.error) || 'Could not load the history.') + '</p>'; return; }
+    const rows = out.data.entries || [];
+    const what = (e) => {
+      const t = String(e.table_name || '').replace(/^org_sponsor(ed_project)?_?/, '').replace(/_/g, ' ').replace(/s$/, '') || 'project';
+      const m = e.metadata || {};
+      if (e.field_name) return t + ': ' + e.field_name.replace(/_/g, ' ') + (e.old_value != null || e.new_value != null ? ' from ' + (e.old_value == null ? 'empty' : e.old_value) + ' to ' + (e.new_value == null ? 'empty' : e.new_value) : '');
+      return t + ' ' + ({ create: 'added', update: 'changed', delete: 'removed' })[e.action] + (m.reason ? ': ' + m.reason : m.summary ? ': ' + m.summary : '');
+    };
+    el.innerHTML = rows.length
+      ? '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead><tbody>' +
+        rows.map((e) => '<tr><td>' + esc(fmtDate(e.occurred_at)) + '</td><td>' + esc(e.user_email || 'This workspace') + '</td><td class="organizational-sp-name" title="' + esc(what(e)) + '">' + esc(what(e)) + '</td></tr>').join('') +
+        '</tbody></table></div></section>'
+      : '<p class="organizational-empty">No history recorded yet.</p>';
+  }
+
+  // ---------- Add and edit project ----------
+  function openProjectForm(project) {
+    const body = openPanel(project ? 'Edit project' : 'Add project');
+    body.appendChild(document.getElementById('organizational-sp-form-template').content.cloneNode(true));
+    const $ = (id) => document.getElementById('organizational-sp-' + id);
+    const progSel = $('program');
+    programs.filter((x) => x.parent_id == null).forEach((pg) => {
+      const group = document.createElement('optgroup');
+      group.label = pg.name || 'Program ' + pg.id;
+      const own = document.createElement('option');
+      own.value = String(pg.id);
+      own.textContent = '(the program itself)';
+      group.appendChild(own);
+      programs.filter((a) => a.parent_id === pg.id).forEach((a) => {
+        const o = document.createElement('option');
+        o.value = String(a.id);
+        o.textContent = a.name || 'Activity ' + a.id;
+        group.appendChild(o);
+      });
+      progSel.appendChild(group);
+    });
+    const p = project || {};
+    $('edit-id').value = p.id ? String(p.id) : '';
+    $('name').value = p.name || '';
+    $('description').value = p.description || '';
+    $('start-date').value = p.start_date ? String(p.start_date).slice(0, 10) : '';
+    $('end-date').value = p.end_date ? String(p.end_date).slice(0, 10) : '';
+    $('contact-name').value = p.contact_lead_name || '';
+    $('contact-email').value = p.contact_lead_email || '';
+    $('budget').value = p.annual_budget_estimate != null ? p.annual_budget_estimate : '';
+    $('sponsorship-model').value = p.sponsorship_model || '';
+    progSel.value = p.program_id ? String(p.program_id) : '';
+    $('admin-rate').value = p.admin_rate != null ? p.admin_rate : '';
+    if (p.current_fee_kind) { $('admin-rate').disabled = true; $('admin-rate').title = 'This project has a fee rule. Change the fee under Money in.'; }
+    $('next-report-due').value = p.next_report_due ? String(p.next_report_due).slice(0, 10) : '';
+    $('status').value = p.status || 'active';
+    const hint = () => { $('program-hint').hidden = ($('sponsorship-model').value || (org && org.sponsorship_model) || '') !== 'model_a'; };
+    hint();
+    $('sponsorship-model').addEventListener('change', hint);
+    $('more-link').addEventListener('click', (e) => { e.preventDefault(); $('more-fields').hidden = !$('more-fields').hidden; });
+    $('cancel').addEventListener('click', closePanel);
+    if (p.id && canMoney()) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'organizational-btn organizational-btn-outline organizational-sp-delete';
+      del.textContent = 'Delete project';
+      del.addEventListener('click', () => deleteProject(p));
+      $('cancel').parentNode.insertBefore(del, $('cancel'));
+    }
+    $('form').addEventListener('submit', (e) => saveProject(e, p));
+    $('name').focus();
+  }
+
+  async function saveProject(e, p) {
+    e.preventDefault();
+    const $ = (id) => document.getElementById('organizational-sp-' + id);
+    const errBox = $('form-error');
+    const body = {
+      name: $('name').value, description: $('description').value,
+      start_date: $('start-date').value || null, end_date: $('end-date').value || null,
+      contact_lead_name: $('contact-name').value, contact_lead_email: $('contact-email').value,
+      annual_budget_estimate: $('budget').value ? Number($('budget').value) : null,
+      sponsorship_model: $('sponsorship-model').value || null,
+      program_id: $('program').value ? Number($('program').value) : null,
+      admin_rate: $('admin-rate').value && !$('admin-rate').disabled ? Number($('admin-rate').value) : (p.admin_rate != null ? Number(p.admin_rate) : null),
+      next_report_due: $('next-report-due').value || null,
+      status: $('status').value,
+    };
+    $('save').disabled = true;
+    const out = await api('/sponsored-projects' + (p.id ? '/' + p.id : ''), { method: p.id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+    $('save').disabled = false;
+    if (!out || !out.res.ok) {
+      errBox.textContent = (out && out.data && out.data.error) || 'Could not save the project. Check the fields and try again.';
+      errBox.hidden = false;
+      return;
+    }
+    closePanel();
+    await loadProjects();
+    renderStrip();
+    const newId = !p.id && out.data.sponsored_project ? out.data.sponsored_project.id : null;
+    if (newId) go({ project: newId, view: 'overview' }); else render();
+  }
+
+  async function deleteProject(p) {
+    if (!window.confirm('Delete "' + p.name + '"? This cannot be undone.')) return;
+    const out = await api('/sponsored-projects/' + p.id, { method: 'DELETE' });
+    if (!out || !out.res.ok) { window.alert((out && out.data && out.data.error) || 'Could not delete the project.'); return; }
+    closePanel();
+    await loadProjects();
+    renderStrip();
+    go({ project: null, tab: 'projects' });
+  }
+
+  // ---------- Start ----------
   async function init() {
-    const { slug } = parseSponsoredProjectsPath();
-    currentSlug = slug;
-    if (!slug) {
-      showError('Invalid workspace URL.');
+    const m = (window.location.pathname || '').match(/^\/organizational\/o\/([^/]+)\/sponsored-projects\/?$/);
+    slug = m ? decodeURIComponent(m[1]) : '';
+    if (!slug) { showError('This address does not name a workspace.'); loadingEl.hidden = true; return; }
+    const [o, prog, acc] = await Promise.all([
+      api(''), api('/programs'), api('/my-access'),
+    ]);
+    if (!o || !o.res.ok) { showError((o && o.data && o.data.error) || 'Could not load the workspace.'); loadingEl.hidden = true; return; }
+    org = o.data.org;
+    programs = (prog && prog.res.ok && (prog.data.programs || [])) || [];
+    if (acc && acc.res.ok) myAccess = acc.data.access || acc.data;
+    if (window.OrganizationalSidebar && window.OrganizationalSidebar.setWorkspaceName) window.OrganizationalSidebar.setWorkspaceName(org.display_name || '—');
+    if (window.OrganizationalHeader && window.OrganizationalHeader.setOrg) window.OrganizationalHeader.setOrg(org.display_name || '—');
+    if (!org.fiscal_sponsorship_mode) {
+      showError('This workspace is not set up as a fiscal sponsor. Turn on fiscal sponsorship in Settings to manage sponsored projects.');
       loadingEl.hidden = true;
       return;
     }
-
-    wireSpModal();
-    await Promise.all([loadOrgInfo(slug), loadPrograms(slug), loadMyAccess(slug)]);
-    const workspaceEl = document.getElementById('organizational-sp-workspace');
-    if (workspaceEl && canReadFund() && myAccess.role !== 'program' && window.OrganizationalSponsorRecords) {
-      window.OrganizationalSponsorRecords.renderWorkspace(workspaceEl, {
-        slug, canStaff: !!(myAccess.write && myAccess.write.sponsorship), programs: programsCache.filter((p) => !p.parent_id), onProjectsChanged: loadSponsoredProjects,
-      });
-    }
-    const settingsEl = document.getElementById('organizational-sp-settings');
-    if (settingsEl && canReadFund() && window.OrganizationalSponsorFund) {
-      settingsEl.closest('details').hidden = false;
-      window.OrganizationalSponsorFund.renderSettings(settingsEl, { slug, canMoney: canMoney() });
-    }
-
+    if (!canEnter()) addBtn.hidden = true;
+    addBtn.addEventListener('click', () => openProjectForm(null));
+    state = readUrl();
+    applyTabAccess();
+    wireTabs();
+    wireFilters();
+    await loadProjects();
     loadingEl.hidden = true;
     dashEl.hidden = false;
-
-    await loadSponsoredProjects();
+    renderStrip();
+    writeUrl(false);
+    render();
   }
 
   (async function initHeader() {

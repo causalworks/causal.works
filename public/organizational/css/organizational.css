@@ -6021,6 +6021,56 @@ input.organizational-sp-rec-month { width: auto; max-width: 150px; display: inli
   .organizational-sp-fund-form { grid-template-columns: 1fr; }
 }
 
+/* Sponsorship screen: tabs, project grid, project page */
+.organizational-sp-page .organizational-budget-workspace-tabs { margin-bottom: 12px; border-bottom: 1px solid var(--organizational-border-subtle); }
+.organizational-sp-pane[hidden], .organizational-sp-page .organizational-budget-stat-strip[hidden] { display: none; }
+.organizational-sp-toolbar { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.organizational-sp-toolbar-gap { flex: 1; }
+.organizational-sp-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; margin: 0 0 8px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: 6px; font-size: 0.8125rem; }
+.organizational-sp-filters[hidden] { display: none; }
+.organizational-sp-filters .organizational-input, .organizational-sp-filters .organizational-select { width: auto; min-width: 140px; font-size: 0.8125rem; padding: 4px 7px; }
+.organizational-sp-filter-check { display: inline-flex; gap: 4px; align-items: center; color: var(--text-secondary); }
+.organizational-sp-filter-check input { width: auto; }
+.organizational-sp-empty-line { margin: 8px 0; }
+.organizational-sp-grid td, .organizational-sp-grid th { white-space: nowrap; }
+.organizational-sp-grid td.organizational-sp-flags { white-space: normal; min-width: 140px; }
+.organizational-sp-row { cursor: pointer; }
+.organizational-sp-row a { color: inherit; text-decoration: none; font-weight: 600; }
+.organizational-sp-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.organizational-table th.organizational-sp-num, .organizational-sp-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.organizational-sp-chip { display: inline-block; margin: 0 4px 0 0; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; line-height: 1.5; background: var(--surface-active); color: var(--text-secondary); white-space: nowrap; }
+.organizational-sp-chip-danger { background: rgba(239, 68, 68, 0.1); color: var(--organizational-status-danger); }
+.organizational-sp-chip-warn { background: rgba(245, 158, 11, 0.12); color: #92400e; }
+.organizational-sp-stat-link { color: inherit; text-decoration: none; display: contents; }
+.organizational-sp-card-foot { margin: 0; padding: 8px 12px; }
+.organizational-sp-intro { margin: 0 0 12px; }
+.organizational-sp-page .organizational-subheading { margin: 16px 0 6px; }
+.organizational-sp-page .organizational-subheading:first-child { margin-top: 0; }
+.organizational-sp-back { margin: 0 0 4px; font-size: 0.8125rem; }
+.organizational-sp-project-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.organizational-sp-project-title { min-width: 0; max-width: 100%; }
+.organizational-sp-project-title h2 { margin: 0; font-size: 1.25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.organizational-sp-project-meta { display: block; margin-top: 2px; font-size: 0.8125rem; color: var(--text-secondary); }
+.organizational-sp-project-available { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+.organizational-sp-project-available .organizational-budget-stat-value { font-size: 1.25rem; }
+.organizational-sp-subtabs { margin-bottom: 12px; flex-wrap: nowrap; overflow-x: auto; }
+.organizational-sp-head { margin: 16px 0 6px; font-size: 0.9375rem; }
+.organizational-sp-view-block:empty { display: none; }
+.organizational-sp-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 16px; font-size: 0.8125rem; }
+.organizational-sp-fact { display: flex; flex-direction: column; }
+.organizational-sp-fact-label { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.organizational-sp-description { white-space: pre-line; }
+.organizational-sp-more { margin: 0 0 8px; font-size: 0.8125rem; }
+.organizational-sp-delete { margin-right: auto; }
+@media (max-width: 600px) {
+  .organizational-sp-page .organizational-budget-workspace-tabs { flex-wrap: nowrap; overflow-x: auto; }
+  .organizational-sp-page .organizational-budget-workspace-tabs .organizational-tab { padding: 10px 10px; }
+  .organizational-sp-project-head { flex-direction: column; align-items: stretch; }
+  .organizational-sp-project-available { align-items: flex-start; }
+  .organizational-sp-page .organizational-budget-stat-item { min-width: 0; flex: 1 1 calc(50% - 8px); grid-template-columns: 1fr; }
+  .organizational-sp-page .organizational-panel-fields { grid-template-columns: 1fr; }
+}
+
 /* Public pages (lead link, public project page) */
 body.organizational-pub { background: var(--organizational-surface, var(--surface, #f7f7f5)); margin: 0; }
 .organizational-pub-main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }

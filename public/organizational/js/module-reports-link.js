@@ -1,4 +1,4 @@
-/* module-reports-link.js -- a "Reports" tab on Budget, Accounting, Funding and Membership (a button on Sponsored Projects).
+/* module-reports-link.js -- a "Reports" tab on Budget, Accounting, Funding and Membership.
    It opens that module's reports inside the module: the module's reports as grouped links (list in reports-index.js), and the
    chosen report in place of the list, in place of the module's own content until another tab is chosen. The report itself is the Reports page shown
    in embedded mode (?embed=1: no header, sidebar or title), so the reports exist in one place only (js/reports.js).
@@ -16,7 +16,6 @@
     accounting: { row: '#organizational-accounting-workspace-tabs', after: '[data-section="gift-postings"]' },
     funding: { row: '#organizational-funders-workspace-tabs', after: '[data-section="donors"]' },
     membership: { row: '.organizational-tabs', after: '[data-membership-tab="payments"]', label: 'Membership' },
-    'sponsored-projects': { button: '#organizational-sp-add-btn', label: 'Sponsorship' },
   };
   var MODULE_OF = { grants: 'funding' };
   var cfg = PAGES[MODULE_OF[active] || active];

@@ -1,7 +1,7 @@
 /* sponsor-records.js — a sponsored project's records (agreement and amendments, documents by type, reports, good standing and
    acknowledgments, approvals) and the workspace-wide lists (applications, approvals queue, reports calendar, agreement templates).
    OrganizationalSponsorRecords.renderProject(el, { slug, projectId, canStaff, canEnter, isAdmin, onChange })
-   OrganizationalSponsorRecords.renderWorkspace(el, { slug, canStaff, programs }) */
+   OrganizationalSponsorRecords.renderWorkspace(el, { slug, canStaff, programs, parts, projectHref, openPanel, closePanel }) */
 (function () {
   'use strict';
 
@@ -78,9 +78,11 @@
     const docsByType = {};
     docList.forEach((d) => { (docsByType[d.sponsor_doc_type || ''] = docsByType[d.sponsor_doc_type || ''] || []).push(d); });
 
+    const parts = ctx.parts || ['agreement', 'documents', 'reports', 'standing', 'statements', 'letters', 'property', 'links', 'public', 'approvals'];
+    const show = (k) => parts.indexOf(k) !== -1;
     el.innerHTML =
       // Agreement
-      '<div class="organizational-panel-section-head">Agreement</div>' +
+      (!show('agreement') ? '' : '<div class="organizational-panel-section-head">Agreement</div>' +
       (signed ? '<p class="organizational-sp-rec-line">Signed ' + esc(signed.signed_at) + ' · ' + docLink(ctx.slug, signed.signed_document_id, 'signed copy') +
           ' · effective ' + esc(signed.effective_date) + '</p>' +
           (amendments.length ? '<ul class="organizational-sp-fund-list">' + amendments.map((m) => '<li>Amendment from ' + esc(m.effective_date) + ': ' + esc(m.summary) + ' · ' + docLink(ctx.slug, m.document_id, 'document') + '</li>').join('') + '</ul>' : '') +
@@ -89,9 +91,9 @@
           (draft ? '<p class="organizational-sp-rec-line">Draft generated ' + esc(String(draft.created_at).slice(0, 10)) + ' · ' + docLink(ctx.slug, draft.generated_document_id, 'open the draft') +
             (ctx.canStaff ? ' · <a href="#" data-a="signed" data-id="' + draft.id + '">Record the signed copy</a>' : '') + '</p>' : '') +
           (ctx.canStaff ? '<p class="organizational-sp-rec-line"><a href="#" data-a="generate">' + (draft ? 'Generate again' : 'Generate the agreement') + '</a></p>' : '')) +
-      '<div data-box="agreement" hidden></div>' +
+      '<div data-box="agreement" hidden></div>') +
       // Documents
-      '<div class="organizational-panel-section-head">Documents</div>' +
+      (!show('documents') ? '' : '<div class="organizational-panel-section-head">Documents</div>' +
       (docList.length ? '<ul class="organizational-sp-fund-list">' + Object.keys(docsByType).sort().map((k) =>
         '<li><strong>' + esc(k ? typeLabel(k) : 'No type') + '</strong>: ' + docsByType[k].map((d) =>
           docLink(ctx.slug, d.id, d.title) + (d.version > 1 ? ' <span class="organizational-hint">v' + d.version + (d.is_current ? '' : ', older') + '</span>' : '') +
@@ -100,9 +102,9 @@
             types.map((t) => '<option value="' + t.key + '">' + esc(t.label) + '</option>').join('') + '</select>' : '')).join(' · ') + '</li>').join('') + '</ul>'
         : '<p class="organizational-hint organizational-sp-rec-line">No documents yet.</p>') +
       (ctx.canEnter ? '<p class="organizational-sp-rec-line"><select class="organizational-select organizational-sp-rec-type" data-f="up-type">' + types.map((t) => '<option value="' + t.key + '">' + esc(t.label) + '</option>').join('') +
-        '</select> <input type="file" data-f="up-file"> <button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-a="upload">Upload</button></p>' : '') +
+        '</select> <input type="file" data-f="up-file"> <button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-a="upload">Upload</button></p>' : '')) +
       // Reports
-      '<div class="organizational-panel-section-head">Reports</div>' +
+      (!show('reports') ? '' : '<div class="organizational-panel-section-head">Reports</div>' +
       (reports.length ? '<ul class="organizational-sp-fund-list">' + reports.slice().reverse().slice(0, 12).map((r) =>
         '<li>' + esc(r.kind === 'funder' ? (r.title || 'Funder report') + (r.funder_name ? ' (' + r.funder_name + ')' : '') : 'Quarter ' + r.period_start + ' to ' + r.period_end) +
         ' · due ' + esc(r.due_date) + ' · <span class="organizational-sp-rec-' + r.status + '">' + esc(STATUS[r.status] || r.status) + (r.received_at ? ' ' + esc(r.received_at) : '') + '</span>' +
@@ -110,54 +112,57 @@
         (ctx.canStaff && !r.received_at ? ' · <a href="#" data-a="received" data-id="' + r.id + '">Mark received</a>' : '') + '</li>').join('') + '</ul>'
         : '<p class="organizational-hint organizational-sp-rec-line">Quarterly reports appear here once the project is active.</p>') +
       (ctx.canStaff ? '<p class="organizational-sp-rec-line"><a href="#" data-a="funder-report">Add a report owed to a funder</a></p>' : '') +
-      '<div data-box="report" hidden></div>' +
+      '<div data-box="report" hidden></div>') +
       // Standing
-      '<div class="organizational-panel-section-head">Good standing</div>' +
+      (!show('standing') ? '' : '<div class="organizational-panel-section-head">Good standing</div>' +
       (standing ? '<p class="organizational-sp-rec-line">' + (standing.good ? 'In good standing.' : '<span class="organizational-sp-mo-hold">Not in good standing.</span>') +
           (standing.status === 'lapsed' && ctx.canStaff ? ' <a href="#" data-a="reactivate">Reactivate</a>' : '') + '</p>' +
         '<ul class="organizational-sp-fund-list">' + standing.items.map((i) => '<li>' + (i.ok ? '✓ ' : '✗ ') + esc(i.label) + ' <span class="organizational-hint">' + esc(i.detail) + '</span></li>').join('') + '</ul>' +
         '<details class="organizational-collapsible"><summary class="organizational-section-heading">Standing terms acknowledged</summary><div class="organizational-section-body"><ul class="organizational-sp-fund-list">' +
         standing.acknowledgments.map((a) => '<li>' + esc(a.label) + ' · ' + (a.acknowledged_on ? esc(a.acknowledged_on) : '<span class="organizational-hint">not yet</span>') +
-          (ctx.canStaff ? ' · <a href="#" data-a="ack" data-key="' + a.key + '">Record</a>' : '') + '</li>').join('') + '</ul></div></details>' : '') +
+          (ctx.canStaff ? ' · <a href="#" data-a="ack" data-key="' + a.key + '">Record</a>' : '') + '</li>').join('') + '</ul></div></details>' : '')) +
       // Statements
-      '<div class="organizational-panel-section-head">Monthly statements</div>' +
+      (!show('statements') ? '' : '<div class="organizational-panel-section-head">Monthly statements</div>' +
       (statements.length ? '<ul class="organizational-sp-fund-list">' + statements.slice(0, 6).map((m) => '<li>' + esc(String(m.month).slice(0, 7)) + ' · closing ' + money(m.closing_cents) +
         ' · ' + docLink(ctx.slug, m.generated_document_id, 'PDF') + ' · <span class="organizational-hint">' + esc(({ sent: 'emailed to ' + (m.sent_to || 'the lead'), failed: 'email failed', skipped: 'no lead email', not_sent: 'not emailed', pending: 'waiting' })[m.send_status] || m.send_status) + '</span>' +
         (ctx.canStaff && (m.send_status === 'failed' || m.send_status === 'not_sent') ? ' · <a href="#" data-a="stmt" data-month="' + esc(String(m.month).slice(0, 7)) + '" data-send="1">Email it</a>' : '') + '</li>').join('') + '</ul>'
         : '<p class="organizational-hint organizational-sp-rec-line">Statements are made on the statement day each month.</p>') +
       (ctx.canStaff ? '<p class="organizational-sp-rec-line">Make a statement for <input type="month" class="organizational-input organizational-sp-rec-month" data-f="stmt-month" value="' + lastMonth + '"> ' +
-        '<a href="#" data-a="stmt" data-send="0">Make PDF</a> · <a href="#" data-a="stmt" data-send="1">Make and email</a></p>' : '') +
+        '<a href="#" data-a="stmt" data-send="0">Make PDF</a> · <a href="#" data-a="stmt" data-send="1">Make and email</a></p>' : '')) +
       // Donor letters
-      (letters.length ? '<div class="organizational-panel-section-head">Donor letters</div><ul class="organizational-sp-fund-list">' + letters.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.donor_name || 'Donor') + ' · ' + money(g.amount_cents) +
+      (!show('letters') ? '' : (letters.length ? '<div class="organizational-panel-section-head">Donor letters</div><ul class="organizational-sp-fund-list">' + letters.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.donor_name || 'Donor') + ' · ' + money(g.amount_cents) +
         ' · ' + (g.missing ? '<span class="organizational-sp-rec-overdue">letter missing</span> · <a href="/api/organizational/orgs/' + encodeURIComponent(ctx.slug) + '/sponsored-projects/' + ctx.projectId + '/gifts/' + g.id + '/donor-letter-template">template</a>' +
           (ctx.canStaff ? ' · <a href="#" data-a="letter" data-id="' + g.id + '">Attach signed letter</a>' : '') : docLink(ctx.slug, g.donor_letter_document_id, 'signed letter')) + '</li>').join('') + '</ul>' : '') +
+      (show('property') ? '' : '<div data-box="gift" hidden></div>')) +
       // Donated property
-      (property.length ? '<div class="organizational-panel-section-head">Donated property</div><ul class="organizational-sp-fund-list">' + property.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.in_kind_description || 'Donated item') + ' · ' + money(g.amount_cents) +
+      (!show('property') ? '' : (property.length ? '<div class="organizational-panel-section-head">Donated property</div><ul class="organizational-sp-fund-list">' + property.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.in_kind_description || 'Donated item') + ' · ' + money(g.amount_cents) +
         (g.release_id ? ' · released (' + esc(g.release_status) + (g.release_posted ? ', posted' : '') + ')'
           : g.held_as === 'asset' && g.posting_status === 'posted' && ctx.canStaff ? ' · <a href="#" data-a="release" data-id="' + g.id + '">Release to the project at value</a>'
             : ' <span class="organizational-hint">' + (g.posting_status !== 'posted' ? 'waiting for Accounting to post' : 'booked as an expense') + '</span>') + '</li>').join('') + '</ul>' : '') +
-      '<div data-box="gift" hidden></div>' +
-      // Lead links and public page
-      (ctx.canStaff ? '<div class="organizational-panel-section-head">Project lead link</div>' +
+      '<div data-box="gift" hidden></div>') +
+      // Lead link
+      (!show('links') ? '' : (ctx.canStaff ? '<div class="organizational-panel-section-head">Project lead link</div>' +
         '<p class="organizational-hint organizational-sp-rec-line">The lead opens the project\'s balance and activity, asks for payments, sends reports and documents. No sign-in; keep links private.</p>' +
         (links.length ? '<ul class="organizational-sp-fund-list">' + links.map((l) => '<li>' + esc(l.label || 'Link') + ' · made ' + esc(String(l.created_at).slice(0, 10)) + ' · ' +
           (l.revoked_at ? 'turned off' : new Date(l.expires_at) < new Date() ? 'expired' : 'works until ' + esc(String(l.expires_at).slice(0, 10))) +
           ' · used ' + l.uses + ' time' + (l.uses === 1 ? '' : 's') + (l.revoked_at || new Date(l.expires_at) < new Date() ? '' : ' · <a href="#" data-a="revoke" data-id="' + l.id + '">Turn off</a>') + '</li>').join('') + '</ul>' : '') +
         '<p class="organizational-sp-rec-line"><a href="#" data-a="link" data-send="1">Make a link and email it to the lead</a> · <a href="#" data-a="link" data-send="0">Make a link to copy</a></p>' +
-        '<div data-box="link" hidden></div>' +
+        '<div data-box="link" hidden></div>' : '')) +
+      // Public page
+      (!show('public') ? '' : (ctx.canStaff ?
         '<div class="organizational-panel-section-head">Public page</div>' +
         '<p class="organizational-sp-rec-line"><label><input type="checkbox" data-f="pub-on"' + (me.public_page_enabled ? ' checked' : '') + '> Show a public page for this project</label>' +
           (me.public_page_enabled ? ' · <a href="/p/' + encodeURIComponent(ctx.slug) + '/projects/' + ctx.projectId + '" target="_blank" rel="noopener">open it</a>' : '') + '</p>' +
         '<p class="organizational-sp-rec-line"><textarea class="organizational-input" rows="3" data-f="pub-summary" placeholder="What the public page says about the project">' + esc(me.public_summary || '') + '</textarea>' +
-          ' <a href="#" data-a="pub-save">Save</a></p>' : '') +
+          ' <a href="#" data-a="pub-save">Save</a></p>' : '')) +
       // Approvals
-      '<div class="organizational-panel-section-head">Items using the sponsor\'s name</div>' +
+      (!show('approvals') ? '' : '<div class="organizational-panel-section-head">Items using the sponsor\'s name</div>' +
       (approvals.length ? '<ul class="organizational-sp-fund-list">' + approvals.map((a) => '<li>' + esc(APPROVAL_KINDS[a.kind] || a.kind) + ': ' + esc(a.title) + ' · ' + esc(a.status) +
         (a.decision_reason ? ' <span class="organizational-hint">' + esc(a.decision_reason) + '</span>' : '') + (a.draft_document_id ? ' · ' + docLink(ctx.slug, a.draft_document_id, 'draft') : '') +
         (ctx.canStaff && a.status === 'pending' ? ' · <a href="#" data-a="decide" data-id="' + a.id + '" data-d="approve">Approve</a> · <a href="#" data-a="decide" data-id="' + a.id + '" data-d="decline">Decline</a>' : '') + '</li>').join('') + '</ul>'
         : '<p class="organizational-hint organizational-sp-rec-line">Nothing waiting for approval.</p>') +
       (ctx.canEnter ? '<p class="organizational-sp-rec-line"><a href="#" data-a="ask-approval">Ask for approval</a></p>' : '') +
-      '<div data-box="approval" hidden></div>';
+      '<div data-box="approval" hidden></div>');
 
     const done = () => { renderProject(el, ctx); if (ctx.onChange) ctx.onChange(); };
     const on = (sel, fn) => el.querySelectorAll(sel).forEach((x) => x.addEventListener(x.tagName === 'SELECT' ? 'change' : 'click', (e) => { if (x.tagName === 'A') e.preventDefault(); fn(x); }));
@@ -319,42 +324,41 @@
       api(ctx.slug, '/sponsor-approvals?status=pending'), api(ctx.slug, '/sponsor-agreement-templates'),
     ]);
     const applications = (apps && apps.res.ok && apps.data.applications) || [];
-    const reports = ((cal && cal.res.ok && cal.data.reports) || []).filter((r) => !r.received_at && r.status !== 'upcoming');
+    const reports = ((cal && cal.res.ok && cal.data.reports) || []).filter((r) => !r.received_at);
     const approvals = (appr && appr.res.ok && appr.data.approvals) || [];
     const templates = (tpls && tpls.res.ok && tpls.data.templates) || [];
-    const open = applications.filter((a) => a.status === 'submitted' || a.status === 'in_review');
+    const parts = ctx.parts || ['applications', 'approvals', 'calendar', 'year-end', 'information-returns', 'templates'];
+    const show = (k) => parts.indexOf(k) !== -1;
+    const projectLink = (id, name, view) => (ctx.projectHref && id ? '<a href="' + esc(ctx.projectHref(id, view)) + '">' + esc(name) + '</a>' : esc(name));
+    const section = (title, body) => '<h2 class="organizational-subheading">' + esc(title) + '</h2><section class="organizational-card organizational-card-flush">' + body + '</section>';
+    const table = (head, rows, empty) => rows.length
+      ? '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr>' + head.map((x) => '<th' + (x.num ? ' class="organizational-sp-num"' : '') + '>' + esc(x.label || x) + '</th>').join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+      : '<p class="organizational-empty organizational-sp-card-foot">' + esc(empty) + '</p>';
     el.innerHTML =
-      '<details class="organizational-collapsible"' + (open.length ? ' open' : '') + '><summary class="organizational-section-heading">Applications' + (open.length ? ' · ' + open.length + ' open' : '') + '</summary><div class="organizational-section-body">' +
-        (applications.length ? '<ul class="organizational-sp-fund-list organizational-sp-mo-requests">' + applications.map((a) => '<li><span><strong>' + esc(a.project_name) + '</strong> · ' + esc(a.lead_name || '') +
-          (a.budget_cents != null ? ' · budget ' + money(a.budget_cents) : '') + ' · ' + esc(a.status) + (a.decision_reason ? ' <span class="organizational-hint">' + esc(a.decision_reason) + '</span>' : '') + '</span>' +
+      (!show('applications') ? '' : section('Applications',
+        table(['Project', 'Lead', { label: 'Yearly budget', num: true }, 'Status', ''], applications.map((a) => '<tr><td title="' + esc(a.mission || '') + '">' + esc(a.project_name) + '</td><td>' + esc(a.lead_name || '') + '</td>' +
+          '<td class="organizational-sp-num">' + (a.budget_cents != null ? money(a.budget_cents) : '') + '</td><td>' + esc(a.status) + (a.decision_reason ? ' <span class="organizational-hint">' + esc(a.decision_reason) + '</span>' : '') + '</td><td>' +
           (ctx.canStaff && (a.status === 'submitted' || a.status === 'in_review') ? '<span class="organizational-sp-mo-actions"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-a="accept" data-id="' + a.id + '">Accept</button>' +
-            '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-a="decline" data-id="' + a.id + '">Decline</button></span>' : '') +
-          (a.mission ? '<span class="organizational-hint" style="flex-basis:100%;">' + esc(a.mission) + '</span>' : '') + '</li>').join('') + '</ul>' : '<p class="organizational-hint">No applications yet.</p>') +
-        (ctx.canStaff ? '<p class="organizational-sp-rec-line"><a href="#" data-a="new-app">Enter an application</a></p><div data-box="app" hidden></div>' : '') +
-      '</div></details>' +
-      '<details class="organizational-collapsible"' + (reports.length ? ' open' : '') + '><summary class="organizational-section-heading">Reports due' + (reports.length ? ' · ' + reports.length : '') + '</summary><div class="organizational-section-body">' +
-        (reports.length ? '<ul class="organizational-sp-fund-list">' + reports.map((r) => '<li>' + esc(r.due_date) + ' · ' + esc(r.source === 'grant' ? r.title : (r.project_name + ': ' + (r.kind === 'funder' ? r.title : 'quarterly report'))) +
-          ' · <span class="organizational-sp-rec-' + r.status + '">' + esc(STATUS[r.status] || r.status) + '</span></li>').join('') + '</ul>' : '<p class="organizational-hint">Nothing due in the next 30 days.</p>') +
-      '</div></details>' +
-      '<details class="organizational-collapsible"' + (approvals.length ? ' open' : '') + '><summary class="organizational-section-heading">Waiting for approval' + (approvals.length ? ' · ' + approvals.length : '') + '</summary><div class="organizational-section-body">' +
-        (approvals.length ? '<ul class="organizational-sp-fund-list">' + approvals.map((a) => '<li>' + esc(a.project_name) + ' · ' + esc(APPROVAL_KINDS[a.kind] || a.kind) + ': ' + esc(a.title) + '</li>').join('') + '</ul>' : '<p class="organizational-hint">Nothing waiting.</p>') +
-        '<p class="organizational-hint">Approve or decline from the project.</p>' +
-      '</div></details>' +
-      '<details class="organizational-collapsible"><summary class="organizational-section-heading">Year-end sheet</summary><div class="organizational-section-body">' +
-        '<p class="organizational-sp-rec-line">Fiscal year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="fy" value="' + (new Date().getFullYear() - 1) + '"> ' +
-        '<a href="#" data-a="year-end">Show</a> · <a href="#" data-a="year-end-csv">Download CSV</a></p><div data-box="year-end"></div>' +
-      '</div></details>' +
-      '<details class="organizational-collapsible"><summary class="organizational-section-heading">Grant releases by entity</summary><div class="organizational-section-body">' +
-        '<p class="organizational-sp-rec-line">Calendar year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="iry" value="' + (new Date().getFullYear() - 1) + '"> ' +
+            '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-a="decline" data-id="' + a.id + '">Decline</button></span>' : '') + '</td></tr>'), 'No applications yet.') +
+        (ctx.canStaff ? '<p class="organizational-sp-rec-line organizational-sp-card-foot"><a href="#" data-a="new-app">Enter an application</a></p>' : '') + '<div data-box="app" hidden></div>')) +
+      (!show('approvals') ? '' : section('Waiting for approval',
+        table(['Project', 'What', 'Title', 'Asked'], approvals.map((a) => '<tr><td>' + projectLink(a.sponsored_project_id, a.project_name, 'agreement') + '</td><td>' + esc(APPROVAL_KINDS[a.kind] || a.kind) + '</td><td>' + esc(a.title) + '</td><td>' + esc(String(a.requested_at || '').slice(0, 10)) + '</td></tr>'), 'Nothing waiting.') +
+        '<p class="organizational-hint organizational-sp-card-foot">Approve or decline from the project, under Agreement and documents.</p>')) +
+      (!show('calendar') ? '' : section('Reports due',
+        table(['Due', 'Project', 'Report', 'Status'], reports.map((r) => '<tr><td>' + esc(r.due_date) + '</td><td>' + (r.source === 'grant' ? '' : projectLink(r.sponsored_project_id, r.project_name, 'reports')) + '</td><td>' +
+          esc(r.source === 'grant' ? r.title : (r.kind === 'funder' ? r.title : 'Quarterly report')) + '</td><td><span class="organizational-sp-rec-' + r.status + '">' + esc(STATUS[r.status] || r.status) + '</span></td></tr>'), 'No reports outstanding.'))) +
+      (!show('year-end') ? '' : section('Year-end sheet',
+        '<p class="organizational-sp-rec-line organizational-sp-card-foot">Fiscal year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="fy" value="' + (new Date().getFullYear() - 1) + '"> ' +
+        '<a href="#" data-a="year-end">Show</a> · <a href="#" data-a="year-end-csv">Download CSV</a></p><div data-box="year-end"></div>')) +
+      (!show('information-returns') ? '' : section('Grant releases by entity',
+        '<p class="organizational-sp-rec-line organizational-sp-card-foot">Calendar year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="iry" value="' + (new Date().getFullYear() - 1) + '"> ' +
         '<a href="#" data-a="ir">Show</a> · <a href="#" data-a="ir-csv">Download CSV</a></p><div data-box="ir"></div>' +
-        '<p class="organizational-hint">Check the information-return threshold against the IRS instructions each year (Sponsorship settings).</p>' +
-      '</div></details>' +
-      '<details class="organizational-collapsible"><summary class="organizational-section-heading">Agreement templates</summary><div class="organizational-section-body">' +
-        '<ul class="organizational-sp-fund-list">' + templates.map((t) => '<li>' + esc(t.title) + (t.is_default ? ' <span class="organizational-hint">shared default</span>' : '') +
-          (ctx.canStaff ? ' · <a href="#" data-a="tpl-copy" data-id="' + t.id + '">' + (t.is_default ? 'Copy and edit' : 'Edit') + '</a>' : '') + '</li>').join('') + '</ul>' +
-        '<p class="organizational-hint">Merge fields: ' + esc(((tpls && tpls.data && tpls.data.merge_fields) || []).map((m) => '{{' + m + '}}').join(' ')) + '</p>' +
-        '<div data-box="tpl" hidden></div>' +
-      '</div></details>';
+        '<p class="organizational-hint organizational-sp-card-foot">Check the information-return threshold against the IRS instructions each year (Sponsorship settings).</p>')) +
+      (!show('templates') ? '' : section('Agreement templates',
+        table(['Template', 'Kind', ''], templates.map((t) => '<tr><td>' + esc(t.title) + '</td><td>' + (t.is_default ? 'Shared default' : 'This workspace') + '</td><td>' +
+          (ctx.canStaff ? '<a href="#" data-a="tpl-copy" data-id="' + t.id + '">' + (t.is_default ? 'Copy and edit' : 'Edit') + '</a>' : '') + '</td></tr>'), 'No templates.') +
+        '<p class="organizational-hint organizational-sp-card-foot">Merge fields: ' + esc(((tpls && tpls.data && tpls.data.merge_fields) || []).map((m) => '{{' + m + '}}').join(' ')) + '</p>' +
+        '<div data-box="tpl" hidden></div>'));
 
     const done = () => renderWorkspace(el, ctx);
     const on = (sel, fn) => el.querySelectorAll(sel).forEach((x) => x.addEventListener('click', (e) => { e.preventDefault(); fn(x); }));
@@ -363,9 +367,15 @@
       if (!reason || !reason.trim()) return;
       if (await post(ctx.slug, '/sponsor-applications/' + b.dataset.id + '/decide', { decision: 'decline', reason })) done();
     });
-    on('[data-a="accept"]', (b) => {
-      const box = el.querySelector('[data-box="app"]');
+    const formBox = (key, title) => {
+      if (ctx.openPanel) return ctx.openPanel(title);
+      const box = el.querySelector('[data-box="' + key + '"]');
       box.hidden = false;
+      return box;
+    };
+    const closeForm = () => { if (ctx.closePanel) ctx.closePanel(); };
+    on('[data-a="accept"]', (b) => {
+      const box = formBox('app', 'Accept the application');
       box.innerHTML = '<div class="organizational-sp-fund-form"><label>Program for the project fund <select class="organizational-select" data-f="prog"><option value="">Choose later</option>' +
         (ctx.programs || []).map((p) => '<option value="' + p.id + '">' + esc(p.name) + '</option>').join('') + '</select></label>' +
         '<label>Model <select class="organizational-select" data-f="model"><option value="">Workspace default</option><option value="model_a">Comprehensive</option><option value="model_c">Pre-approved grant</option></select></label>' +
@@ -374,14 +384,14 @@
       const f = (n) => box.querySelector('[data-f="' + n + '"]');
       f('go').addEventListener('click', async () => {
         if (await post(ctx.slug, '/sponsor-applications/' + b.dataset.id + '/decide', { decision: 'accept', reason: f('reason').value, program_id: f('prog').value || null, sponsorship_model: f('model').value || null })) {
+          closeForm();
           done();
           if (ctx.onProjectsChanged) ctx.onProjectsChanged();
         }
       });
     });
     on('[data-a="new-app"]', async () => {
-      const box = el.querySelector('[data-box="app"]');
-      box.hidden = false;
+      const box = formBox('app', 'Enter an application');
       const names = await api(ctx.slug, '/constituents/names?active=true', { method: 'GET', skip403Redirect: true });
       const contacts = (names && names.res.ok && Array.isArray(names.data)) ? names.data : [];
       box.innerHTML = '<div class="organizational-sp-fund-form">' +
@@ -402,7 +412,7 @@
           applicant_constituent_id: Number(document.getElementById('sp-app-applicant').value) || null,
           budget_cents: f('budget').value ? Math.round(Number(f('budget').value) * 100) : null };
         ['mission', 'activities', 'leaders', 'expected_funders', 'risks'].forEach((k) => { body[k] = f(k).value; });
-        if (await post(ctx.slug, '/sponsor-applications', body)) done();
+        if (await post(ctx.slug, '/sponsor-applications', body)) { closeForm(); done(); }
       });
     });
     on('[data-a="year-end-csv"]', () => {
@@ -434,15 +444,14 @@
     });
     on('[data-a="tpl-copy"]', (a) => {
       const t = templates.find((x) => String(x.id) === a.dataset.id);
-      const box = el.querySelector('[data-box="tpl"]');
-      box.hidden = false;
+      const box = formBox('tpl', t.is_default ? 'Copy the template' : 'Edit the template');
       box.innerHTML = '<div class="organizational-sp-fund-form"><label style="grid-column:1/-1;">Title * <input class="organizational-input" type="text" data-f="title" value="' + esc(t.is_default ? t.title + ' (this workspace)' : t.title) + '"></label>' +
         '<label style="grid-column:1/-1;">Text * <textarea class="organizational-input" rows="16" data-f="body">' + esc(t.body) + '</textarea></label>' +
         '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-f="go">Save template</button></div></div>';
       box.querySelector('[data-f="go"]').addEventListener('click', async () => {
         const body = { title: box.querySelector('[data-f="title"]').value, body: box.querySelector('[data-f="body"]').value, model: t.model };
         const ok = t.is_default ? await post(ctx.slug, '/sponsor-agreement-templates', body) : await post(ctx.slug, '/sponsor-agreement-templates/' + t.id, body, 'PUT');
-        if (ok) done();
+        if (ok) { closeForm(); done(); }
       });
     });
   }

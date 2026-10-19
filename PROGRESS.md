@@ -7,14 +7,22 @@ Test database: `createdb test_db`, load `build-specs/schema.sql`, then every fil
 ## Done
 - U1 server: `lib/sponsorOverview.js` (grid rows, the four top numbers, project flags, money-out queue, project history), batched `loadStandings` in `lib/sponsorStanding.js`, read routes `GET /sponsorship/overview`, `GET /sponsorship/money-out`, `GET /sponsored-projects/:id/history`, dashboard and compliance links now open `?project=<id>&view=...`, tests `tests/sponsorship/overview*.test.js`.
 
+- U1 screens: `sponsored-projects.html` and `js/sponsored-projects.js` rebuilt as one module page: four-number strip, tabs Projects / Money out / Intake / Reports / Agreements, gear for Sponsorship settings (fee and threshold settings plus public-page spam check), project page `?project=<id>&view=` with sub-tabs Overview, Money in, Money out, Agreement and documents, Reports, Lead link and public page, History. `sponsor-fund.js`, `sponsor-money-out.js` and `sponsor-records.js` take a `parts` list so each tab shows its slice; workspace forms open in the slide-in panel. Gift Postings and the Document Vault link to the project. Checked in a browser at 1280 px and 390 px as admin and board member, no console errors. Pull request from `build/sponsorship-ui-u1`.
+
 ## Next
-- U1 screens: page title, four-number strip, tabs (Projects, Money out, Intake, Reports, Agreements), gear for Sponsorship settings, project page with sub-tabs, slide-in panels for add/edit and intake.
+- U2: layout polish (grouped settings, plain section headings instead of collapsible blocks, one date format, money alignment, empty states, status chips in the components).
 
 ## Blocked or needs the owner
 - Nothing yet.
 
 ## Decisions to review
-- The four numbers sit above the tabs, as the spec says (Budget puts its strip under the tabs).
+- The four numbers sit above the tabs, as the spec says (Budget puts its strip under the tabs). They are hidden on the project page, which has its own four.
+- "Held for projects" uses the statement rule (`heldCents`): received and in the books, less fees charged, payments, recalls, closings and other spending. "Available" also takes off money committed.
+- "Fees due to run" is the same figure the Accounting fee run preview shows for quarters ended by today.
+- "Need attention" counts projects on hold, negative, with an overdue report, or with no signed agreement. Good standing is shown as a flag but not counted.
+- Lead links keep their fixed 180-day default; the settings page states it rather than adding a stored setting (a stored default would change a route, out of scope).
+- The shared "Reports" button that the module-reports script added next to "Add project" is removed for Sponsorship; there are no Sponsorship entries in the reports index, and the Reports tab links to all reports instead.
+- Old dashboard links with `?focus=<id>` still open the project page.
 
 ## After merge (owner actions per pull request)
 - U1: no migration. Restart the app.

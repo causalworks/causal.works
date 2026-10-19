@@ -91,6 +91,10 @@
     renderRows(flagged.concat(untagged, rows, dis, recalls, closings));
   }
 
+  function projectLink(id, name, view) {
+    return '<a href="/organizational/o/' + encodeURIComponent(currentSlug) + '/sponsored-projects?project=' + id + '&view=' + view + '">' + esc(name) + '</a>';
+  }
+
   function renderRows(rows) {
     if (!tbody) return;
     pendingRows = rows;
@@ -111,14 +115,14 @@
       }
       if (g.closing) {
         const c = g.closing;
-        return '<tr data-id="' + g.id + '"><td>Closing</td><td>' + esc(c.closing_date || '') + '</td><td>' + esc(c.project_name) + '</td><td>' + fmtUsd(c.amount_cents) + '</td>'
+        return '<tr data-id="' + g.id + '"><td>Closing</td><td>' + esc(c.closing_date || '') + '</td><td>' + projectLink(c.project_id, c.project_name, 'money-out') + '</td><td>' + fmtUsd(c.amount_cents) + '</td>'
           + '<td style="font-size:0.8125rem;color:var(--text-secondary);">Remaining balance' + (c.destination_name ? ' to ' + esc(c.destination_name) : '') + ': ' + esc(c.reason) + '</td>'
           + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-closing-post" data-id="' + c.id + '">Post…</button> '
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-closing-void" data-id="' + c.id + '">Cancel</button></td></tr>';
       }
       if (g.recall) {
         const rc = g.recall;
-        return '<tr data-id="' + g.id + '"><td>Recall</td><td>' + esc(rc.recall_date || '') + '</td><td>' + esc(rc.project_name) + '</td><td>' + fmtUsd(rc.amount_cents) + '</td>'
+        return '<tr data-id="' + g.id + '"><td>Recall</td><td>' + esc(rc.recall_date || '') + '</td><td>' + projectLink(rc.project_id, rc.project_name, 'money-out') + '</td><td>' + fmtUsd(rc.amount_cents) + '</td>'
           + '<td style="font-size:0.8125rem;color:var(--text-secondary);">Funds taken back from the project: ' + esc(rc.reason) + '</td>'
           + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-recall-post" data-id="' + rc.id + '">Post</button> '
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-recall-void" data-id="' + rc.id + '">Cancel</button></td></tr>';
@@ -148,7 +152,7 @@
       return '<tr data-id="' + g.id + '">' +
         '<td>' + typeLabel + '</td>' +
         '<td>' + esc((g.received_at || '').slice(0, 10)) + '</td>' +
-        '<td>' + esc(g.constituent_name || '—') + '</td>' +
+        '<td>' + (g.disbursement && g.disbursement.project_id ? projectLink(g.disbursement.project_id, g.constituent_name || g.disbursement.project_name, 'money-out') : esc(g.constituent_name || '—')) + '</td>' +
         '<td>' + fmtUsd(g.amount_cents) + '</td>' +
         '<td style="font-size:0.8125rem;color:var(--text-secondary);">' + details + '</td>' +
         '<td><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline organizational-giftpostings-review-btn" data-id="' + g.id + '">' + btnLabel + '</button></td>' +

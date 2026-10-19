@@ -254,7 +254,7 @@
       { area: 'donors', roots: ['#organizational-funding-actions'], hide: ['#organizational-gift-add-donation', '#organizational-gift-add-pledge'] },
       { allAreas: ['donors', 'funder_records'], roots: ['#organizational-funding-actions'], hide: ['#organizational-funder-add'] },
     ],
-    'sponsored-projects': [{ area: 'sponsorship', roots: ['main', '#organizational-sp-modal'], hide: ['#organizational-sp-add-btn'], note: true }],
+    'sponsored-projects': [{ area: 'sponsorship', roots: ['main', '#organizational-sp-panel'], hide: ['#organizational-sp-add-btn'], note: true }],
   };
   const RO_WRITE_TEXT = /^(\+|add\b|new\b|save\b|delete\b|remove\b|import\b|create\b|edit\b|copy\b|recalc|promote|fork\b|approve|archive|void\b|apply\b|fix math|run\b|rename|duplicate|upload|attach|reset|revert)/i;
   const RO_FIELD_HOME = 'form, table, .organizational-panel, .organizational-panel-body, .organizational-modal-overlay';

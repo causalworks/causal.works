@@ -1,6 +1,6 @@
 /* sponsor-fund.js — a sponsored project's fund on the project page: balance parts, the fee line, the tie-out with the books,
    fee rule changes (amendments once the agreement is signed), fee exemptions on gifts; and the sponsorship settings section.
-   OrganizationalSponsorFund.renderBalance(el, { slug, projectId, canMoney })
+   OrganizationalSponsorFund.renderBalance(el, { slug, projectId, canMoney, parts: ['balance', 'fee'] })
    OrganizationalSponsorFund.renderSettings(el, { slug, canMoney }) */
 (function () {
   'use strict';
@@ -50,7 +50,9 @@
     const locked = !!(rules && rules.res.ok && rules.data.locked);
     const gifts = (track && track.res.ok && track.data.gifts) || [];
 
-    el.innerHTML =
+    const parts = ctx.parts || ['balance', 'fee'];
+    const show = (k) => parts.indexOf(k) !== -1;
+    el.innerHTML = (!show('balance') ? '' :
       '<table class="organizational-sp-fund-table"><tbody>' +
         row('Received, in the books', money(b.received_posted_cents)) +
         (b.received_unposted_cents ? row('Received, not yet in the books', money(b.received_unposted_cents), 'not counted as available until posted') : '') +
@@ -64,7 +66,8 @@
       '<p class="organizational-hint organizational-sp-fund-tieout">' +
         (t.ledger_net_cents == null ? esc(t.explanation || '') :
           'Books, project program: ' + money(t.ledger_net_cents) + ' · expected ' + money(t.expected_cents) +
-          (t.difference_cents ? ' · difference ' + money(t.difference_cents) : '') + '. ' + esc(t.explanation || '')) + '</p>' +
+          (t.difference_cents ? ' · difference ' + money(t.difference_cents) : '') + '. ' + esc(t.explanation || '')) + '</p>') +
+      (!show('fee') ? '' :
       '<p style="margin:8px 0 0;">Fee: ' + esc(ruleText(current)) +
         (locked ? ' <span class="organizational-hint">(agreement signed ' + esc(rules.data.agreement_signed_at || '') + '; changes are amendments)</span>' : '') +
         (ctx.canMoney ? ' · <a href="#" class="organizational-sp-fee-change">Change</a>' : '') +
@@ -72,7 +75,7 @@
       (ruleList.length > 1 ? '<details class="organizational-collapsible"><summary class="organizational-section-heading">Fee history</summary><div class="organizational-section-body"><ul style="margin:0;padding-left:18px;">' +
         ruleList.map((r) => '<li>' + esc(ruleText(r)) + (r.amendment_reason ? ' · ' + esc(r.amendment_reason) : '') + '</li>').join('') + '</ul></div></details>' : '') +
       '<div class="organizational-sp-fee-form" hidden></div>' +
-      '<div class="organizational-sp-fee-exempt" hidden></div>';
+      '<div class="organizational-sp-fee-exempt" hidden></div>');
 
     const changeLink = el.querySelector('.organizational-sp-fee-change');
     if (changeLink) changeLink.addEventListener('click', (e) => { e.preventDefault(); openFeeForm(el, ctx, current, locked); });

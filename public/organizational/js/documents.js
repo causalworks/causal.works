@@ -143,7 +143,7 @@
     if (doc.source_ref_type) return { group: 'Accounting', label: 'Saved report', href: base + '/reports' };
     if (doc.grant_id) return { group: 'Funding', label: 'Grant', href: base + '/grants' };
     if (doc.obligation_id) return { group: 'Compliance', label: 'Obligation', href: base + '/compliance' };
-    return { group: 'Sponsorship', label: 'Sponsored project', href: base + '/sponsored-projects' };
+    return { group: 'Sponsorship', label: 'Sponsored project', href: base + '/sponsored-projects' + (doc.sponsored_project_id ? '?project=' + doc.sponsored_project_id + '&view=agreement' : '') };
   }
 
   function docTitleLink(doc) {

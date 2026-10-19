@@ -52,6 +52,7 @@
     if (name === 'summary') loadSummary();
     if (name === 'tiers') loadTiers();
     if (name === 'settings') loadSettings();
+    if (name === 'emails') loadEmails();
   }
 
   // --- Dues members ---
@@ -149,6 +150,12 @@
     panelTitle.textContent = d.dues_member.display_name;
     panelBody.innerHTML = recordHtml(d);
     wireRecord(d);
+    api('/messages?constituent_id=' + id).then((m) => {
+      const box = $('record-messages');
+      if (!box) return;
+      const rows = (m && m.res.ok && m.data.messages) || [];
+      box.innerHTML = rows.length ? rows.slice(0, 20).map((x) => esc(String(x.sent_at || x.created_at).slice(0, 10)) + ' · ' + esc(x.subject || x.template_key) + ' · ' + esc(x.status) + (x.opened_at ? ', opened' : '')).join('<br>') : 'No emails yet.';
+    });
     openPanel();
   }
 
@@ -229,6 +236,8 @@
     if (d.seats.length) {
       html += '<div class="organizational-membership-section">Seats</div><ul>' + d.seats.map((s) => '<li>' + esc(s.display_name) + (s.label ? ' (' + esc(s.label) + ')' : '') + ', from ' + esc(String(s.starts_on).slice(0, 10)) + (s.ends_on ? ' to ' + esc(String(s.ends_on).slice(0, 10)) : '') + '</li>').join('') + '</ul>';
     }
+
+    html += '<div class="organizational-membership-section">Emails</div><div id="record-messages" class="organizational-hint">Loading…</div>';
 
     html += '<div class="organizational-membership-section">History</div><div class="organizational-table-wrap"><table class="organizational-table"><tbody>'
       + (d.history.length ? d.history.map((hh) => '<tr><td style="white-space:nowrap;">' + esc(String(hh.occurred_at).slice(0, 10)) + '</td><td>' + esc(historyText(hh)) + '</td><td class="organizational-hint">' + esc(hh.by_email || '') + '</td></tr>').join('')
@@ -427,6 +436,105 @@
     openPanel();
   }
 
+  // --- Emails ---
+
+  const TPL_NAMES = { welcome: 'Welcome', renewal_60: 'First renewal notice', renewal_30: 'Second renewal notice', renewal_0: 'Ends today',
+    grace_15: 'Grace period', win_back_60: 'Win-back', failed_payment_0: 'Card payment failed', failed_payment_3: 'Payment failed, reminder', failed_payment_7: 'Payment failed, last reminder' };
+  const ANCHOR = { join: 'after joining', end: 'the end date', failed: 'after a failed payment' };
+  const MSG_STATUS = { queued: 'Waiting', sent: 'Sent', failed: 'Failed', skipped: 'Not sent' };
+  let templates = [];
+  const bulkKey = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+
+  function whenText(t) {
+    if (t.anchor === 'end') return t.offset_days === 0 ? 'On the end date' : Math.abs(t.offset_days) + ' days ' + (t.offset_days < 0 ? 'before' : 'after') + ' the end date';
+    if (t.anchor === 'join') return t.offset_days ? t.offset_days + ' days after joining' : 'On joining';
+    return t.offset_days ? t.offset_days + ' days after a failed payment' : 'On the day a payment fails';
+  }
+
+  async function loadEmails() {
+    const out = await api('/templates');
+    templates = (out && out.res.ok && out.data.templates) || [];
+    $('membership-templates-tbody').innerHTML = templates.map((t) => '<tr><td>' + esc(TPL_NAMES[t.key] || t.key) + (t.edited ? ' <span class="organizational-hint">edited</span>' : '') + '</td><td>' + esc(whenText(t)) + '</td><td class="organizational-hint">' + esc(t.subject) + '</td><td>' + (t.enabled ? 'Yes' : 'No') + '</td><td>'
+      + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-tpl="' + esc(t.key) + '">' + (access.canWrite ? 'Edit' : 'View') + '</button></td></tr>').join('');
+    $('membership-templates-tbody').querySelectorAll('[data-tpl]').forEach((b) => b.addEventListener('click', () => openTemplate(templates.find((t) => t.key === b.dataset.tpl))));
+    $('membership-bulk').hidden = !access.canWrite;
+    $('membership-bulk-tier').innerHTML = '<option value="">Any</option>' + tiers.filter((t) => !t.archived_at).map((t) => '<option value="' + t.id + '">' + esc(t.name) + '</option>').join('');
+    const log = await api('/messages');
+    const rows = (log && log.res.ok && log.data.messages) || [];
+    $('membership-messages-tbody').innerHTML = rows.length ? rows.map((m) => '<tr><td>' + esc(String(m.sent_at || m.created_at).slice(0, 10)) + '</td><td>' + esc(m.display_name) + '</td><td>'
+      + esc(m.subject || TPL_NAMES[m.template_key] || (String(m.template_key).startsWith('bulk_') ? 'Group email' : m.template_key)) + '</td><td>'
+      + esc(MSG_STATUS[m.status] || m.status) + (m.opened_at ? ', opened' : m.delivered_at ? ', delivered' : '') + '</td></tr>').join('')
+      : '<tr class="organizational-table-empty"><td colspan="4">No emails yet.</td></tr>';
+  }
+
+  function openTemplate(t) {
+    openId = null;
+    showPanelError('');
+    panelTitle.textContent = TPL_NAMES[t.key] || t.key;
+    const ro = access.canWrite ? '' : ' disabled';
+    panelBody.innerHTML = '<form id="f-tpl"><div class="organizational-panel-fields">'
+      + field('Days ' + (t.anchor === 'end' ? 'from the end date (negative is before)' : ANCHOR[t.anchor]), '<input name="offset_days" type="number" class="organizational-input" value="' + t.offset_days + '"' + ro + '>')
+      + field('Send it', '<span><input type="checkbox" name="enabled"' + (t.enabled ? ' checked' : '') + ro + '> On</span>')
+      + field('Subject *', '<input name="subject" class="organizational-input" value="' + esc(t.subject) + '"' + ro + '>', true)
+      + field('Message *', '<textarea name="body" class="organizational-input" rows="8"' + ro + '>' + esc(t.body) + '</textarea>', true)
+      + '</div><p class="organizational-hint">Merge fields: {{first_name}}, {{name}}, {{workspace}}, {{tier}}, {{starts_on}}, {{ends_on}}, {{amount_due}}, {{renew_link}}.'
+      + (t.transactional ? ' Payment notices go even to people who unsubscribed.' : ' An unsubscribe link is added at the end.') + '</p>'
+      + '<button type="button" class="organizational-btn organizational-btn-outline" id="tpl-preview">Preview</button> '
+      + (access.canWrite ? '<button type="submit" class="organizational-btn organizational-btn-primary">Save</button> ' + (t.edited ? '<button type="button" class="organizational-btn organizational-btn-outline" id="tpl-reset">Back to the default</button>' : '') : '')
+      + '</form><div id="tpl-preview-box" class="organizational-membership-form" hidden></div>';
+    const f = $('f-tpl');
+    $('tpl-preview').addEventListener('click', async () => {
+      const out = await api('/templates/preview', 'POST', { subject: f.elements.subject.value, body: f.elements.body.value });
+      if (!out || !out.res.ok) { showPanelError(errorOf(out, 'Could not make the preview.')); return; }
+      const box = $('tpl-preview-box');
+      box.hidden = false;
+      box.innerHTML = '<div class="organizational-hint">' + (out.data.sample ? 'As ' + esc(out.data.sample) + ' would see it' : 'With sample details') + '</div><p><strong>' + esc(out.data.subject) + '</strong></p><div style="white-space:pre-wrap;">' + esc(out.data.body) + '</div>';
+    });
+    if (access.canWrite) {
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const out = await api('/templates/' + t.key, 'PUT', { subject: f.elements.subject.value, body: f.elements.body.value, offset_days: Number(f.elements.offset_days.value), enabled: f.elements.enabled.checked });
+        if (!out || !out.res.ok) { showPanelError(errorOf(out, 'Could not save.')); return; }
+        closePanel();
+        loadEmails();
+      });
+      if ($('tpl-reset')) $('tpl-reset').addEventListener('click', async () => {
+        const out = await api('/templates/' + t.key + '/reset', 'POST', {});
+        if (!out || !out.res.ok) { showPanelError(errorOf(out, 'Could not reset.')); return; }
+        closePanel();
+        loadEmails();
+      });
+    }
+    openPanel();
+  }
+
+  function bulkFilters() {
+    const f = $('membership-bulk');
+    const o = {};
+    ['status', 'tier_id', 'tags', 'location'].forEach((k) => { if (f.elements[k].value.trim()) o[k] = f.elements[k].value.trim(); });
+    return o;
+  }
+
+  function wireBulk() {
+    const f = $('membership-bulk');
+    $('membership-bulk-count').addEventListener('click', async () => {
+      const out = await api('/bulk-email/preview', 'POST', { filters: bulkFilters() });
+      $('membership-bulk-msg').textContent = out && out.res.ok
+        ? out.data.total + ' dues members match' + (out.data.unsubscribed ? '; ' + out.data.unsubscribed + ' unsubscribed' : '') + (out.data.no_email ? '; ' + out.data.no_email + ' have no email' : '') + '.'
+        : errorOf(out, 'Could not count.');
+    });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!window.confirm('Send this email now?')) return;
+      $('membership-bulk-msg').textContent = 'Sending…';
+      const out = await api('/bulk-email', 'POST', { filters: bulkFilters(), subject: f.elements.subject.value, body: f.elements.body.value, key: bulkKey });
+      $('membership-bulk-msg').textContent = out && out.res.ok
+        ? 'Sent ' + (out.data.sent || 0) + ', not sent ' + (out.data.skipped || 0) + (out.data.failed ? ', failed ' + out.data.failed : '') + (out.data.already ? ', already sent ' + out.data.already : '') + '.'
+        : errorOf(out, 'Could not send.');
+      loadEmails();
+    });
+  }
+
   // --- Settings ---
 
   let settingsWired = false;
@@ -522,6 +630,8 @@
     $('organizational-org-dashboard').hidden = false;
     document.querySelectorAll('[data-membership-tab="members"], [data-membership-tab="renewals"]').forEach((b) => { b.hidden = !access.canRead; });
     document.querySelector('[data-membership-tab="settings"]').hidden = !access.canAdmin;
+    document.querySelector('[data-membership-tab="emails"]').hidden = !access.canRead;
+    wireBulk();
     $('membership-add').hidden = !access.canWrite;
     $('membership-export').hidden = !access.canAdmin;
     $('membership-tier-add').hidden = !access.canAdmin;

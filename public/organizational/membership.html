@@ -38,6 +38,7 @@
             <button type="button" class="organizational-tab" data-membership-tab="renewals" hidden>Renewals</button>
             <button type="button" class="organizational-tab" data-membership-tab="summary">Summary</button>
             <button type="button" class="organizational-tab" data-membership-tab="tiers">Tiers</button>
+            <button type="button" class="organizational-tab" data-membership-tab="emails" hidden>Emails</button>
             <button type="button" class="organizational-tab" data-membership-tab="settings" hidden>Settings</button>
           </div>
 
@@ -117,6 +118,42 @@
                 <table class="organizational-table" aria-label="Tiers">
                   <thead><tr><th>Tier</th><th>For</th><th>Price</th><th>Seats</th><th>Benefits</th><th></th></tr></thead>
                   <tbody id="membership-tiers-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+          <section id="membership-tab-emails" class="organizational-tab-content">
+            <h2 class="organizational-membership-section">Scheduled emails</h2>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Email templates">
+                  <thead><tr><th>Email</th><th>When</th><th>Subject</th><th>On</th><th></th></tr></thead>
+                  <tbody id="membership-templates-tbody"></tbody>
+                </table>
+              </div>
+            </section>
+            <form id="membership-bulk" class="organizational-card" style="margin-top:16px;max-width:720px;" hidden>
+              <div class="organizational-membership-section" style="margin-top:0;">Email a group of dues members</div>
+              <div class="organizational-panel-fields">
+                <label class="organizational-label">Status<select name="status" class="organizational-select"><option value="">Any</option><option value="active">Active</option><option value="pending">Pending</option><option value="grace">Grace</option><option value="lapsed">Lapsed</option></select></label>
+                <label class="organizational-label">Tier<select name="tier_id" class="organizational-select" id="membership-bulk-tier"><option value="">Any</option></select></label>
+                <label class="organizational-label">Tag<input name="tags" class="organizational-input" placeholder="Any"></label>
+                <label class="organizational-label">Address contains<input name="location" class="organizational-input" placeholder="Town, state or postcode"></label>
+                <label class="organizational-label organizational-panel-field-full">Subject *<input name="subject" class="organizational-input" maxlength="300"></label>
+                <label class="organizational-label organizational-panel-field-full">Message *<textarea name="body" class="organizational-input" rows="6"></textarea></label>
+              </div>
+              <p class="organizational-hint">Merge fields: {{first_name}}, {{name}}, {{tier}}, {{ends_on}}, {{amount_due}}, {{renew_link}}. An unsubscribe link is added, and people who unsubscribed are left out.</p>
+              <p class="organizational-hint" id="membership-bulk-msg"></p>
+              <button type="button" class="organizational-btn organizational-btn-outline" id="membership-bulk-count">Count recipients</button>
+              <button type="submit" class="organizational-btn organizational-btn-primary">Send</button>
+            </form>
+            <h2 class="organizational-membership-section">Sent emails</h2>
+            <section class="organizational-card organizational-card-flush">
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Sent emails">
+                  <thead><tr><th>Date</th><th>To</th><th>Email</th><th>Status</th></tr></thead>
+                  <tbody id="membership-messages-tbody"></tbody>
                 </table>
               </div>
             </section>

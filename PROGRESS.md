@@ -70,6 +70,7 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
 ## After merge (owner actions per pull request)
+- M6: apply `db/migrations/349_membership_directory_benefits.sql` (it adds an enum value outside a transaction, then the rest in one); restart. Turn the directory on and choose the allowed fields in Membership settings. Mark documents "Also dues members" in the Document Vault to offer them on the account page.
 - M5: apply `db/migrations/348_membership_accounting.sql`; restart. In Membership settings set the deferred dues (liability), contribution and dues revenue accounts and the default program; have the accountant confirm the recognition choice before the first posting. Dues payments recorded before this change are listed in Accounting > Dues Postings to be posted.
 - M4: apply `db/migrations/347_membership_messages.sql`; restart (the daily job starts with the server and runs at 13:40 UTC; it does not run at boot). Set `POSTMARK_WEBHOOK_TOKEN` and add a delivery and bounce webhook in Postmark to `/api/public/email/postmark/webhook` with the header `X-Webhook-Token` set to the same value. Review the default email texts in Membership > Emails before turning membership on in a live workspace, because the first run sends the notices that are due.
 - M3: apply `db/migrations/346_membership_payments.sql`; restart. `POD_CREDENTIAL_ENCRYPTION_KEY` must be set (it already is where pod credentials work). In Stripe, add the webhook address shown in Membership settings for the events checkout.session.completed, invoice.paid, invoice.payment_failed, payment_intent.payment_failed, customer.subscription.deleted and charge.refunded; enter the test secret key and webhook secret, turn card payments on in test mode and try a payment, a renewal, a failure and a refund before switching to live. Turn on Stripe's customer portal for the card-update link.
@@ -112,8 +113,11 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 
 - M5: migration 348 (posting split columns on payments, `org_membership_recognition`, ledger source `membership_dues`), `lib/membershipAccounting.js` (split rules, posting, refund posting, reversal with a reason, recognition preview, run and reversal), routes `routes/duesPostings.js` (Accounting read to see, Accounting writer to post), Dues Postings tab in Accounting (shown when membership is on; page route `/organizational/o/:slug/dues-postings`), Banking's dues match now posts through the same split, `lib/membershipReports.js` (joins and renewals, retention, revenue by tier, unpaid dues by age, growth, why memberships ended; CSV), `lib/importPreview.js` (reusable new / changed / unchanged / duplicate / error preview) and `lib/membershipImport.js`, Reports and Import tabs. Status rule: a term ended by staff counts as ended from its end date. Tests in `tests/membership/accounting.test.js`, `accounting.db.test.js`, `reports.db.test.js`. Checked in a browser. Pull request #14 from `build/membership-m5` (stacked on #13).
 
+- M6: migration 349 (document visibility `dues_members`, `org_membership_directory_optin`, directory switch, one open seat per person per term), `lib/membershipDirectory.js` (seats and seat membership, directory opt-in and listing, documents for dues members), staff routes for seats and the directory listing, public routes for the directory, the private directory, opt-in and document download, seat holders can sign in, Documents shows the new visibility to staff as before (only admins-only stays hidden), screens (seats on the record page, directory settings, account page benefits, documents and directory, public page `/p/<workspace>/directory`). Tests in `tests/membership/directory.db.test.js`. Checked in a browser. Pull request from `build/membership-m6`.
+- All six milestones are built.
+
 ## Next
-- M6: directory (public and private, per-field opt-in), benefits and gated documents by active status, seats for organization tiers.
+- Review feedback on the pull requests (#10 to #15, stacked; merge in order).
 
 ## Blocked or needs the owner
 
@@ -130,6 +134,10 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M2: a confirmed email that matches a contact (main or additional email) joins that contact; only blank phone and address are filled in. If that contact already has a current term, the request is declined and the person is told to sign in.
 - M2: the extra gift becomes a gift to confirm in Funding (`review_status = 'to_confirm'`, not posted, noted as not received yet). There is no gift intake function for a form, so it uses the same row shape as Funding's own queue.
 - M2: sign-in answers the same for any email. The emailed link is single use for 30 minutes and is exchanged for a one-hour link scoped to that dues member; every use is logged. A dues member cannot change their email address on the page.
+- M6: documents marked "Also dues members" stay visible to staff as ordinary documents and are offered on the account page only while the dues member's own membership, or a seat on an active membership, is active. A document whose local copy was moved to the pod archive cannot be downloaded from the account page; the page says to ask the workspace.
+- M6: benefits are the tier's list; per-tier gating of documents was not built (all active dues members see the same documents).
+- M6: a seat holder is a person contact on an organization's term; they can sign in and see benefits, documents and the private directory while the term is active. Seats count open seats (no end date, or ending later) against the tier's seats included.
+- M6: the public directory is the one public route that lists records, by design: it shows only active dues members who opted in to the public directory, and only the fields each chose that the workspace allows.
 - M5: a payment's contribution part is its share of the term's contribution (price above the benefit value), split pro rata for part payments; it goes to the contribution account at receipt. The exchange part goes to the deferred dues liability in "spread" mode (and in "at receipt" mode when paid before the term starts), otherwise straight to dues revenue.
 - M5: recognition is cumulative: each run moves (exchange posted so far × days elapsed ÷ term days) less what was already moved, so late payments and refunds catch up in the next run. Runs are one ledger entry per month (dated the month end), grouped by account and program; a run can only be reversed newest first.
 - M5: reversing a dues posting posts a reversing entry and puts the payment back in the queue to be posted again.
@@ -146,10 +154,15 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M3: refunds made in the provider's own dashboard arrive by webhook and are recorded with the reason "Refunded through the payment provider".
 - M2: the optional challenge check is the shared one in public settings (`PUT .../public-settings`); like the lead page, the join and sign-in pages do not yet load a challenge widget.
 
+## Hooks left for out-of-scope work
+- Events, ballots and space booking can check eligibility with `effectiveActive()` in `lib/membershipDirectory.js` (own membership or a seat) and email a segment with `segment()` and `sendLogged()` in `lib/membershipMessages.js`.
+- Gated access for any later feature can reuse the session link (`membership_session`) and the account page.
+
 ## Testing
 - `TEST_DATABASE_URL=... node --test tests/` runs everything; add `TEST_SCHEMA_SQL=<path to build-specs/schema.sql>` to run the migration copy test.
 
 ## After merge (owner actions per pull request)
+- M6: apply `db/migrations/349_membership_directory_benefits.sql` (it adds an enum value outside a transaction, then the rest in one); restart. Turn the directory on and choose the allowed fields in Membership settings. Mark documents "Also dues members" in the Document Vault to offer them on the account page.
 - M5: apply `db/migrations/348_membership_accounting.sql`; restart. In Membership settings set the deferred dues (liability), contribution and dues revenue accounts and the default program; have the accountant confirm the recognition choice before the first posting. Dues payments recorded before this change are listed in Accounting > Dues Postings to be posted.
 - M4: apply `db/migrations/347_membership_messages.sql`; restart (the daily job starts with the server and runs at 13:40 UTC; it does not run at boot). Set `POSTMARK_WEBHOOK_TOKEN` and add a delivery and bounce webhook in Postmark to `/api/public/email/postmark/webhook` with the header `X-Webhook-Token` set to the same value. Review the default email texts in Membership > Emails before turning membership on in a live workspace, because the first run sends the notices that are due.
 - M3: apply `db/migrations/346_membership_payments.sql`; restart. `POD_CREDENTIAL_ENCRYPTION_KEY` must be set (it already is where pod credentials work). In Stripe, add the webhook address shown in Membership settings for the events checkout.session.completed, invoice.paid, invoice.payment_failed, payment_intent.payment_failed, customer.subscription.deleted and charge.refunded; enter the test secret key and webhook secret, turn card payments on in test mode and try a payment, a renewal, a failure and a refund before switching to live. Turn on Stripe's customer portal for the card-update link.

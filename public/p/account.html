@@ -37,6 +37,14 @@
         <button type="button" class="organizational-btn organizational-btn-outline" id="pub-card" hidden>Update your card</button>
         <p class="organizational-pub-msg" id="pub-pay-msg"></p>
       </section>
+      <section class="organizational-pub-card" id="pub-benefits-card" hidden>
+        <h2>Your benefits</h2>
+        <ul class="organizational-sp-fund-list" id="pub-benefits"></ul>
+      </section>
+      <section class="organizational-pub-card" id="pub-docs-card" hidden>
+        <h2>Documents for dues members</h2>
+        <ul class="organizational-sp-fund-list" id="pub-docs"></ul>
+      </section>
       <form id="pub-renew" class="organizational-pub-card organizational-pub-form" hidden>
         <h2>Renew</h2>
         <div id="pub-tiers" class="organizational-pub-form"></div>
@@ -61,6 +69,17 @@
         <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
         <button type="submit" class="organizational-btn">Save</button>
         <p class="organizational-pub-msg" data-msg></p>
+      </form>
+      <form id="pub-dir" class="organizational-pub-card organizational-pub-form" hidden>
+        <h2>Directory</h2>
+        <label class="organizational-pub-inline"><input type="checkbox" name="listed" value="true"> List me in the directory</label>
+        <div id="pub-dir-fields" class="organizational-pub-form"></div>
+        <label>Who can see it <select class="organizational-select" name="visibility"><option value="private">Only other dues members</option><option value="public">Anyone</option></select></label>
+        <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button type="submit" class="organizational-btn">Save</button>
+        <p class="organizational-pub-msg" data-msg></p>
+        <button type="button" class="organizational-btn organizational-btn-outline" id="pub-dir-view">See the directory</button>
+        <ul class="organizational-sp-fund-list" id="pub-dir-list"></ul>
       </form>
       <section class="organizational-pub-card">
         <h2>Receipts</h2>

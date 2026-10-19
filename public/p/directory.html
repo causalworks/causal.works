@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Directory</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title" id="pub-title">Directory</h1>
+    <p class="organizational-error" id="pub-error" hidden></p>
+    <section class="organizational-pub-card">
+      <input type="search" class="organizational-input" id="pub-search" placeholder="Search" aria-label="Search the directory">
+      <ul class="organizational-sp-fund-list" id="pub-list"></ul>
+    </section>
+    <p class="organizational-hint">Only dues members who chose to be listed appear here, with only the details they chose. <a id="pub-account" href="#">Dues members sign in</a> to see everyone listed for dues members.</p>
+  </main>
+  <script src="/p/membership-pub.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const P = window.MembershipPub;
+      const list = document.getElementById('pub-list');
+      document.getElementById('pub-account').href = '/p/' + encodeURIComponent(P.slug) + '/account';
+      let entries = [];
+      function render() {
+        const q = document.getElementById('pub-search').value.trim().toLowerCase();
+        const rows = entries.filter((x) => !q || JSON.stringify(x).toLowerCase().includes(q));
+        list.innerHTML = rows.length ? rows.map((x) => '<li><strong>' + P.esc(x.name) + '</strong>'
+          + ['tier', 'kind', 'website', 'mailing_address', 'email', 'phone'].filter((k) => x[k]).map((k) => ' · ' + P.esc(x[k])).join('') + '</li>').join('')
+          : '<li class="organizational-hint">No one matches.</li>';
+      }
+      P.call('/directory').then((out) => {
+        if (!out.ok) { const e = document.getElementById('pub-error'); e.textContent = out.data.error || 'This page is not available.'; e.hidden = false; return; }
+        document.getElementById('pub-org').textContent = out.data.workspace_name;
+        document.getElementById('pub-title').textContent = out.data.workspace_name + ' directory';
+        document.title = out.data.workspace_name + ' directory';
+        entries = out.data.entries;
+        render();
+      });
+      document.getElementById('pub-search').addEventListener('input', render);
+    })();
+  </script>
+</body>
+</html>

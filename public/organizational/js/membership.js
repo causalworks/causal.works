@@ -234,8 +234,23 @@
       }).join('') : '<tr class="organizational-table-empty"><td colspan="5">No payments yet.</td></tr>')
       + '</tbody></table></div>';
 
-    if (d.seats.length) {
-      html += '<div class="organizational-membership-section">Seats</div><ul>' + d.seats.map((s) => '<li>' + esc(s.display_name) + (s.label ? ' (' + esc(s.label) + ')' : '') + ', from ' + esc(String(s.starts_on).slice(0, 10)) + (s.ends_on ? ' to ' + esc(String(s.ends_on).slice(0, 10)) : '') + '</li>').join('') + '</ul>';
+    const seatTier = cur && tiers.find((t) => t.id === cur.tier_id);
+    const seatsIncluded = seatTier ? Number(seatTier.seats_included) || 0 : 0;
+    if (d.seats.length || seatsIncluded) {
+      const today = new Date().toISOString().slice(0, 10);
+      const open = d.seats.filter((x) => !x.ends_on || String(x.ends_on).slice(0, 10) > today);
+      html += '<div class="organizational-membership-section">Seats' + (seatsIncluded ? ' (' + open.filter((x) => cur && x.term_id === cur.id).length + ' of ' + seatsIncluded + ' in use)' : '') + '</div><div class="organizational-hint">'
+        + (d.seats.length ? d.seats.map((x) => esc(x.display_name) + (x.label ? ' (' + esc(x.label) + ')' : '') + ', from ' + esc(String(x.starts_on).slice(0, 10)) + (x.ends_on ? ' to ' + esc(String(x.ends_on).slice(0, 10)) : '')
+          + (w && !x.ends_on ? ' <a href="#" data-end-seat="' + x.id + '">end</a>' : '')).join('<br>') : 'No seats taken yet.') + '</div>';
+      if (w && cur && seatsIncluded) {
+        html += form('f-seat', 'Add a person to a seat', field('Name *', '<input name="display_name" class="organizational-input">') + field('Email', '<input name="email" type="email" class="organizational-input">')
+          + field('Label', '<input name="label" class="organizational-input" placeholder="Role or team">'), 'Add seat')
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-open="f-seat">Add a person to a seat</button>';
+      }
+    }
+    if (d.directory) {
+      html += '<div class="organizational-membership-section">Directory</div><div class="organizational-hint">'
+        + (d.directory.listed ? 'Listed (' + (d.directory.visibility === 'public' ? 'public' : 'dues members only') + '): ' + esc(d.directory.fields.join(', ')) : 'Not listed') + '. Dues members choose this on their account page.</div>';
     }
 
     html += '<div class="organizational-membership-section">Emails</div><div id="record-messages" class="organizational-hint">Loading…</div>';
@@ -291,6 +306,14 @@
       submit('f-end', (b) => api('/terms/' + cur.id + '/end', 'POST', b));
     }
     submit('f-term', (b) => api('/dues-members/' + d.dues_member.id + '/terms', 'POST', b));
+    if (cur) submit('f-seat', (b) => api('/terms/' + cur.id + '/seats', 'POST', { label: b.label, contact: { display_name: b.display_name, email: b.email } }));
+    panelBody.querySelectorAll('[data-end-seat]').forEach((a) => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!window.confirm('End this seat today?')) return;
+      const r = await api('/seats/' + a.dataset.endSeat + '/end', 'POST', {});
+      if (!r || !r.res.ok) { showPanelError(errorOf(r, 'Could not end the seat.')); return; }
+      await openRecord(d.dues_member.id);
+    }));
     submit('f-refund', (b) => { const id = b.payment_id; delete b.payment_id; return api('/payments/' + id + '/refund', 'POST', b); });
     panelBody.querySelectorAll('[data-refund]').forEach((b) => b.addEventListener('click', () => {
       $('f-refund').querySelector('[name=payment_id]').value = b.dataset.refund;
@@ -631,8 +654,10 @@
       else el.value = st[el.name] == null ? '' : String(st[el.name]);
     });
     f.querySelectorAll('[data-form-field]').forEach((cb) => { cb.checked = (st.form_fields || []).includes(cb.dataset.formField); });
+    f.querySelectorAll('[data-dir-field]').forEach((cb) => { cb.checked = (st.directory_fields || []).includes(cb.dataset.dirField); });
     const pubBase = location.origin + '/p/' + encodeURIComponent(slug);
-    $('membership-public-links').innerHTML = 'Join form: <a href="' + esc(pubBase + '/join') + '" target="_blank" rel="noopener">' + esc(pubBase + '/join') + '</a><br>Dues members sign in at: <a href="' + esc(pubBase + '/account') + '" target="_blank" rel="noopener">' + esc(pubBase + '/account') + '</a>';
+    $('membership-public-links').innerHTML = 'Join form: <a href="' + esc(pubBase + '/join') + '" target="_blank" rel="noopener">' + esc(pubBase + '/join') + '</a><br>Dues members sign in at: <a href="' + esc(pubBase + '/account') + '" target="_blank" rel="noopener">' + esc(pubBase + '/account') + '</a>'
+      + '<br>Public directory: <a href="' + esc(pubBase + '/directory') + '" target="_blank" rel="noopener">' + esc(pubBase + '/directory') + '</a>';
     const syncFixed = () => f.querySelectorAll('[data-fixed]').forEach((x) => { x.style.display = f.elements.year_mode.value === 'fixed' ? '' : 'none'; });
     syncFixed();
     Array.from(f.elements).forEach((el) => { el.disabled = !access.canAdmin; });
@@ -653,6 +678,7 @@
       e.preventDefault();
       const b = {};
       b.form_fields = Array.from(f.querySelectorAll('[data-form-field]')).filter((cb) => cb.checked).map((cb) => cb.dataset.formField);
+      b.directory_fields = Array.from(f.querySelectorAll('[data-dir-field]')).filter((cb) => cb.checked).map((cb) => cb.dataset.dirField);
       Array.from(f.elements).forEach((el) => {
         if (!el.name) return;
         if (el.type === 'checkbox') b[el.name] = el.checked;

@@ -97,8 +97,11 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M1 migration `db/migrations/344_membership_core.sql` (in one transaction): settings, tier columns and `org_membership_tier_prices` (the tier's old single price moves there and the column is dropped), terms, seats, reshaped payments (kind, method, discount, approver, refund link, processor ref), templates, message log, `manage_membership` permission, copy of `org_members` to contacts (matched by email), the `dues_member` role, terms and payments; reminders move to the message log; old tables and types dropped. Tested by `tests/membership/migration.db.test.js`.
 - M1 server: `lib/membership.js` (settings, prices, terms with payments, status for every dues member, the dues-member list, renewals), new guarded routes in `routes/membership.js` (old Router removed), write area and read areas in `requireWriteAccess.js`, `manage_membership` in `accessPermissions.js` and its label in Settings, `dues_member` writable and shown on the Contacts page; `banking.js`, `membershipDuesPayment.js`, `donors.js` and the attention feed read terms instead of `org_members`. Tests in `tests/membership/routes.db.test.js`.
 
+- M1 screens: `public/organizational/membership.html` and `js/membership.js` rewritten (dues members list with filters and CSV export, record panel with terms, payments, seats and history and the actions, renewals, summary, tiers with dated prices and archive, settings). Board members see Summary and Tiers only. Checked in a browser at desktop and phone width. New badge and form classes in `organizational.css`.
+- M1 pull request opened from `build/membership-m1`.
+
 ## Next
-- M1 screens: rewrite `public/organizational/membership.html` and `js/membership.js` (dues members list, record page with terms, payments and status history, renewals, tiers, settings, summary). Then open the M1 pull request.
+- M2: join, renew and update pages on the shared public module (`lib/publicLinks.js`, `lib/rateLimit.js`, `server/organizational/public/`).
 
 ## Blocked or needs the owner
 

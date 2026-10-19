@@ -392,7 +392,7 @@ function registerMembershipRoutes(app, pool) {
         terms: st.terms.map((t) => ({ ...t, payments: undefined })),
         payments: pays.rows.map((p) => ({ ...p, payment_date: S.toDay(p.payment_date) })),
         seats: seats.rows,
-        history: hist.rows.map((h) => ({ ...h, metadata: h.metadata ? { reason: h.metadata.reason || null, note: h.metadata.note || null } : null })),
+        history: hist.rows.map((h) => ({ ...h, metadata: h.metadata ? { reason: h.metadata.reason || null, kind: h.metadata.kind || null } : null })),
         settings: { grace_days: settings.grace_days, year_mode: settings.year_mode },
       });
     } catch (e) {

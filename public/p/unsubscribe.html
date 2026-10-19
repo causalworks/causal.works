@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Email preferences</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title">Email preferences</h1>
+    <section class="organizational-pub-card">
+      <p id="pub-text">Stop membership emails such as renewal reminders? Receipts and payment notices still come.</p>
+      <button type="button" class="organizational-btn" id="pub-stop">Stop these emails</button>
+      <p class="organizational-pub-msg" id="pub-msg"></p>
+    </section>
+  </main>
+  <script src="/p/membership-pub.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const P = window.MembershipPub;
+      const token = P.fragmentToken();
+      const btn = document.getElementById('pub-stop');
+      if (!token) { btn.hidden = true; document.getElementById('pub-text').textContent = 'Open the link from one of our emails to change your email preferences.'; return; }
+      btn.addEventListener('click', async () => {
+        const out = await P.call('/unsubscribe', { method: 'POST' }, token);
+        if (out.data.workspace_name) document.getElementById('pub-org').textContent = out.data.workspace_name;
+        document.getElementById('pub-msg').textContent = out.ok ? out.data.message : (out.data.error || 'That did not work. Try again later.');
+        if (out.ok) btn.hidden = true;
+      });
+    })();
+  </script>
+</body>
+</html>

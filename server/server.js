@@ -11,6 +11,7 @@ const { scheduleProcessAcrOutbox } = require('./jobs/process-acr-outbox');
 const { schedulePurgeSyncedDocuments } = require('./jobs/purge-synced-documents');
 const { scheduleRecurringScheduleJob } = require('./jobs/recurring-schedule-job');
 const { scheduleSponsorDailyJob } = require('./jobs/sponsor-daily-job');
+const { scheduleMembershipDailyJob } = require('./jobs/membership-daily-job');
 const {
   registerUser,
   createMagicToken,
@@ -3537,4 +3538,5 @@ app.listen(3000, '127.0.0.1', () => {
   schedulePurgeSyncedDocuments(pool);
   scheduleRecurringScheduleJob(pool);
   scheduleSponsorDailyJob(pool);
+  scheduleMembershipDailyJob(pool);
 });

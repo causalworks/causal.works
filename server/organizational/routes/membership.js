@@ -15,6 +15,7 @@ const M = require('../lib/membership');
 const J = require('../lib/membershipJoin');
 const Pay = require('../lib/membershipPayments');
 const { addContactRoles } = require('../lib/contactRoles');
+const Msg = require('../lib/membershipMessages');
 
 const { cents, day, text } = M;
 
@@ -773,6 +774,120 @@ function registerMembershipRoutes(app, pool) {
     } catch (e) {
       console.error('POST membership/join-requests/:id/decline:', e.message);
       return fail(res, 500, 'Could not decline the join request.');
+    }
+  });
+
+  // --- Email: templates, message log, bulk email ---
+
+  app.get(`${B}/templates`, ...read, async (req, res) => {
+    try {
+      return res.json({ templates: await Msg.loadTemplates(pool, req.orgId), merge_fields: Msg.MERGE_FIELDS });
+    } catch (e) {
+      console.error('GET membership/templates:', e.message);
+      return fail(res, 500, 'Could not load the email templates.');
+    }
+  });
+
+  app.put(`${B}/templates/:key`, ...write, async (req, res) => {
+    const d = Msg.defaultOf(req.params.key);
+    if (!d) return fail(res, 404, 'That email template was not found.');
+    const b = req.body || {};
+    const subject = text(b.subject);
+    const body = b.body != null ? String(b.body).trim() : '';
+    if (!subject) return fail(res, 400, 'Write a subject.');
+    if (!body) return fail(res, 400, 'Write the message.');
+    const offset = b.offset_days == null || b.offset_days === '' ? d.offset_days : Number(b.offset_days);
+    if (!Number.isInteger(offset) || offset < -365 || offset > 365) return fail(res, 400, 'Days must be a whole number from -365 to 365.');
+    if (d.anchor === 'failed' && offset < 0) return fail(res, 400, 'Failed-payment notices go out on or after the failure.');
+    if (d.anchor === 'join' && offset < 0) return fail(res, 400, 'The welcome message goes out on or after joining.');
+    try {
+      const before = (await Msg.loadTemplates(pool, req.orgId)).find((t) => t.key === d.key);
+      await pool.query(
+        `INSERT INTO org_membership_templates (org_id, key, subject, body, offset_days, enabled, updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+         ON CONFLICT (org_id, key) DO UPDATE SET subject = EXCLUDED.subject, body = EXCLUDED.body, offset_days = EXCLUDED.offset_days,
+                                                 enabled = EXCLUDED.enabled, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [req.orgId, d.key, subject.slice(0, 300), body.slice(0, 20000), offset, b.enabled !== false, userIdOf(req)]);
+      const fields = diffFields(before, { subject, body, offset_days: offset, enabled: b.enabled !== false }, ['subject', 'body', 'offset_days', 'enabled']);
+      if (fields.length) await audit(req, 'update', 'org_membership_templates', req.orgId, { fields, metadata: { key: d.key } });
+      return res.json({ templates: await Msg.loadTemplates(pool, req.orgId) });
+    } catch (e) {
+      console.error('PUT membership/templates/:key:', e.message);
+      return fail(res, 500, 'Could not save the email template.');
+    }
+  });
+
+  app.post(`${B}/templates/:key/reset`, ...write, async (req, res) => {
+    if (!Msg.defaultOf(req.params.key)) return fail(res, 404, 'That email template was not found.');
+    try {
+      const r = await pool.query('DELETE FROM org_membership_templates WHERE org_id = $1 AND key = $2 RETURNING id', [req.orgId, req.params.key]);
+      if (r.rows.length) await audit(req, 'update', 'org_membership_templates', req.orgId, { fields: [{ fieldName: 'reset', oldValue: req.params.key, newValue: 'default' }] });
+      return res.json({ templates: await Msg.loadTemplates(pool, req.orgId) });
+    } catch (e) {
+      console.error('POST membership/templates/:key/reset:', e.message);
+      return fail(res, 500, 'Could not reset the email template.');
+    }
+  });
+
+  app.post(`${B}/templates/preview`, ...read, async (req, res) => {
+    const b = req.body || {};
+    try {
+      const ws = (await pool.query('SELECT id, slug, display_name FROM coop_members WHERE id = $1', [req.orgId])).rows[0];
+      const rows = await M.listDuesMembers(pool, req.orgId, { active: 'true' });
+      const pick = rows.find((r) => r.id === intId(b.constituent_id)) || rows.find((r) => r.term) || null;
+      const fields = pick
+        ? await Msg.fieldsFor(pool, ws, pick, (await M.loadTerms(pool, req.orgId, [pick.id])).find((t) => t.id === pick.term.id), {})
+        : { name: 'A dues member', first_name: 'Friend', workspace: ws.display_name, tier: 'Standard', starts_on: M.today(), ends_on: S.addDays(S.addMonths(M.today(), 12), -1), amount_due: '$0.00', renew_link: '', unsubscribe_link: '' };
+      fields.unsubscribe_link = fields.unsubscribe_link || '(unsubscribe link)';
+      return res.json({ subject: Msg.render(b.subject, fields), body: Msg.render(b.body, fields), sample: pick ? pick.display_name : null });
+    } catch (e) {
+      console.error('POST membership/templates/preview:', e.message);
+      return fail(res, 500, 'Could not make the preview.');
+    }
+  });
+
+  app.get(`${B}/messages`, ...read, async (req, res) => {
+    const cid = req.query.constituent_id ? intId(req.query.constituent_id) : null;
+    try {
+      const r = await pool.query(
+        `SELECT m.id, m.constituent_id, c.display_name, m.template_key, m.offset_days, m.subject, m.to_email, m.status, m.sent_at, m.delivered_at, m.opened_at, m.created_at
+           FROM org_membership_messages m JOIN org_constituents c ON c.id = m.constituent_id
+          WHERE m.org_id = $1 ${cid ? 'AND m.constituent_id = $2' : ''}
+          ORDER BY m.created_at DESC, m.id DESC LIMIT 300`, cid ? [req.orgId, cid] : [req.orgId]);
+      return res.json({ messages: r.rows });
+    } catch (e) {
+      console.error('GET membership/messages:', e.message);
+      return fail(res, 500, 'Could not load the message log.');
+    }
+  });
+
+  app.post(`${B}/bulk-email/preview`, ...write, async (req, res) => {
+    try {
+      const rows = await Msg.segment(pool, req.orgId, (req.body || {}).filters);
+      let unsub = 0;
+      for (const r of rows) if (await Msg.unsubscribed(pool, req.orgId, r.id)) unsub++;
+      return res.json({ total: rows.length, no_email: rows.filter((r) => !r.email).length, unsubscribed: unsub });
+    } catch (e) {
+      console.error('POST membership/bulk-email/preview:', e.message);
+      return fail(res, 500, 'Could not count the recipients.');
+    }
+  });
+
+  app.post(`${B}/bulk-email`, ...write, async (req, res) => {
+    const b = req.body || {};
+    const subject = text(b.subject);
+    const body = b.body != null ? String(b.body).trim() : '';
+    const key = String(b.key || '').trim();
+    if (!subject || !body) return fail(res, 400, 'Write a subject and a message.');
+    if (!/^[a-z0-9]{6,40}$/.test(key)) return fail(res, 400, 'This send has no key. Reload the page and try again.');
+    try {
+      const ws = (await pool.query('SELECT id, slug, display_name FROM coop_members WHERE id = $1', [req.orgId])).rows[0];
+      const out = await Msg.bulkSend(pool, ws, { filters: b.filters, subject: subject.slice(0, 300), body: body.slice(0, 20000), key, userId: userIdOf(req) });
+      await audit(req, 'create', 'org_membership_messages', req.orgId, { metadata: { bulk: key, filters: b.filters || {}, ...out } });
+      return res.json(out);
+    } catch (e) {
+      console.error('POST membership/bulk-email:', e.message);
+      return fail(res, 500, 'Could not send the email.');
     }
   });
 

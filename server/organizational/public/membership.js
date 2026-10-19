@@ -91,6 +91,7 @@ function registerPublicMembershipRoutes(app, pool, opts) {
 
   app.get('/p/:slug/join', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'join.html')));
   app.get('/p/:slug/account', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'account.html')));
+  app.get('/p/:slug/unsubscribe', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'unsubscribe.html')));
 
   // --- Join ---
 
@@ -216,6 +217,23 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       const session = await createLink(pool, { orgId: req.workspace.id, purpose: J.SESSION, constituentId: req.link.constituent_id, minutes: J.SESSION_MINUTES });
       return res.json({ session: session.token, expires_at: session.expires_at });
     } catch (e) { return oops(res, 'POST public membership session', e); }
+  });
+
+  // --- Unsubscribe from membership email ---
+
+  app.post(`${P}/unsubscribe`, writeLimit, workspace, withLink('email_unsubscribe'), async (req, res) => {
+    try {
+      const ws = req.workspace;
+      const r = await pool.query(
+        `INSERT INTO org_contact_email_prefs (org_id, constituent_id, scope, source) VALUES ($1, $2, 'membership', 'unsubscribe link')
+         ON CONFLICT (constituent_id, scope) DO NOTHING RETURNING id`, [ws.id, req.link.constituent_id]);
+      if (r.rows.length) {
+        await logAudit(pool, { orgId: ws.id, userId: null, action: 'update', tableName: 'org_constituents', recordId: req.link.constituent_id,
+          fields: [{ fieldName: 'membership_email', oldValue: 'on', newValue: 'unsubscribed' }], metadata: { via: 'unsubscribe link' } });
+      }
+      await recordUse(pool, req, req.link, 'unsubscribe');
+      return res.json({ workspace_name: ws.display_name, message: 'You will no longer get membership emails from ' + ws.display_name + '. Receipts and payment notices still come.' });
+    } catch (e) { return oops(res, 'POST public membership unsubscribe', e); }
   });
 
   // --- Account (signed in) ---

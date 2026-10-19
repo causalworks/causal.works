@@ -24,6 +24,7 @@ const { registerSponsorshipRecordRoutes } = require('./routes/sponsorshipRecords
 const { registerPublicRoutes } = require('./public');
 const { registerPublicMembershipRoutes } = require('./public/membership');
 const { registerPaymentWebhookRoutes } = require('./public/payments');
+const { registerEmailWebhookRoutes } = require('./public/email');
 const { registerPublicSettingsRoutes } = require('./routes/publicSettings');
 const { registerComplianceRoutes } = require('./routes/compliance');
 const { registerMembershipRoutes } = require('./routes/membership');
@@ -93,6 +94,7 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerPublicRoutes(app, pool);
   registerPublicMembershipRoutes(app, pool);
   registerPaymentWebhookRoutes(app, pool);
+  registerEmailWebhookRoutes(app, pool);
   registerPublicSettingsRoutes(app, pool);
   registerComplianceRoutes(app, pool);
   registerMembershipRoutes(app, pool);

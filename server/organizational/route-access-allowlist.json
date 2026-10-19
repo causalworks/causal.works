@@ -71,6 +71,7 @@
  "GET /p/:slug/join": "Public page shell for a workspace's membership join form (static HTML, no data). Rate limited by IP and workspace.",
  "GET /p/:slug/lead": "Public page shell for a project lead link (static HTML, no data). The link token stays in the URL fragment and is sent only to the lead API in a header. Rate limited by IP and workspace.",
  "GET /p/:slug/projects/:projectId": "Public page shell for a project's optional public page (static HTML, no data). Rate limited by IP and workspace.",
+ "GET /p/:slug/unsubscribe": "Public page shell for the membership email unsubscribe link (static HTML, no data). Rate limited by IP and workspace.",
  "GET /share/:token": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "GET /share/:token/file": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "GET /share/:token/info": "Public share link: access is the unguessable token plus a one-time emailed code.",
@@ -124,7 +125,9 @@
  "POST /api/public/:slug/membership/me/renew": "Dues member account page: adds the signed-in dues member's renewal term, unpaid, inside the renewal window. Scoped session link, honeypot, form token. Rate limited.",
  "POST /api/public/:slug/membership/session": "Dues member sign-in: exchanges a valid single-use sign-in link for a one-hour link scoped to that one dues member. Every use is logged. Rate limited.",
  "POST /api/public/:slug/membership/sign-in": "Dues member sign-in: emails a single-use 30-minute link when the address belongs to a dues member; the answer is the same either way, so it reveals nothing. Honeypot, form token, optional challenge. Strictly rate limited.",
+ "POST /api/public/:slug/membership/unsubscribe": "Membership email unsubscribe: a valid link scoped to one contact turns off non-essential membership email for that contact. Every use is logged. Rate limited.",
  "POST /api/public/:slug/payments/:provider/webhook": "Payment provider webhook: accepted only when the signature matches the workspace's stored webhook secret; each event id is handled once, so a replayed event changes nothing. Rate limited.",
+ "POST /api/public/email/postmark/webhook": "Email provider delivery and open reports for membership messages. Accepted only with the shared token header set on the server; updates delivery and open times by provider message id and returns no data. Rate limited.",
  "POST /api/share/:token/request-code": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "POST /api/share/:token/verify": "Public share link: access is the unguessable token plus a one-time emailed code."
 }

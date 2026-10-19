@@ -75,6 +75,8 @@ function registerSponsoredProjectsRoutes(app, pool) {
                   created_at,
                   updated_at,
                   agreement_signed_at,
+                  public_page_enabled,
+                  public_summary,
                   hold_reason,
                   hold_kind,
                   hold_set_at,
@@ -327,6 +329,18 @@ function registerSponsoredProjectsRoutes(app, pool) {
       if (body.next_report_due !== undefined) {
         updates.push(`next_report_due = $${paramIndex}`);
         values.push(body.next_report_due ? String(body.next_report_due) : null);
+        paramIndex++;
+      }
+
+      if (body.public_page_enabled !== undefined) {
+        updates.push(`public_page_enabled = $${paramIndex}`);
+        values.push(!!body.public_page_enabled);
+        paramIndex++;
+      }
+
+      if (body.public_summary !== undefined) {
+        updates.push(`public_summary = $${paramIndex}`);
+        values.push(body.public_summary ? String(body.public_summary).trim().slice(0, 4000) : null);
         paramIndex++;
       }
 

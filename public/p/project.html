@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Project</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title" id="pub-title">Loading…</h1>
+    <p id="pub-summary" class="organizational-pub-summary"></p>
+    <p id="pub-note" class="organizational-hint"></p>
+    <p id="pub-donate" hidden></p>
+  </main>
+  <script>
+    (function () {
+      var m = location.pathname.match(/^\/p\/([^/]+)\/projects\/(\d+)/);
+      if (!m) return;
+      fetch('/api/public/' + m[1] + '/projects/' + m[2]).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); }).then(function (x) {
+        if (!x.ok) { document.getElementById('pub-title').textContent = x.d.error || 'This page is not available.'; return; }
+        document.title = x.d.name;
+        document.getElementById('pub-org').textContent = x.d.workspace_name;
+        document.getElementById('pub-title').textContent = x.d.name;
+        document.getElementById('pub-summary').textContent = x.d.summary;
+        document.getElementById('pub-note').textContent = x.d.workspace_name + ' is the fiscal sponsor of this project and holds its funds, with full control over their use for the project’s charitable purpose.';
+        if (x.d.donate_url) {
+          var p = document.getElementById('pub-donate');
+          var a = document.createElement('a');
+          a.className = 'organizational-btn';
+          a.href = x.d.donate_url;
+          a.textContent = 'Donate';
+          p.appendChild(a);
+          p.hidden = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -17,11 +17,16 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 - S5: migration 364 (W-9 fields and receiving entity on projects, payee and grant agreement on disbursements, `org_sponsor_closings`, ledger source `sponsor_closing`), grant-model rules in `lib/sponsorMoneyOut.js`, `lib/sponsorGrants.js` (release history, information-return sheet, closing), closing in the balance helper and statements, ended projects take no new income, routes, Gift Postings rows for closings, screens; model labels now read "Comprehensive" and "Pre-approved grant". Pull request from `build/sponsorship-s5`.
 
+- S6: the shared public module was not on `main` (or on `build/membership`), so it is built here: migration 365 (`org_public_links`, `org_public_link_uses`, `org_public_settings`, public page fields on projects), `lib/rateLimit.js`, `lib/publicLinks.js`, routes in `server/organizational/public/index.js` (the route audit now also scans that folder; every public route is in the allowlist), admin settings route `routes/publicSettings.js`, staff routes for lead links, pages `public/p/lead.html` and `public/p/project.html`. Pull request from `build/sponsorship-s6`.
+- All six milestones are built. Pull requests: S1 #1, S2 #2, S3 #3, S4 #4, S5 #5, S6 #6 (stacked; merge in order).
+
 ## Next
-- S6: shared public module (check `main` first), scoped lead links, optional public project page.
+- Nothing planned. Review feedback on the pull requests.
 
 ## Blocked or needs the owner
-- None.
+- Public rate limits key on `req.ip`. If the app runs behind a proxy, set Express `trust proxy` in `server/server.js`, or every visitor will share one limit.
+- The optional challenge check is enforced by the server once a workspace saves a verify address and secret (`PUT .../public-settings`), but the lead page does not yet load a challenge widget. Add the widget for the chosen service before turning the check on, or lead forms will be refused.
+- Set `BASE_URL` so lead links carry the full address.
 
 ## Decisions to review
 - Available balance counts only money that is in the books (posted). Money recorded in Funding but not yet posted is shown on its own line.
@@ -51,7 +56,17 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S5: the information-return sheet groups posted releases by receiving entity for a calendar year (by posting date), cash plus property at value, and flags totals at or above that year's threshold (the latest earlier year's threshold if the year has none).
 - S5: closing needs the project in winding down (or on hold), no pending payments, an amount no more than what is available, a reason, a destination, and for a new sponsor the written agreement. Accounting posts it; the project then ends. Cancelling a posted closing voids the entry and sets the project back to winding down.
 
+- S6: lead links last 180 days by default (1 to 730), are scoped to one project and revocable; staff can email the link to the lead or copy it. The token is shown once and stays in the URL fragment; the page keeps it for the tab only and sends it in a header, so it never reaches server logs. Every use is logged with a hashed IP.
+- S6: a payee typed by a lead becomes a contact (matched by exact name and kind first). Lead requests still need staff approval; the person-approval rules apply to staff only.
+- S6: the public project page shows the name and public summary only, and only when turned on. The donate button is left out because the Membership payment provider code is not on `main`.
+
+## Notes for the Membership build
+- Reuse `lib/publicLinks.js` (`createLink`, `createSignInLink` for 30-minute single-use sign-in links, `checkLink`, `recordUse`, `revokeLink`, `guardForm`, `issueFormToken`, `enterWorkspace`), `lib/rateLimit.js` (`publicRateLimit`) and the `org_public_links` table (purpose key, `constituent_id` for dues members). Add Membership's public routes as another file in `server/organizational/public/`; the audit scans that folder.
+- `org_public_settings` holds the optional challenge check, so Membership can use the same setting.
+- Migration 360 adds `org_allow_ledger_source(text)`, which adds a ledger source without dropping the others; use it for `membership_dues` instead of rewriting the constraint.
+
 ## Hooks left for later
+- Recurring gifts to a project: when Membership's provider supports subscriptions, a recurring gift should arrive as an ordinary gift tagged to the project (`org_gifts.sponsored_project_id`), so balances, fees and statements pick it up with no change here. The donate button belongs on `public/p/project.html` (it already shows a `donate_url` when the API returns one).
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
 ## After merge (owner actions per pull request)
@@ -64,6 +79,8 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S4: apply `db/migrations/363_sponsor_statements_year_end.sql`; restart. Statement PDFs need Chrome on the server and emails need the live email key. Check the statement day in Sponsorship settings (default the 5th). No snapshot rerun needed.
 
 - S5: apply `db/migrations/364_sponsor_grant_model_closing.sql`; restart. For each pre-approved grant project, name the receiving entity and attach its W-9 before the next release. No snapshot rerun needed.
+
+- S6: apply `db/migrations/365_public_links.sql`; restart. Set `BASE_URL`, and `trust proxy` if behind a proxy. Test a lead link end to end on the real workspace. No snapshot rerun needed.
 
 ## Testing
 - Pure rules: `node --test tests/`.

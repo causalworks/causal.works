@@ -181,11 +181,11 @@ function loadRoutes(relPath, registerName, pool) {
   }
   return {
     routes,
-    async call(method, routePath, { params, body, query, user, role, permissions, orgId, programIds }) {
+    async call(method, routePath, { params, body, query, user, role, permissions, orgId, programIds, headers, file, ip }) {
       const route = routes.find((r) => r.method === method && r.path === routePath);
       if (!route) throw new Error('No route ' + method + ' ' + routePath);
       const req = {
-        params: params || {}, body: body || {}, query: query || {}, headers: {}, ip: '127.0.0.1', get: () => null,
+        params: params || {}, body: body || {}, query: query || {}, headers: headers || {}, ip: ip || '127.0.0.1', get: () => null, file,
         user: { id: user, user_id: user }, orgId, coopOrgRole: role, accessPermissions: permissions || [], coopOrgProgramIds: programIds || [],
         coopOrgUserId: null,
       };
@@ -194,7 +194,7 @@ function loadRoutes(relPath, registerName, pool) {
         status(c) { this.statusCode = c; return this; },
         json(b) { this.body = b; this.done = true; return this; },
         send(b) { this.body = b; this.done = true; return this; },
-        set() { return this; }, setHeader() {}, type() { return this; },
+        set() { return this; }, setHeader() {}, type() { return this; }, sendFile(f) { this.body = f; this.done = true; return this; },
       };
       for (const h of route.handlers) {
         let nextCalled = false;

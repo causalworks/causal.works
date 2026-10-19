@@ -56,6 +56,9 @@
       api(ctx.slug, base + '/standing'), api(ctx.slug, '/sponsor-approvals'), api(ctx.slug, '/sponsor-agreement-templates'),
       api(ctx.slug, base + '/statements'), api(ctx.slug, base + '/donor-letters'), api(ctx.slug, base + '/property'),
     ]);
+    const [lk, proj] = ctx.canStaff ? await Promise.all([api(ctx.slug, base + '/lead-links'), api(ctx.slug, '/sponsored-projects')]) : [null, null];
+    const links = (lk && lk.res.ok && lk.data.links) || [];
+    const me = ((proj && proj.res.ok && proj.data.sponsored_projects) || []).find((x) => Number(x.id) === Number(ctx.projectId)) || {};
     const statements = (stm && stm.res.ok && stm.data.statements) || [];
     const letters = (dl && dl.res.ok && dl.data.gifts) || [];
     const property = (prop && prop.res.ok && prop.data.items) || [];
@@ -134,6 +137,19 @@
           : g.held_as === 'asset' && g.posting_status === 'posted' && ctx.canStaff ? ' · <a href="#" data-a="release" data-id="' + g.id + '">Release to the project at value</a>'
             : ' <span class="organizational-hint">' + (g.posting_status !== 'posted' ? 'waiting for Accounting to post' : 'booked as an expense') + '</span>') + '</li>').join('') + '</ul>' : '') +
       '<div data-box="gift" hidden></div>' +
+      // Lead links and public page
+      (ctx.canStaff ? '<div class="organizational-panel-section-head">Project lead link</div>' +
+        '<p class="organizational-hint organizational-sp-rec-line">The lead opens the project\'s balance and activity, asks for payments, sends reports and documents. No sign-in; keep links private.</p>' +
+        (links.length ? '<ul class="organizational-sp-fund-list">' + links.map((l) => '<li>' + esc(l.label || 'Link') + ' · made ' + esc(String(l.created_at).slice(0, 10)) + ' · ' +
+          (l.revoked_at ? 'turned off' : new Date(l.expires_at) < new Date() ? 'expired' : 'works until ' + esc(String(l.expires_at).slice(0, 10))) +
+          ' · used ' + l.uses + ' time' + (l.uses === 1 ? '' : 's') + (l.revoked_at || new Date(l.expires_at) < new Date() ? '' : ' · <a href="#" data-a="revoke" data-id="' + l.id + '">Turn off</a>') + '</li>').join('') + '</ul>' : '') +
+        '<p class="organizational-sp-rec-line"><a href="#" data-a="link" data-send="1">Make a link and email it to the lead</a> · <a href="#" data-a="link" data-send="0">Make a link to copy</a></p>' +
+        '<div data-box="link" hidden></div>' +
+        '<div class="organizational-panel-section-head">Public page</div>' +
+        '<p class="organizational-sp-rec-line"><label><input type="checkbox" data-f="pub-on"' + (me.public_page_enabled ? ' checked' : '') + '> Show a public page for this project</label>' +
+          (me.public_page_enabled ? ' · <a href="/p/' + encodeURIComponent(ctx.slug) + '/projects/' + ctx.projectId + '" target="_blank" rel="noopener">open it</a>' : '') + '</p>' +
+        '<p class="organizational-sp-rec-line"><textarea class="organizational-input" rows="3" data-f="pub-summary" placeholder="What the public page says about the project">' + esc(me.public_summary || '') + '</textarea>' +
+          ' <a href="#" data-a="pub-save">Save</a></p>' : '') +
       // Approvals
       '<div class="organizational-panel-section-head">Items using the sponsor\'s name</div>' +
       (approvals.length ? '<ul class="organizational-sp-fund-list">' + approvals.map((a) => '<li>' + esc(APPROVAL_KINDS[a.kind] || a.kind) + ': ' + esc(a.title) + ' · ' + esc(a.status) +
@@ -249,6 +265,23 @@
       f('go').addEventListener('click', async () => {
         if (await post(ctx.slug, base + '/approvals', { kind: f('kind').value, title: f('title').value, draft_document_id: Number(f('doc').value) || null })) done();
       });
+    });
+    on('[data-a="link"]', async (a) => {
+      const data = await post(ctx.slug, base + '/lead-links', { send: a.dataset.send === '1' });
+      if (!data) return;
+      const box = el.querySelector('[data-box="link"]');
+      box.hidden = false;
+      box.innerHTML = '<p class="organizational-sp-rec-line">' + (data.emailed ? 'Emailed to the lead. ' : '') + 'This link is shown only now. Copy it if you need it:</p>' +
+        '<p class="organizational-sp-rec-line"><input class="organizational-input" readonly value="' + esc(data.url) + '" data-f="link-url"></p>';
+      box.querySelector('[data-f="link-url"]').select();
+    });
+    on('[data-a="revoke"]', async (a) => {
+      const reason = window.prompt('Why is this link being turned off? (optional)');
+      if (reason === null) return;
+      if (await post(ctx.slug, base + '/lead-links/' + a.dataset.id + '/revoke', { reason })) done();
+    });
+    on('[data-a="pub-save"]', async () => {
+      if (await post(ctx.slug, '/sponsored-projects/' + ctx.projectId, { public_page_enabled: el.querySelector('[data-f="pub-on"]').checked, public_summary: el.querySelector('[data-f="pub-summary"]').value }, 'PATCH')) done();
     });
     on('[data-a="stmt"]', async (a) => {
       const month = a.dataset.month || el.querySelector('[data-f="stmt-month"]').value;

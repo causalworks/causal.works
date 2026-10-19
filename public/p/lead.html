@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Project</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title" id="pub-title">Loading…</h1>
+    <p class="organizational-error" id="pub-error" hidden></p>
+    <div id="pub-body" hidden>
+      <p class="organizational-sp-mo-hold" id="pub-hold" hidden></p>
+      <section class="organizational-pub-card">
+        <h2>Balance</h2>
+        <table class="organizational-sp-fund-table" id="pub-balance"></table>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>Ask for a payment</h2>
+        <form id="pub-request" class="organizational-pub-form">
+          <label>Who is being paid * <input class="organizational-input" name="payee_name" required maxlength="200" autocomplete="organization"></label>
+          <label>Payee is <select class="organizational-select" name="payee_kind"><option value="organization">a business or organization</option><option value="individual">a person</option></select></label>
+          <label>Payee email <input class="organizational-input" type="email" name="payee_email" maxlength="200"></label>
+          <label>Amount * <input class="organizational-input" type="number" name="amount" min="0.01" step="0.01" required inputmode="decimal"></label>
+          <label>What it is for * <input class="organizational-input" name="purpose" required maxlength="500"></label>
+          <label>How to pay <select class="organizational-select" name="method"><option value="check">Check</option><option value="bank_transfer">Bank transfer</option><option value="wire">Wire</option><option value="card">Card</option><option value="other">Other</option></select></label>
+          <label>Needed by <input class="organizational-input" type="date" name="needed_by"></label>
+          <label>Budget line <input class="organizational-input" name="budget_line" maxlength="200"></label>
+          <label>Invoice or receipt <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv"></label>
+          <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <button type="submit" class="organizational-btn">Send the request</button>
+          <p class="organizational-pub-msg" data-msg></p>
+        </form>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>Reports</h2>
+        <div id="pub-reports"></div>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>Send a document</h2>
+        <form id="pub-doc" class="organizational-pub-form">
+          <label>Type <select class="organizational-select" name="doc_type" id="pub-doc-type"></select></label>
+          <label>Title <input class="organizational-input" name="title" maxlength="300"></label>
+          <label>File * <input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.csv"></label>
+          <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+          <button type="submit" class="organizational-btn">Send</button>
+          <p class="organizational-pub-msg" data-msg></p>
+        </form>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>Your requests</h2>
+        <ul class="organizational-sp-fund-list" id="pub-requests"></ul>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>Activity</h2>
+        <ul class="organizational-sp-fund-list" id="pub-activity"></ul>
+      </section>
+      <p class="organizational-hint">Keep this link private. Anyone who has it can see this project.</p>
+    </div>
+  </main>
+  <script src="/p/lead.js"></script>
+</body>
+</html>

@@ -13,6 +13,16 @@ const { loadProjectBalance, loadSponsorSettings } = require('../lib/sponsorBalan
 const { previewFees, runFees, voidFeePosting } = require('../lib/sponsorFeePosting');
 const { createRequest, reviewRequest, placeHold, liftHold, createRecall, postRecall, voidRecall, setGrantEntity, attachGrantAgreement, effectiveModel } = require('../lib/sponsorMoneyOut');
 const { releaseHistory, createClosing, postClosing, voidClosing, DESTINATIONS } = require('../lib/sponsorGrants');
+const { createLink, revokeLink } = require('../lib/publicLinks');
+const { sendPlainEmail } = require('../lib/sendPlainEmail');
+const { loadOrgDocInfo } = require('../lib/orgLetterhead');
+
+const LEAD_LINK_DAYS = 180;
+
+function notProgramLead(req, res, next) {
+  if (req.coopOrgRole !== 'program') return next();
+  return res.status(403).json({ code: 'sponsor_staff_only', error: 'This is for the sponsor\'s staff. Ask an admin if you need access.' });
+}
 const { leadMayTouch } = require('../middleware/requireWriteAccess');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -394,6 +404,75 @@ function registerSponsorshipRoutes(app, pool) {
     } catch (e) {
       console.error('POST .../grant-agreement:', e.message);
       return res.status(500).json({ error: 'Could not attach the grant agreement' });
+    }
+  });
+
+  // Project lead links (scoped to one project, revocable; the token is shown once and only its hash is kept)
+  app.get(P + '/sponsored-projects/:id/lead-links', ...read, notProgramLead, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const r = await pool.query(
+        `SELECT l.id, l.label, l.created_at, l.expires_at, l.last_used_at, l.revoked_at, l.revoke_reason,
+                (SELECT COUNT(*)::int FROM org_public_link_uses u WHERE u.link_id = l.id) AS uses
+           FROM org_public_links l WHERE l.org_id = $1 AND l.sponsored_project_id = $2 AND l.purpose = 'project_lead' ORDER BY l.created_at DESC`, [req.orgId, project.id]);
+      return res.json({ links: r.rows });
+    } catch (e) {
+      console.error('GET .../lead-links:', e.message);
+      return res.status(500).json({ error: 'Could not load the project links' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/lead-links', ...base, requireWriteAccess('sponsorship'), notProgramLead, async (req, res) => {
+    const b = req.body || {};
+    const days = b.days != null ? Number.parseInt(String(b.days), 10) : LEAD_LINK_DAYS;
+    if (!Number.isInteger(days) || days < 1 || days > 730) return res.status(400).json({ error: 'A link can last from 1 to 730 days.' });
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      let email = null, name = null;
+      if (project.lead_constituent_id) {
+        const c = await pool.query('SELECT display_name, email FROM org_constituents WHERE id = $1 AND org_id = $2', [project.lead_constituent_id, req.orgId]);
+        if (c.rows[0]) { email = c.rows[0].email; name = c.rows[0].display_name; }
+      }
+      email = email || project.contact_lead_email || null;
+      name = name || project.contact_lead_name || null;
+      if (b.send && !email) return res.status(400).json({ code: 'no_lead_email', error: 'The project lead has no email address. Add one to the lead\'s contact, or copy the link instead.' });
+      const link = await createLink(pool, { orgId: req.orgId, userId: uid(req), purpose: 'project_lead', projectId: project.id, days, label: b.label ? String(b.label).slice(0, 200) : (name ? 'For ' + name : null) });
+      const base0 = (process.env.BASE_URL || '').replace(/\/$/, '');
+      const url = base0 + '/p/' + encodeURIComponent(req.params.slug) + '/lead#t=' + link.token;
+      let emailed = false;
+      if (b.send) {
+        const info = await loadOrgDocInfo(pool, req.orgId);
+        emailed = await sendPlainEmail({
+          to: email, fromName: info.name, replyTo: info.replyTo || undefined, subject: info.name + ': your link for ' + project.name,
+          text: ['Hello' + (name ? ' ' + name : '') + ',', '', 'Use this link to see ' + project.name + '\'s balance and activity, ask for a payment, send a report or upload a document:', '', url, '',
+            'The link works until ' + isoDate(link.expires_at) + '. Keep it private; anyone with it can see the project. Reply to this email if you need a new one.', '', info.name].join('\n'),
+        });
+      }
+      await logAudit(pool, { orgId: req.orgId, userId: uid(req), action: 'create', tableName: 'org_public_links', recordId: link.id,
+        metadata: { purpose: 'project_lead', sponsored_project_id: project.id, days, emailed } });
+      return res.status(201).json({ id: link.id, url, expires_at: link.expires_at, emailed });
+    } catch (e) {
+      console.error('POST .../lead-links:', e.message);
+      return res.status(500).json({ error: 'Could not make the link' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/lead-links/:linkId/revoke', ...base, requireWriteAccess('sponsorship'), notProgramLead, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const linkId = posInt(req.params.linkId);
+      const own = await pool.query(`SELECT 1 FROM org_public_links WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3 AND purpose = 'project_lead'`, [linkId, req.orgId, project.id]);
+      if (!own.rows.length) return res.status(404).json({ error: 'Link not found' });
+      const reason = req.body && req.body.reason ? String(req.body.reason).trim().slice(0, 500) : null;
+      if (!(await revokeLink(pool, { orgId: req.orgId, userId: uid(req), linkId, reason }))) return res.status(409).json({ error: 'This link is already turned off.' });
+      await logAudit(pool, { orgId: req.orgId, userId: uid(req), action: 'update', tableName: 'org_public_links', recordId: linkId, fields: [{ fieldName: 'revoked', oldValue: null, newValue: 'yes' }], metadata: { reason } });
+      return res.json({ id: linkId, revoked: true });
+    } catch (e) {
+      console.error('POST .../lead-links/:id/revoke:', e.message);
+      return res.status(500).json({ error: 'Could not turn off the link' });
     }
   });
 

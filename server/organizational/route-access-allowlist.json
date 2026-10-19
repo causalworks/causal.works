@@ -62,6 +62,10 @@
  "GET /api/organizational/orgs/:slug/tracking-program-maps": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/search-civic": "Organization record and the caller's own organizations; user-level or visible to every workspace user by design.",
  "GET /api/organizational/setup-presets": "Per-user setup presets; user-level, no organization data.",
+ "GET /api/public/:slug/lead/project": "Project lead link: shows one project's balance, activity (no donor names), its own requests and reports due. Needs a valid, unexpired, unrevoked link scoped to that project; every use is logged. Rate limited.",
+ "GET /api/public/:slug/projects/:projectId": "Optional public project page: name and public summary only, and only when the workspace turned the page on for that project. Rate limited.",
+ "GET /p/:slug/lead": "Public page shell for a project lead link (static HTML, no data). The link token stays in the URL fragment and is sent only to the lead API in a header. Rate limited by IP and workspace.",
+ "GET /p/:slug/projects/:projectId": "Public page shell for a project's optional public page (static HTML, no data). Rate limited by IP and workspace.",
  "GET /share/:token": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "GET /share/:token/file": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "GET /share/:token/info": "Public share link: access is the unguessable token plus a one-time emailed code.",
@@ -104,6 +108,9 @@
  "POST /api/organizational/orgs/:slug/projections/validate-formula": "Writes check the role (admin or finance) inside the handler; reads are plan data like Budget, program-scoped by row-level security.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/disbursements/:disbId/approve": "Disbursement approval uses a local middleware (finance, or a board member when the small-organization setting is on).",
  "POST /api/organizational/setup-presets": "Per-user setup presets; user-level, no organization data.",
+ "POST /api/public/:slug/lead/documents": "Project lead link: uploads a document to the link's one project. Valid scoped link, honeypot, form token, optional challenge; file type and size checked. Rate limited.",
+ "POST /api/public/:slug/lead/payment-requests": "Project lead link: enters a payment request for the link's one project. Valid scoped link, honeypot, minimum-time form token and optional challenge check; the request still needs staff approval. Rate limited.",
+ "POST /api/public/:slug/lead/reports/:reportId": "Project lead link: sends a quarterly report for the link's one project. Valid scoped link, honeypot, form token, optional challenge; file type and size checked. Rate limited.",
  "POST /api/share/:token/request-code": "Public share link: access is the unguessable token plus a one-time emailed code.",
  "POST /api/share/:token/verify": "Public share link: access is the unguessable token plus a one-time emailed code."
 }

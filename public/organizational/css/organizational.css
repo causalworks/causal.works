@@ -6020,3 +6020,18 @@ input.organizational-sp-rec-month { width: auto; max-width: 150px; display: inli
   .organizational-sp-fund-table th { white-space: normal; }
   .organizational-sp-fund-form { grid-template-columns: 1fr; }
 }
+
+/* Public pages (lead link, public project page) */
+body.organizational-pub { background: var(--organizational-surface, var(--surface, #f7f7f5)); margin: 0; }
+.organizational-pub-main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+.organizational-pub-org { margin: 0; font-size: 0.8125rem; color: var(--text-secondary); }
+.organizational-pub-title { margin: 4px 0 16px; font-size: 1.375rem; }
+.organizational-pub-summary { white-space: pre-line; line-height: 1.5; }
+.organizational-pub-card { background: var(--organizational-card, #fff); border: 0.5px solid var(--organizational-border-subtle, var(--border-subtle)); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+.organizational-pub-card h2 { font-size: 0.9375rem; margin: 0 0 8px; }
+.organizational-pub-form { display: grid; gap: 8px; font-size: 0.875rem; }
+.organizational-pub-form label { display: flex; flex-direction: column; gap: 4px; }
+.organizational-pub-form .organizational-btn { justify-self: start; }
+.organizational-pub-msg { margin: 0; font-size: 0.8125rem; }
+.organizational-pub-hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+.organizational-pub-inline { display: inline-flex; gap: 6px; align-items: center; }

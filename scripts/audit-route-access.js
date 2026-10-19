@@ -7,6 +7,7 @@ const Module = require('module');
 
 const ROOT = path.join(__dirname, '..', 'server');
 const ROUTES_DIR = path.join(ROOT, 'organizational', 'routes');
+const PUBLIC_DIR = path.join(ROOT, 'organizational', 'public');
 const ALLOWLIST = path.join(ROOT, 'organizational', 'route-access-allowlist.json');
 
 function tagFactory(name, fn) {
@@ -48,9 +49,11 @@ const fakeApp = {};
 const stubPool = new Proxy(function () {}, { get: () => () => Promise.resolve({ rows: [] }), apply: () => Promise.resolve({ rows: [] }) });
 
 const failed = [];
-for (const file of fs.readdirSync(ROUTES_DIR).filter((f) => f.endsWith('.js')).sort()) {
+const routeFiles = fs.readdirSync(ROUTES_DIR).filter((f) => f.endsWith('.js')).sort().map((f) => [ROUTES_DIR, f])
+  .concat(fs.existsSync(PUBLIC_DIR) ? fs.readdirSync(PUBLIC_DIR).filter((f) => f.endsWith('.js')).sort().map((f) => [PUBLIC_DIR, 'public/' + f]) : []);
+for (const [dir, file] of routeFiles) {
   let mod;
-  try { mod = require(path.join(ROUTES_DIR, file)); } catch (e) { failed.push(file + ': ' + e.message); continue; }
+  try { mod = require(path.join(dir, path.basename(file))); } catch (e) { failed.push(file + ': ' + e.message); continue; }
   const before = routes.length;
   for (const key of Object.keys(mod)) {
     if (!/^register/i.test(key) || typeof mod[key] !== 'function') continue;

@@ -155,11 +155,22 @@ function coveredCents(payments) {
   return total;
 }
 
-function isSettled(term) {
+// Days a monthly instalment plan stays in good standing after a failed payment while the provider retries.
+const INSTALMENT_FAILURE_DAYS = 14;
+
+// A term is settled when it is free, paid in full, or on a monthly instalment plan with at least one instalment
+// paid and no failed payment older than INSTALMENT_FAILURE_DAYS.
+function isSettled(term, today) {
   const price = Number(term.price_cents) || 0;
   if (price === 0) return true;
   const covered = term.covered_cents != null ? Number(term.covered_cents) : coveredCents(term.payments);
-  return covered >= price;
+  if (covered >= price) return true;
+  if (term.instalment_plan === 'monthly' && covered > 0) {
+    if (!term.payment_failed_at) return true;
+    const day = toDay(today);
+    return !!day && dayDiff(day, toDay(term.payment_failed_at)) <= INSTALMENT_FAILURE_DAYS;
+  }
+  return false;
 }
 
 // The state of one term on a given day. 'upcoming' is a settled term that has not started.
@@ -169,7 +180,7 @@ function termState(term, today, rawSettings) {
   if (term.status_override === 'ended') return 'ended';
   const starts = toDay(term.starts_on);
   const ends = toDay(term.ends_on);
-  if (!isSettled(term)) return day > ends ? 'lapsed' : 'pending';
+  if (!isSettled(term, day)) return day > ends ? 'lapsed' : 'pending';
   if (day < starts) return 'upcoming';
   if (day <= ends) return 'active';
   return dayDiff(day, ends) <= settings.grace_days ? 'grace' : 'lapsed';
@@ -193,7 +204,7 @@ function memberStatus(terms, today, rawSettings) {
   if (current) return { status: 'active', term: current.term };
   const latest = states[0];
   if (latest.state === 'ended') return { status: 'ended', term: latest.term };
-  const lastSettled = states.find((s) => s.state === 'grace' || (s.state === 'lapsed' && isSettled(s.term)));
+  const lastSettled = states.find((s) => s.state === 'grace' || (s.state === 'lapsed' && isSettled(s.term, day)));
   if (lastSettled && lastSettled.state === 'grace') return { status: 'grace', term: lastSettled.term };
   if (latest.state === 'pending' || latest.state === 'upcoming') return { status: 'pending', term: latest.term };
   return { status: 'lapsed', term: (lastSettled || latest).term };
@@ -205,7 +216,7 @@ function renewalBase(terms) {
 }
 
 module.exports = {
-  STATUSES, DEFAULT_SETTINGS,
+  STATUSES, DEFAULT_SETTINGS, INSTALMENT_FAILURE_DAYS,
   toDay, addDays, addMonths, dayDiff, normalizeSettings,
   joinTermDates, renewalTermDates, renewalOpen, proratedPriceCents,
   coveredCents, isSettled, termState, memberStatus, renewalBase, sortTermsNewestFirst,

@@ -10,7 +10,7 @@ const SETTINGS_FIELDS = [
   'year_mode', 'fixed_start_month', 'fixed_start_day', 'renewal_window_days', 'proration_mode', 'grace_days',
   'join_requires_approval', 'recognition_mode', 'deferred_dues_account_id', 'contribution_account_id',
   'dues_revenue_account_id', 'default_program_id', 'directory_fields', 'join_form_enabled', 'form_fields',
-  'extra_gift_enabled', 'auto_renew_default',
+  'extra_gift_enabled', 'auto_renew_default', 'payment_mode', 'card_payments_enabled', 'monthly_instalments_enabled',
 ];
 
 const SETTINGS_DEFAULTS = {
@@ -18,7 +18,7 @@ const SETTINGS_DEFAULTS = {
   join_requires_approval: false, recognition_mode: 'spread', deferred_dues_account_id: null,
   contribution_account_id: null, dues_revenue_account_id: null, default_program_id: null,
   directory_fields: [], join_form_enabled: false, form_fields: [], extra_gift_enabled: false,
-  auto_renew_default: false,
+  auto_renew_default: false, payment_mode: 'test', card_payments_enabled: false, monthly_instalments_enabled: false,
 };
 
 function today() {
@@ -87,6 +87,11 @@ async function loadTerms(pool, orgId, contactIds) {
     `SELECT p.id, p.term_id, p.kind, p.amount_cents, p.discount_cents, p.posting_status, p.approved_at
        FROM org_membership_payments p JOIN org_membership_terms t ON t.id = p.term_id
       WHERE ${where}`, params);
+  const inv = await pool.query(
+    `SELECT t.id AS term_id, ip.amount_cents FROM org_invoice_payments ip
+       JOIN org_membership_terms t ON t.invoice_id = ip.invoice_id
+      WHERE ${where} AND ip.status = 'posted'`, params);
+  for (const r of inv.rows) pays.rows.push({ id: null, term_id: r.term_id, kind: 'payment', amount_cents: Number(r.amount_cents), discount_cents: 0, posting_status: 'posted', via_invoice: true });
   const byTerm = new Map();
   for (const p of pays.rows) {
     if (!byTerm.has(p.term_id)) byTerm.set(p.term_id, []);
@@ -104,7 +109,7 @@ async function loadTerms(pool, orgId, contactIds) {
 }
 
 function decorateTerm(t, day, settings) {
-  return { ...t, state: S.termState(t, day, settings), settled: S.isSettled(t), balance_cents: Math.max(0, t.price_cents - t.covered_cents) };
+  return { ...t, state: S.termState(t, day, settings), settled: S.isSettled(t, day), balance_cents: Math.max(0, t.price_cents - t.covered_cents) };
 }
 
 // Status for every dues member, keyed by contact id.

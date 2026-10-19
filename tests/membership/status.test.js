@@ -150,3 +150,13 @@ test('renewal base skips ended terms', () => {
   const b = { ...paid(2, '2026-01-01', '2026-12-31'), status_override: 'ended' };
   assert.equal(M.renewalBase([a, b]).id, 1);
 });
+
+test('a monthly instalment plan counts as settled while instalments are paid, and for a short time after a failure', () => {
+  const t = { id: 1, starts_on: '2026-01-01', ends_on: '2026-12-31', price_cents: 12000, instalment_plan: 'monthly', payments: [{ kind: 'payment', amount_cents: 1000 }] };
+  assert.equal(M.termState(t, '2026-03-01', ROLLING), 'active');
+  assert.equal(M.termState({ ...t, payments: [] }, '2026-03-01', ROLLING), 'pending');
+  const failed = { ...t, payment_failed_at: '2026-03-01T10:00:00Z' };
+  assert.equal(M.termState(failed, '2026-03-15', ROLLING), 'active');
+  assert.equal(M.termState(failed, '2026-03-16', ROLLING), 'pending');
+  assert.equal(M.termState({ ...t, instalment_plan: null }, '2026-03-01', ROLLING), 'pending');
+});

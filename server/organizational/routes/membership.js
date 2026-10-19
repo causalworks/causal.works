@@ -13,6 +13,8 @@ const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../li
 const S = require('../lib/membershipStatus');
 const M = require('../lib/membership');
 const J = require('../lib/membershipJoin');
+const Pay = require('../lib/membershipPayments');
+const { addContactRoles } = require('../lib/contactRoles');
 
 const { cents, day, text } = M;
 
@@ -109,7 +111,8 @@ function registerMembershipRoutes(app, pool) {
       pick('proration_mode', (v) => ['none', 'monthly'].includes(v), 'Proration must be none or monthly.');
       pick('grace_days', intIn(0, 366), 'Grace days must be 0 to 366.');
       pick('recognition_mode', (v) => ['spread', 'at_receipt'].includes(v), 'Recognition must be spread over the term or at receipt.');
-      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
+      pick('payment_mode', (v) => ['test', 'live'].includes(v), 'Payment mode must be test or live.');
+      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default', 'card_payments_enabled', 'monthly_instalments_enabled']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
       for (const k of ['deferred_dues_account_id', 'contribution_account_id', 'dues_revenue_account_id', 'default_program_id']) {
         pick(k, (v) => v === null || intId(v) != null, k.replace(/_id$/, '').replace(/_/g, ' ') + ' is not valid.');
       }
@@ -117,6 +120,12 @@ function registerMembershipRoutes(app, pool) {
       pick('form_fields', (v) => Array.isArray(v), 'Form fields must be a list.');
       if (errors.length) return fail(res, 400, errors.join(' '));
       for (const k of ['fixed_start_month', 'fixed_start_day', 'renewal_window_days', 'grace_days']) next[k] = Number(next[k]);
+      if (next.card_payments_enabled && (!before.card_payments_enabled || next.payment_mode !== before.payment_mode)) {
+        const acct = (await Pay.loadAccounts(pool, req.orgId, 'stripe')).find((a) => a.mode === next.payment_mode);
+        if (!acct || !acct.secret_enc || !acct.webhook_secret_enc) {
+          return fail(res, 400, 'Enter the ' + next.payment_mode + ' secret key and webhook secret under Card payments before turning card payments on in ' + next.payment_mode + ' mode.');
+        }
+      }
       for (const k of ['deferred_dues_account_id', 'contribution_account_id', 'dues_revenue_account_id']) {
         if (next[k] != null && next[k] !== before[k]) {
           const a = await pool.query('SELECT 1 FROM org_accounts WHERE id = $1 AND org_id = $2', [next[k], req.orgId]);
@@ -552,11 +561,25 @@ function registerMembershipRoutes(app, pool) {
       const value = amount.value == null ? left : amount.value;
       if (value <= 0) return fail(res, 409, 'This payment has already been refunded in full.');
       if (value > left) return fail(res, 400, 'You can refund up to ' + (left / 100).toFixed(2) + ' on this payment.');
+      let processorRef = null;
+      let refundMethod = method;
+      if (p.method === 'card' && p.processor_ref) {
+        let out;
+        try {
+          out = await Pay.refundThroughProvider(pool, { orgId: req.orgId, paymentRef: p.processor_ref, amountCents: value });
+        } catch (e) {
+          console.error('membership refund through provider:', e.message);
+          return fail(res, 502, 'The payment provider did not accept the refund: ' + e.message + ' Nothing was recorded.');
+        }
+        if (out.error) return fail(res, 409, out.error);
+        processorRef = out.id;
+        refundMethod = 'card';
+      }
       const ins = await pool.query(
         `INSERT INTO org_membership_payments (org_id, term_id, constituent_id, kind, method, amount_cents, reason, refund_of_id, payment_date,
-                                              recorded_by_user_id, posting_status)
-         VALUES ($1, $2, $3, 'refund', $4, $5, $6, $7, $8, $9, 'unposted') RETURNING id`,
-        [req.orgId, p.term_id, p.constituent_id, method, value, reason, p.id, day(b.payment_date) || M.today(), userIdOf(req)]);
+                                              recorded_by_user_id, posting_status, processor_ref)
+         VALUES ($1, $2, $3, 'refund', $4, $5, $6, $7, $8, $9, 'unposted', $10) RETURNING id`,
+        [req.orgId, p.term_id, p.constituent_id, refundMethod, value, reason, p.id, day(b.payment_date) || M.today(), userIdOf(req), processorRef]);
       await audit(req, 'create', 'org_membership_payments', ins.rows[0].id, { metadata: { kind: 'refund', refund_of: p.id, term: p.term_id, amount_cents: value, reason } });
       return res.status(201).json({ payment_id: ins.rows[0].id });
     } catch (e) {
@@ -611,6 +634,100 @@ function registerMembershipRoutes(app, pool) {
     } catch (e) {
       console.error('POST membership/terms/:id/end:', e.message);
       return fail(res, 500, 'Could not end the term.');
+    }
+  });
+
+  // --- Card payments: provider account ---
+
+  app.get(`${B}/payment-account`, ...adminFinance, async (req, res) => {
+    try {
+      const accounts = await Pay.loadAccounts(pool, req.orgId, 'stripe');
+      const base0 = (process.env.BASE_URL || '').replace(/\/$/, '');
+      return res.json({
+        accounts: accounts.map(Pay.publicAccount),
+        webhook_url: base0 + '/api/public/' + encodeURIComponent(req.params.slug) + '/payments/stripe/webhook',
+      });
+    } catch (e) {
+      console.error('GET membership/payment-account:', e.message);
+      return fail(res, 500, 'Could not load the card payment account.');
+    }
+  });
+
+  app.put(`${B}/payment-account`, ...adminFinance, async (req, res) => {
+    const b = req.body || {};
+    const mode = b.mode === 'live' ? 'live' : b.mode === 'test' ? 'test' : null;
+    if (!mode) return fail(res, 400, 'Choose test or live.');
+    const secret = text(b.secret_key);
+    const webhookSecret = text(b.webhook_secret);
+    const accountRef = text(b.account_ref);
+    if (secret && !new RegExp('^(sk|rk)_' + mode + '_[A-Za-z0-9]{8,}$').test(secret)) {
+      return fail(res, 400, 'That does not look like a ' + mode + ' secret key. It starts with sk_' + mode + '_.');
+    }
+    if (webhookSecret && !/^whsec_[A-Za-z0-9]{8,}$/.test(webhookSecret)) return fail(res, 400, 'That does not look like a webhook signing secret. It starts with whsec_.');
+    if (!secret && !webhookSecret && !accountRef) return fail(res, 400, 'Nothing to save.');
+    try {
+      await Pay.saveAccount(pool, { orgId: req.orgId, userId: userIdOf(req), provider: 'stripe', mode, accountRef, secret, webhookSecret });
+    } catch (e) {
+      console.error('PUT membership/payment-account:', e.message);
+      return fail(res, 500, /ENCRYPTION_KEY/.test(e.message) ? 'The server has no key to store credentials safely. Ask the platform owner to set it.' : 'Could not save the card payment account.');
+    }
+    await audit(req, 'update', 'org_payment_accounts', req.orgId, { metadata: { mode, secret_key: secret ? 'changed' : 'kept', webhook_secret: webhookSecret ? 'changed' : 'kept' } });
+    const accounts = await Pay.loadAccounts(pool, req.orgId, 'stripe');
+    return res.json({ accounts: accounts.map(Pay.publicAccount) });
+  });
+
+  // --- Invoices for terms (created through the existing Sales invoice route) ---
+
+  app.post(`${B}/terms/:id/invoice-draft`, ...write, async (req, res) => {
+    try {
+      const term = await loadTerm(req, intId(req.params.id));
+      if (!term) return fail(res, 404, 'That term was not found.');
+      if (term.invoice_id) return fail(res, 409, 'This term already has an invoice.', { invoice_id: term.invoice_id });
+      const owed = (await M.loadTerms(pool, req.orgId, [term.constituent_id])).find((t) => t.id === term.id);
+      const amount = Math.max(0, owed.price_cents - owed.covered_cents);
+      if (!amount) return fail(res, 409, 'Nothing is owed on this term.');
+      const tier = term.tier_id ? await loadTier(req.orgId, term.tier_id) : null;
+      const settings = await M.getSettings(pool, req.orgId);
+      const accountId = (tier && tier.revenue_account_id) || settings.dues_revenue_account_id;
+      const programId = (tier && tier.program_id) || settings.default_program_id;
+      if (!accountId || !programId) return fail(res, 400, 'Set a revenue account and program on the tier, or the defaults in Membership settings, before invoicing.');
+      const added = await pool.query(
+        `SELECT 1 FROM org_contact_roles r WHERE r.constituent_id = $1 AND r.role = 'customer' AND r.starts_on <= CURRENT_DATE AND (r.ends_on IS NULL OR r.ends_on > CURRENT_DATE)`, [term.constituent_id]);
+      if (!added.rows.length) {
+        await inTransaction((client) => addContactRoles(client, req.orgId, term.constituent_id, ['customer']));
+        await audit(req, 'update', 'org_constituents', term.constituent_id, { fields: [{ fieldName: 'roles', oldValue: null, newValue: '+customer' }], metadata: { via: 'membership invoice', term: term.id } });
+      }
+      return res.json({
+        constituent_id: term.constituent_id,
+        invoice_date: M.today(),
+        due_date: S.addDays(M.today(), 30),
+        reference: 'Membership ' + S.toDay(term.starts_on) + ' to ' + S.toDay(term.ends_on),
+        lines: [{ account_id: accountId, program_id: programId, quantity: 1, unit_amount_cents: amount,
+          description: 'Membership dues' + (tier ? ': ' + tier.name : '') + ', ' + S.toDay(term.starts_on) + ' to ' + S.toDay(term.ends_on) }],
+      });
+    } catch (e) {
+      console.error('POST membership/terms/:id/invoice-draft:', e.message);
+      return fail(res, 500, 'Could not prepare the invoice.');
+    }
+  });
+
+  app.post(`${B}/terms/:id/invoice`, ...write, async (req, res) => {
+    const invoiceId = intId((req.body || {}).invoice_id);
+    if (!invoiceId) return fail(res, 400, 'Give the invoice to link.');
+    try {
+      const term = await loadTerm(req, intId(req.params.id));
+      if (!term) return fail(res, 404, 'That term was not found.');
+      if (term.invoice_id) return fail(res, 409, 'This term already has an invoice.');
+      const inv = await pool.query('SELECT id, constituent_id, status FROM org_invoices WHERE id = $1 AND org_id = $2', [invoiceId, req.orgId]);
+      if (!inv.rows.length) return fail(res, 404, 'That invoice was not found.');
+      if (Number(inv.rows[0].constituent_id) !== Number(term.constituent_id)) return fail(res, 400, 'That invoice is for a different contact.');
+      if (['void', 'written_off'].includes(inv.rows[0].status)) return fail(res, 400, 'That invoice is void or written off.');
+      await pool.query('UPDATE org_membership_terms SET invoice_id = $1, updated_at = now() WHERE id = $2', [invoiceId, term.id]);
+      await audit(req, 'update', 'org_membership_terms', term.id, { fields: [{ fieldName: 'invoice_id', oldValue: null, newValue: String(invoiceId) }] });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('POST membership/terms/:id/invoice:', e.message);
+      return fail(res, 500, 'Could not link the invoice.');
     }
   });
 

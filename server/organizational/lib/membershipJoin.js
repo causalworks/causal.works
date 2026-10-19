@@ -117,7 +117,8 @@ async function accountView(pool, orgId, contactId) {
     current_term: st.term ? { tier_name: st.term.tier_name, tier_id: st.term.tier_id, starts_on: st.term.starts_on, ends_on: st.term.ends_on, price_cents: st.term.price_cents, owed_cents: st.term.balance_cents } : null,
     renewal: st.next_term ? { starts_on: st.next_term.starts_on, ends_on: st.next_term.ends_on, price_cents: st.next_term.price_cents, owed_cents: st.next_term.balance_cents } : null,
     receipts: pays.rows.map((p) => ({ date: S.toDay(p.payment_date), kind: p.kind, method: p.method, amount_cents: Number(p.amount_cents) })),
-    terms: st.terms.map((t) => ({ tier_name: t.tier_name, starts_on: t.starts_on, ends_on: t.ends_on, state: t.state })),
+    terms: st.terms.map((t) => ({ tier_name: t.tier_name, starts_on: t.starts_on, ends_on: t.ends_on, state: t.state, auto_renew: !!t.auto_renew, instalments: t.instalment_plan || null })),
+    terms_customer_ref: st.terms.some((t) => !!t.processor_customer_ref),
   };
 }
 

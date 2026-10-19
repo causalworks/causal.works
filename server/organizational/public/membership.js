@@ -15,6 +15,7 @@ const { logAudit, diffFields } = require('../lib/auditLog');
 const M = require('../lib/membership');
 const S = require('../lib/membershipStatus');
 const J = require('../lib/membershipJoin');
+const Pay = require('../lib/membershipPayments');
 
 const PAGES = path.join(__dirname, '..', '..', '..', 'public', 'p');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -172,7 +173,11 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       }
       const out = await J.acceptJoin(pool, { orgId: ws.id, requestId: rq.id, userId: null });
       if (out.httpStatus >= 400) return res.status(out.httpStatus).json(out.body);
+      const session = out.body.price_cents > 0 && await Pay.activeAccount(pool, ws.id, req.membershipSettings)
+        ? await createLink(pool, { orgId: ws.id, purpose: J.SESSION, constituentId: out.body.constituent_id, minutes: J.SESSION_MINUTES })
+        : null;
       return res.json({
+        session: session ? session.token : null,
         status: 'joined', workspace_name: ws.display_name, starts_on: out.body.starts_on, ends_on: out.body.ends_on, price_cents: out.body.price_cents,
         payment_note: out.body.price_cents > 0 ? J.paymentNote(ws.display_name) : null,
       });
@@ -230,6 +235,9 @@ function registerPublicMembershipRoutes(app, pool, opts) {
         renewal_opens_on: base ? S.addDays(base, 1 - settings.renewal_window_days) : null,
         tiers: tiers.map(J.publicTier),
         payment_note: J.paymentNote(ws.display_name),
+        card_payments: !!(await Pay.activeAccount(pool, ws.id, settings)),
+        monthly_offered: !!settings.monthly_instalments_enabled,
+        can_update_card: view.terms_customer_ref,
         form_token: issueFormToken(ws.id, o.now && o.now()),
       });
     } catch (e) { return oops(res, 'GET public membership me', e); }
@@ -261,6 +269,51 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       await recordUse(pool, req, req.link, 'update_details');
       return res.json({ saved: true });
     } catch (e) { return oops(res, 'POST public membership me details', e); }
+  });
+
+  app.post(`${P}/me/checkout`, writeLimit, workspace, withLink(J.SESSION), async (req, res) => {
+    try {
+      const ws = req.workspace;
+      const b = req.body || {};
+      const plan = ['once', 'yearly', 'monthly'].includes(b.plan) ? b.plan : 'once';
+      const terms = await M.loadTerms(pool, ws.id, [req.link.constituent_id]);
+      const st = S.memberStatus(terms, M.today(), req.membershipSettings);
+      const upcoming = terms.find((t) => t.starts_on > M.today() && t.status_override !== 'ended');
+      const term = b.which === 'renewal' ? upcoming : (st && st.term);
+      if (!term || term.status_override === 'ended') return res.status(400).json({ error: 'There is no membership to pay for. Renew first.' });
+      const c = (await pool.query('SELECT email FROM org_constituents WHERE id = $1 AND org_id = $2', [req.link.constituent_id, ws.id])).rows[0];
+      const back = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/account';
+      let out;
+      try {
+        out = await Pay.startCheckout(pool, { orgId: ws.id, workspaceName: ws.display_name, term, contact: c || {}, plan, successUrl: back + '#paid=1', cancelUrl: back });
+      } catch (e) {
+        console.error('public membership checkout:', e.message);
+        return res.status(502).json({ error: 'The card payment page could not be opened. Try again later, or pay by check.' });
+      }
+      if (out.error) return res.status(400).json({ error: out.error });
+      await recordUse(pool, req, req.link, 'checkout');
+      return res.json({ url: out.url });
+    } catch (e) { return oops(res, 'POST public membership me checkout', e); }
+  });
+
+  app.post(`${P}/me/card`, writeLimit, workspace, withLink(J.SESSION), async (req, res) => {
+    try {
+      const ws = req.workspace;
+      const r = await pool.query(
+        `SELECT processor_customer_ref FROM org_membership_terms WHERE org_id = $1 AND constituent_id = $2 AND processor_customer_ref IS NOT NULL ORDER BY starts_on DESC LIMIT 1`,
+        [ws.id, req.link.constituent_id]);
+      const back = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/account';
+      let out;
+      try {
+        out = await Pay.cardPortal(pool, { orgId: ws.id, customerRef: r.rows[0] && r.rows[0].processor_customer_ref, returnUrl: back });
+      } catch (e) {
+        console.error('public membership card portal:', e.message);
+        return res.status(502).json({ error: 'The card page could not be opened. Try again later.' });
+      }
+      if (out.error) return res.status(400).json({ error: out.error });
+      await recordUse(pool, req, req.link, 'card_update');
+      return res.json({ url: out.url });
+    } catch (e) { return oops(res, 'POST public membership me card', e); }
   });
 
   app.post(`${P}/me/renew`, writeLimit, workspace, withLink(J.SESSION), formGuard, async (req, res) => {

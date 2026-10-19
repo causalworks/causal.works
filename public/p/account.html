@@ -28,6 +28,14 @@
         <h2>Membership</h2>
         <p id="pub-status"></p>
         <p class="organizational-hint" id="pub-renewal-note"></p>
+        <div id="pub-pay" class="organizational-pub-form" hidden>
+          <button type="button" class="organizational-btn" data-plan="once">Pay by card</button>
+          <button type="button" class="organizational-btn organizational-btn-outline" data-plan="yearly">Pay by card and renew every year</button>
+          <button type="button" class="organizational-btn organizational-btn-outline" data-plan="monthly" hidden>Pay monthly by card</button>
+          <p class="organizational-hint">You enter your card on the payment provider's page; it is never sent to us.</p>
+        </div>
+        <button type="button" class="organizational-btn organizational-btn-outline" id="pub-card" hidden>Update your card</button>
+        <p class="organizational-pub-msg" id="pub-pay-msg"></p>
       </section>
       <form id="pub-renew" class="organizational-pub-card organizational-pub-form" hidden>
         <h2>Renew</h2>

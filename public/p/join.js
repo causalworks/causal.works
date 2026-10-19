@@ -23,6 +23,14 @@
     if (!out.ok) { $('pub-title').textContent = 'Join'; fail(out.data.error || 'This link is not working. Fill in the form again.'); return; }
     if (out.data.status === 'awaiting_approval') { done('Email confirmed', out.data.message); return; }
     done('Welcome', 'Your membership runs from ' + out.data.starts_on + ' to ' + out.data.ends_on + (out.data.price_cents ? ', for ' + money(out.data.price_cents) + '.' : '.'), out.data.payment_note);
+    if (out.data.session) {
+      try { sessionStorage.setItem('membership-session:' + slug, out.data.session); } catch (e) { /* storage off */ }
+      const a = document.createElement('a');
+      a.className = 'organizational-btn';
+      a.href = '/p/' + encodeURIComponent(slug) + '/account';
+      a.textContent = 'Pay by card now';
+      $('pub-done').appendChild(a);
+    }
   }
 
   function renderTiers() {

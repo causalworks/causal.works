@@ -51,6 +51,11 @@
     $('pub-receipts').innerHTML = d.receipts.length
       ? d.receipts.map((r) => '<li>' + esc(r.date) + ' · ' + (r.kind === 'refund' ? 'Refund ' : 'Payment ') + money(r.amount_cents) + (r.method ? ' by ' + esc(METHODS[r.method] || r.method) : '') + '</li>').join('')
       : '<li class="organizational-hint">No payments yet.</li>';
+    const owedNow = t && t.owed_cents ? 'current' : (d.renewal && d.renewal.owed_cents ? 'renewal' : null);
+    $('pub-pay').hidden = !(d.card_payments && owedNow);
+    $('pub-pay').dataset.which = owedNow || '';
+    $('pub-pay').querySelector('[data-plan="monthly"]').hidden = !d.monthly_offered;
+    $('pub-card').hidden = !(d.card_payments && d.can_update_card);
     $('pub-signin').hidden = true;
     $('pub-body').hidden = false;
     wired = true;
@@ -79,7 +84,19 @@
     if (out && out.ok) { await load(); $('pub-renewal-note').textContent = 'Renewed: ' + out.data.starts_on + ' to ' + out.data.ends_on + '. ' + (out.data.payment_note || ''); }
   });
 
+  async function goTo(path, body) {
+    $('pub-pay-msg').textContent = 'Opening the payment page…';
+    const out = await call(path, { method: 'POST', body: body || {} }, session);
+    if (out.status === 401) { await showSignIn('Your sign-in has ended. Ask for a new link.'); return; }
+    if (!out.ok) { $('pub-pay-msg').textContent = out.data.error || 'That did not work. Try again later.'; return; }
+    window.location.href = out.data.url;
+  }
+  $('pub-pay').querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => goTo('/me/checkout', { plan: b.dataset.plan, which: $('pub-pay').dataset.which })));
+  $('pub-card').addEventListener('click', () => goTo('/me/card'));
+
   async function start() {
+    const paid = /(^|[#&])paid=1/.test(location.hash);
+    if (paid) history.replaceState(null, '', location.pathname);
     const token = fragmentToken();
     if (token) {
       const out = await call('/session', { method: 'POST' }, token);
@@ -88,6 +105,7 @@
     }
     if (!session) { await showSignIn(''); return; }
     await load();
+    if (paid) $('pub-pay-msg').textContent = 'Thank you. Your payment shows here once the payment provider confirms it, usually within a minute.';
   }
 
   start().catch(() => fail('Something went wrong. Reload the page and try again.'));

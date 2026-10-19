@@ -170,7 +170,9 @@
       + '<a href="/organizational/o/' + encodeURIComponent(slug) + '/contacts?contact=' + c.id + '">Contact record</a></p>';
     if (cur) {
       html += '<p class="organizational-hint">Current term: ' + esc(cur.tier_name || 'No tier') + ', ' + esc(cur.starts_on) + ' to ' + esc(cur.ends_on)
-        + ' · price ' + money(cur.price_cents) + (cur.balance_cents ? ' · owed ' + money(cur.balance_cents) : ' · settled') + '</p>';
+        + ' · price ' + money(cur.price_cents) + (cur.balance_cents ? ' · owed ' + money(cur.balance_cents) : ' · settled')
+        + (cur.invoice_id ? ' · <a href="/organizational/o/' + encodeURIComponent(slug) + '/sales?open_invoice=' + cur.invoice_id + '">invoice</a>' : '')
+        + (cur.auto_renew ? ' · renews automatically' : '') + (cur.payment_failed_at ? ' · <strong>card payment failed</strong>' : '') + '</p>';
     }
     if (w) {
       html += '<div class="organizational-membership-actions">'
@@ -178,6 +180,7 @@
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-open="f-waive">Waive dues</button>'
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-open="f-extend">Extend</button>'
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-open="f-end">End membership</button>' : '')
+        + (cur && cur.balance_cents && !cur.invoice_id && cur.status_override !== 'ended' ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-invoice="' + cur.id + '">Create invoice</button>' : '')
         + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-open="f-term">' + (d.terms.length ? 'Renew or add a term' : 'Add a term') + '</button>'
         + '</div>';
       if (cur) {
@@ -282,6 +285,16 @@
     panelBody.querySelectorAll('[data-refund]').forEach((b) => b.addEventListener('click', () => {
       $('f-refund').querySelector('[name=payment_id]').value = b.dataset.refund;
       show('f-refund');
+    }));
+    panelBody.querySelectorAll('[data-invoice]').forEach((b) => b.addEventListener('click', async () => {
+      showPanelError('');
+      const draft = await api('/terms/' + b.dataset.invoice + '/invoice-draft', 'POST', {});
+      if (!draft || !draft.res.ok) { showPanelError(errorOf(draft, 'Could not prepare the invoice.')); return; }
+      const inv = await window.apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/invoices', { method: 'POST', body: JSON.stringify(draft.data), skip403Redirect: true });
+      if (!inv || !inv.res.ok) { showPanelError(errorOf(inv, 'Could not create the invoice. Creating invoices is for people who can enter transactions in Accounting.')); return; }
+      const link = await api('/terms/' + b.dataset.invoice + '/invoice', 'POST', { invoice_id: inv.data.id });
+      if (!link || !link.res.ok) { showPanelError(errorOf(link, 'The invoice was created but could not be linked.')); return; }
+      await openRecord(d.dues_member.id);
     }));
     panelBody.querySelectorAll('[data-approve]').forEach((b) => b.addEventListener('click', async () => {
       const out = await api('/payments/' + b.dataset.approve + '/approve', 'POST', {});
@@ -443,8 +456,18 @@
     const syncFixed = () => f.querySelectorAll('[data-fixed]').forEach((x) => { x.style.display = f.elements.year_mode.value === 'fixed' ? '' : 'none'; });
     syncFixed();
     Array.from(f.elements).forEach((el) => { el.disabled = !access.canAdmin; });
+    loadPaymentAccount();
     if (settingsWired) return;
     settingsWired = true;
+    $('membership-payment-account').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pf = $('membership-payment-account');
+      const out = await api('/payment-account', 'PUT', { mode: pf.elements.mode.value, secret_key: pf.elements.secret_key.value.trim() || undefined, webhook_secret: pf.elements.webhook_secret.value.trim() || undefined });
+      const msg = $('membership-payment-msg');
+      msg.hidden = false;
+      msg.textContent = out && out.res.ok ? 'Saved. The keys are stored encrypted and are not shown again.' : errorOf(out, 'Could not save the card payment account.');
+      if (out && out.res.ok) { pf.elements.secret_key.value = ''; pf.elements.webhook_secret.value = ''; loadPaymentAccount(); }
+    });
     f.elements.year_mode.addEventListener('change', syncFixed);
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -462,6 +485,19 @@
       msg.hidden = false;
       msg.textContent = out && out.res.ok ? 'Saved.' : errorOf(out, 'Could not save settings.');
     });
+  }
+
+  async function loadPaymentAccount() {
+    const pf = $('membership-payment-account');
+    pf.hidden = !access.canAdmin;
+    if (!access.canAdmin) return;
+    const out = await api('/payment-account');
+    if (!out || !out.res.ok) return;
+    const acc = out.data.accounts || [];
+    $('membership-payment-state').textContent = acc.length
+      ? acc.map((a) => (a.mode === 'live' ? 'Live' : 'Test') + ': ' + (a.has_secret ? 'secret key saved' : 'no secret key') + ', ' + (a.has_webhook_secret ? 'webhook secret saved' : 'no webhook secret')).join(' · ')
+      : 'No card payment account yet.';
+    $('membership-webhook-url').textContent = 'Webhook address to enter in the provider: ' + out.data.webhook_url;
   }
 
   // --- Start ---

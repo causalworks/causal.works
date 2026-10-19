@@ -153,9 +153,27 @@
                   <label style="margin-left:8px;"><input type="checkbox" data-form-field="annual_budget"> Annual budget (organizations)</label>
                 </div>
                 <p class="organizational-hint organizational-panel-field-full" id="membership-public-links"></p>
+                <div class="organizational-panel-field-full organizational-membership-section">Card payments</div>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="card_payments_enabled"> Take card payments online</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="monthly_instalments_enabled"> Offer monthly payments</label>
+                <label class="organizational-label">Mode
+                  <select name="payment_mode" class="organizational-select"><option value="test">Test (no real money)</option><option value="live">Live</option></select></label>
               </div>
               <p id="membership-settings-msg" class="organizational-hint" hidden></p>
               <button type="submit" class="organizational-btn organizational-btn-primary">Save settings</button>
+            </form>
+            <form id="membership-payment-account" class="organizational-card" style="margin-top:12px;max-width:720px;">
+              <div class="organizational-membership-section" style="margin-top:0;">Card payment account (Stripe)</div>
+              <p class="organizational-hint" id="membership-payment-state"></p>
+              <div class="organizational-panel-fields">
+                <label class="organizational-label">Mode
+                  <select name="mode" class="organizational-select"><option value="test">Test</option><option value="live">Live</option></select></label>
+                <label class="organizational-label">Secret key<input name="secret_key" class="organizational-input" autocomplete="off" placeholder="Leave blank to keep the saved key"></label>
+                <label class="organizational-label">Webhook signing secret<input name="webhook_secret" class="organizational-input" autocomplete="off" placeholder="Leave blank to keep the saved secret"></label>
+              </div>
+              <p class="organizational-hint" id="membership-webhook-url"></p>
+              <p id="membership-payment-msg" class="organizational-hint" hidden></p>
+              <button type="submit" class="organizational-btn organizational-btn-primary">Save card payment account</button>
             </form>
           </section>
         </div>

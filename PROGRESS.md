@@ -70,6 +70,7 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
 ## After merge (owner actions per pull request)
+- M3: apply `db/migrations/346_membership_payments.sql`; restart. `POD_CREDENTIAL_ENCRYPTION_KEY` must be set (it already is where pod credentials work). In Stripe, add the webhook address shown in Membership settings for the events checkout.session.completed, invoice.paid, invoice.payment_failed, payment_intent.payment_failed, customer.subscription.deleted and charge.refunded; enter the test secret key and webhook secret, turn card payments on in test mode and try a payment, a renewal, a failure and a refund before switching to live. Turn on Stripe's customer portal for the card-update link.
 - M2: apply `db/migrations/345_membership_join_requests.sql`; restart. Set `BASE_URL` so emailed links carry the full address. To open the join form, tick "Accept joins from the public form" in Membership settings; the page is `/p/<workspace>/join` and dues members sign in at `/p/<workspace>/account`. Emails need the live email key.
 - S1: apply `db/migrations/360_sponsor_funds_and_fees.sql`; restart. In each fiscal-sponsor workspace set the fee income account, fee expense account and fee income program in sponsorship settings before the first fee run. No new NOT NULL column lacks a default, so the demo snapshot needs no rerun.
 
@@ -103,8 +104,10 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 
 - M2: migration 345 (`org_membership_join_requests`), `lib/membershipJoin.js`, public routes in `server/organizational/public/membership.js` (reusing `lib/publicLinks.js` and `lib/rateLimit.js`; all in the allowlist), staff join-request queue (approve, decline with reason), join form settings, pages `public/p/join.html`, `public/p/account.html` with `join.js`, `account.js`, `membership-pub.js`. Tests in `tests/membership/public.db.test.js`. Checked in a browser at phone and desktop width. Pull request #11 from `build/membership-m2` (stacked on #10).
 
+- M3: migration 346 (`org_payment_accounts` with credentials encrypted the same way as pod credentials, `payment_provider_events`, payment settings, term fields for subscriptions and failed payments), provider interface in `lib/payments/` (Stripe over its HTTPS API, a fake provider for tests, shared signature check), `lib/membershipPayments.js` (account, checkout, card update, refunds, event handlers), webhook route `server/organizational/public/payments.js`, account-page checkout and card update, staff refunds through the provider, staff "Create invoice" through the existing Sales invoice route, settings screens. Tests in `tests/membership/payments.db.test.js`. Checked in a browser with the fake provider. Pull request from `build/membership-m3`.
+
 ## Next
-- M3: payments behind a provider interface (fake provider for tests, Stripe implementation), webhook, staff invoice through the existing invoice code.
+- M4: daily job (statuses, scheduled series, failed-payment notices, clearing old join requests), template editor with preview, message log, bulk email with unsubscribe.
 
 ## Blocked or needs the owner
 
@@ -121,11 +124,16 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M2: a confirmed email that matches a contact (main or additional email) joins that contact; only blank phone and address are filled in. If that contact already has a current term, the request is declined and the person is told to sign in.
 - M2: the extra gift becomes a gift to confirm in Funding (`review_status = 'to_confirm'`, not posted, noted as not received yet). There is no gift intake function for a form, so it uses the same row shape as Funding's own queue.
 - M2: sign-in answers the same for any email. The emailed link is single use for 30 minutes and is exchanged for a one-hour link scoped to that dues member; every use is logged. A dues member cannot change their email address on the page.
+- M3: the invoice code lives only in the Sales invoice route handler, so Membership prepares the lines (`POST .../terms/:id/invoice-draft`, which also adds the customer role the invoice route requires), the screen calls the existing `POST .../invoices`, then links the invoice to the term. Only people who can enter transactions in Accounting can create it. Payments on a linked invoice count toward the term; no Membership payment row is made for them. Note for the accountant check: a sent invoice posts a receivable, which rule 6 says billed renewals should not; invoices are only made when staff choose to.
+- M3: a yearly card subscription charges on the anniversary of the first payment, not on the term's end date. The renewal term always follows on from the previous one; if the charge comes after the grace period, the dues member shows as lapsed until it arrives. Check this with real Stripe testing; anchoring the billing date to the term end may be wanted.
+- M3: a monthly instalment term counts as paid while at least one instalment is in and no failed payment is older than 14 days.
+- M3: refunds made in the provider's own dashboard arrive by webhook and are recorded with the reason "Refunded through the payment provider".
 - M2: the optional challenge check is the shared one in public settings (`PUT .../public-settings`); like the lead page, the join and sign-in pages do not yet load a challenge widget.
 
 ## Testing
 - `TEST_DATABASE_URL=... node --test tests/` runs everything; add `TEST_SCHEMA_SQL=<path to build-specs/schema.sql>` to run the migration copy test.
 
 ## After merge (owner actions per pull request)
+- M3: apply `db/migrations/346_membership_payments.sql`; restart. `POD_CREDENTIAL_ENCRYPTION_KEY` must be set (it already is where pod credentials work). In Stripe, add the webhook address shown in Membership settings for the events checkout.session.completed, invoice.paid, invoice.payment_failed, payment_intent.payment_failed, customer.subscription.deleted and charge.refunded; enter the test secret key and webhook secret, turn card payments on in test mode and try a payment, a renewal, a failure and a refund before switching to live. Turn on Stripe's customer portal for the card-update link.
 - M2: apply `db/migrations/345_membership_join_requests.sql`; restart. Set `BASE_URL` so emailed links carry the full address. To open the join form, tick "Accept joins from the public form" in Membership settings; the page is `/p/<workspace>/join` and dues members sign in at `/p/<workspace>/account`. Emails need the live email key.
 - M1: apply `db/migrations/344_membership_core.sql`; restart. Rerun the demo snapshot: the demo restore inserts snapshot rows as they are, and the payments table now has an org column and new required fields. Each workspace that uses membership should check Membership settings (year mode, grace days) and give each tier a revenue account and program.

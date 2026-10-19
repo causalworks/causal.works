@@ -11,6 +11,15 @@
   const dollarsToCents = (v) => (v === '' || v == null ? null : Math.round(Number(v) * 100));
   const centsToDollars = (c) => (c == null ? '' : (Number(c) / 100).toFixed(2));
 
+  // One date format for every Sponsorship screen: "Oct 19, 2026".
+  function day(iso) {
+    if (!iso) return '';
+    const str = String(iso);
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str);
+    if (Number.isNaN(d.getTime())) return str;
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
   function api(slug, path, opts) {
     return apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + path, opts || { method: 'GET' });
   }
@@ -23,7 +32,7 @@
       t = 'Tiered: ' + (r.tiers || []).map((x) => x.rate + '%' + (x.up_to_cents != null ? ' up to ' + money(x.up_to_cents) : ' above that')).join(', ') + ' (yearly totals)';
     } else t = r.rate + '% of money received';
     if (r.minimum_quarter_cents) t += ', minimum ' + money(r.minimum_quarter_cents) + ' a quarter';
-    return t + ', from ' + r.effective_from;
+    return t + ', from ' + day(r.effective_from);
   }
 
   function row(label, value, extra) {
@@ -69,16 +78,19 @@
           (t.difference_cents ? ' · difference ' + money(t.difference_cents) : '') + '. ' + esc(t.explanation || '')) + '</p>') +
       (!show('fee') ? '' :
       '<p style="margin:8px 0 0;">Fee: ' + esc(ruleText(current)) +
-        (locked ? ' <span class="organizational-hint">(agreement signed ' + esc(rules.data.agreement_signed_at || '') + '; changes are amendments)</span>' : '') +
+        (locked ? ' <span class="organizational-hint">(agreement signed ' + esc(day(rules.data.agreement_signed_at)) + '; changes are amendments)</span>' : '') +
         (ctx.canMoney ? ' · <a href="#" class="organizational-sp-fee-change">Change</a>' : '') +
-        (gifts.length && ctx.canMoney ? ' · <a href="#" class="organizational-sp-fee-exempt-link">Fee exemptions</a>' : '') + '</p>' +
-      (ruleList.length > 1 ? '<details class="organizational-collapsible"><summary class="organizational-section-heading">Fee history</summary><div class="organizational-section-body"><ul style="margin:0;padding-left:18px;">' +
-        ruleList.map((r) => '<li>' + esc(ruleText(r)) + (r.amendment_reason ? ' · ' + esc(r.amendment_reason) : '') + '</li>').join('') + '</ul></div></details>' : '') +
+        (gifts.length && ctx.canMoney ? ' · <a href="#" class="organizational-sp-fee-exempt-link">Fee exemptions</a>' : '') +
+        (ruleList.length > 1 ? ' · <a href="#" class="organizational-sp-fee-history-link">Fee history</a>' : '') + '</p>' +
+      (ruleList.length > 1 ? '<ul class="organizational-sp-fund-list organizational-sp-fee-history" hidden>' +
+        ruleList.map((r) => '<li>' + esc(ruleText(r)) + (r.amendment_reason ? ' · ' + esc(r.amendment_reason) : '') + '</li>').join('') + '</ul>' : '') +
       '<div class="organizational-sp-fee-form" hidden></div>' +
       '<div class="organizational-sp-fee-exempt" hidden></div>');
 
     const changeLink = el.querySelector('.organizational-sp-fee-change');
     if (changeLink) changeLink.addEventListener('click', (e) => { e.preventDefault(); openFeeForm(el, ctx, current, locked); });
+    const histLink = el.querySelector('.organizational-sp-fee-history-link');
+    if (histLink) histLink.addEventListener('click', (e) => { e.preventDefault(); const h = el.querySelector('.organizational-sp-fee-history'); h.hidden = !h.hidden; });
     const exLink = el.querySelector('.organizational-sp-fee-exempt-link');
     if (exLink) exLink.addEventListener('click', (e) => { e.preventDefault(); openExemptions(el, ctx, gifts); });
   }
@@ -140,7 +152,7 @@
     box.hidden = false;
     box.innerHTML = '<p class="organizational-hint" style="margin:8px 0 4px;">Tick a gift whose funder caps overhead. It still counts as money received.</p>' +
       '<ul class="organizational-sp-fund-list">' + gifts.map((g) => '<li><label><input type="checkbox" data-gift="' + g.id + '"' + (g.sponsor_fee_exempt ? ' checked' : '') + '> ' +
-        esc(String(g.received_at || '').slice(0, 10)) + ' · ' + money(g.amount_cents) + (g.sponsor_fee_exempt_reason ? ' <span class="organizational-hint">' + esc(g.sponsor_fee_exempt_reason) + '</span>' : '') + '</label></li>').join('') + '</ul>';
+        esc(day(g.received_at)) + ' · ' + money(g.amount_cents) + (g.sponsor_fee_exempt_reason ? ' <span class="organizational-hint">' + esc(g.sponsor_fee_exempt_reason) + '</span>' : '') + '</label></li>').join('') + '</ul>';
     box.querySelectorAll('input[data-gift]').forEach((cb) => cb.addEventListener('change', async () => {
       const reason = window.prompt(cb.checked ? 'Why is this gift exempt from the fee? (required)' : 'Why is the exemption being removed? (required)');
       if (!reason || !reason.trim()) { cb.checked = !cb.checked; return; }
@@ -163,29 +175,41 @@
     const v = s.data.settings;
     const accounts = ((acc && acc.res.ok && acc.data.accounts) || []).filter((a) => a.is_posting);
     const programs = (prog && prog.res.ok && (prog.data.programs || prog.data)) || [];
-    const acctSel = (key, type) => '<select class="organizational-select" data-s="' + key + '"' + (ctx.canMoney ? '' : ' disabled') + '><option value="">Not set</option>' +
-      accounts.filter((a) => a.type === type).map((a) => '<option value="' + a.id + '"' + (Number(v[key]) === Number(a.id) ? ' selected' : '') + '>' + esc((a.code ? a.code + ' ' : '') + a.name) + '</option>').join('') + '</select>';
-    const progSel = '<select class="organizational-select" data-s="fee_income_program_id"' + (ctx.canMoney ? '' : ' disabled') + '><option value="">Not set</option>' +
-      (Array.isArray(programs) ? programs : []).map((p) => '<option value="' + p.id + '"' + (Number(v.fee_income_program_id) === Number(p.id) ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>';
-    const num = (key, dollars, attrs) => '<input class="organizational-input" type="number" data-s="' + key + '"' + (dollars ? ' step="0.01" data-dollars="1"' : '') + ' ' + (attrs || '') +
-      ' value="' + (dollars ? centsToDollars(v[key]) : v[key]) + '"' + (ctx.canMoney ? '' : ' disabled') + '>';
+    const off = ctx.canMoney ? '' : ' disabled';
+    const missing = (key, need) => (!v[key] && need ? '<span class="organizational-sp-set-missing">Not set. ' + esc(need) + '</span>' : '');
+    const acctSel = (key, type, label, need, hint) => '<label class="organizational-label">' + esc(label) + (need ? ' *' : '') +
+      '<select class="organizational-select" data-s="' + key + '"' + off + '><option value="">Choose an account</option>' +
+      accounts.filter((a) => a.type === type).map((a) => '<option value="' + a.id + '"' + (Number(v[key]) === Number(a.id) ? ' selected' : '') + '>' + esc((a.code ? a.code + ' ' : '') + a.name) + '</option>').join('') + '</select>' +
+      missing(key, need) + (hint ? '<span class="organizational-hint">' + esc(hint) + '</span>' : '') + '</label>';
+    const progSel = '<label class="organizational-label">Program for fee income *<select class="organizational-select" data-s="fee_income_program_id"' + off + '><option value="">Choose a program</option>' +
+      (Array.isArray(programs) ? programs : []).map((p) => '<option value="' + p.id + '"' + (Number(v.fee_income_program_id) === Number(p.id) ? ' selected' : '') + '>' + esc(p.name) + '</option>').join('') + '</select>' +
+      missing('fee_income_program_id', 'The fee run needs it.') + '</label>';
+    const num = (key, label, dollars, attrs, hint) => '<label class="organizational-label">' + esc(label) +
+      '<input class="organizational-input" type="number" data-s="' + key + '"' + (dollars ? ' step="0.01" data-dollars="1"' : '') + ' ' + (attrs || '') +
+      ' value="' + (dollars ? centsToDollars(v[key]) : v[key]) + '"' + off + '>' + (hint ? '<span class="organizational-hint">' + esc(hint) + '</span>' : '') + '</label>';
     const years = Object.keys(v.information_return_thresholds || {}).sort();
-    el.innerHTML = '<div class="organizational-sp-fund-form">' +
-      '<label>Fee income account ' + acctSel('fee_income_account_id', 'income') + '</label>' +
-      '<label>Fee charged to projects (expense account) ' + acctSel('fee_expense_account_id', 'expense') + '</label>' +
-      '<label>Program for fee income ' + progSel + '</label>' +
-      '<label>Recalled funds charged to (expense, optional) ' + acctSel('recall_expense_account_id', 'expense') + '</label>' +
-      '<label>Recalled funds income (optional) ' + acctSel('recall_income_account_id', 'income') + '</label>' +
-      '<label>Default minimum fee a quarter ' + num('default_fee_minimum_cents', true, 'min="0"') + '</label>' +
-      '<label>Second approval needed above ' + num('second_approval_threshold_cents', true, 'min="0"') + '</label>' +
-      '<label>Hold a project when its report is overdue by (days) ' + num('overdue_report_hold_days', false, 'min="0"') + '</label>' +
-      '<label>Donor letter needed above ' + num('donor_letter_threshold_cents', true, 'min="0"') + '</label>' +
-      '<label>Statement day of the month ' + num('statement_day_of_month', false, 'min="1" max="28"') + '</label>' +
-      '<label>Information-return threshold, ' + esc(years.join(', ') || 'this year') + ' <input class="organizational-input" type="number" step="0.01" min="0" data-s="ir"' +
-        ' value="' + centsToDollars(years.length ? v.information_return_thresholds[years[years.length - 1]] : 200000) + '"' + (ctx.canMoney ? '' : ' disabled') + '></label>' +
-      '<p class="organizational-hint" style="margin:0;">Check the information-return threshold against the IRS instructions each year.</p>' +
-      (ctx.canMoney ? '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-a="save">Save settings</button><span class="organizational-hint" data-a="msg"></span></div>' : '') +
-      '</div>';
+    const group = (title, body) => '<h2 class="organizational-subheading">' + esc(title) + '</h2><section class="organizational-card organizational-sp-settings-card"><div class="organizational-panel-fields">' + body + '</div></section>';
+    el.innerHTML =
+      (ctx.canMoney ? '' : '<p class="organizational-hint organizational-sp-intro">Changed by ' + esc(ctx.who || 'finance and admins') + '.</p>') +
+      group('Fee accounts',
+        acctSel('fee_income_account_id', 'income', 'Fee income account', 'The fee run needs it.') +
+        acctSel('fee_expense_account_id', 'expense', 'Fee charged to projects (expense)', 'The fee run needs it.') +
+        progSel +
+        num('default_fee_minimum_cents', 'Default minimum fee a quarter', true, 'min="0"') +
+        acctSel('recall_expense_account_id', 'expense', 'Recalled funds charged to', null, 'Optional. The fee expense account is used if empty.') +
+        acctSel('recall_income_account_id', 'income', 'Recalled funds credited to', null, 'Optional. The fee income account is used if empty.')) +
+      group('Approval thresholds',
+        num('second_approval_threshold_cents', 'Second approval needed above', true, 'min="0"', 'A different person approves payments above this.') +
+        num('donor_letter_threshold_cents', 'Donor letter needed above', true, 'min="0"', 'For checks, bank transfers and wires to a project.')) +
+      group('Holds and reports',
+        num('overdue_report_hold_days', 'Hold a project when its report is overdue by (days)', false, 'min="0"')) +
+      group('Statements',
+        num('statement_day_of_month', 'Statement day of the month', false, 'min="1" max="28"', 'Monthly statements are made on this day.')) +
+      group('Tax thresholds',
+        '<label class="organizational-label">Information-return threshold, ' + esc(years.length ? years[years.length - 1] : String(new Date().getFullYear())) +
+          '<input class="organizational-input" type="number" step="0.01" min="0" data-s="ir" value="' + centsToDollars(years.length ? v.information_return_thresholds[years[years.length - 1]] : 200000) + '"' + off + '>' +
+          '<span class="organizational-hint">Check it against the IRS instructions each year.</span></label>') +
+      (ctx.canMoney ? '<div class="organizational-sp-settings-actions"><span class="organizational-hint" data-a="msg">' + (ctx.saved ? 'Saved.' : '') + '</span><button type="button" class="organizational-btn" data-a="save">Save settings</button></div>' : '');
     const save = el.querySelector('[data-a="save"]');
     if (!save) return;
     save.addEventListener('click', async () => {
@@ -200,9 +224,10 @@
       body.information_return_thresholds = { ...(v.information_return_thresholds || {}), [year]: dollarsToCents(el.querySelector('[data-s="ir"]').value) || 0 };
       const msg = el.querySelector('[data-a="msg"]');
       const out = await api(ctx.slug, '/sponsor-settings', { method: 'PUT', body: JSON.stringify(body) });
-      msg.textContent = out && out.res.ok ? 'Saved.' : ((out && out.data && out.data.error) || 'Could not save.');
+      if (out && out.res.ok) { renderSettings(el, { ...ctx, saved: true }); return; }
+      msg.textContent = (out && out.data && out.data.error) || 'Could not save. Check the amounts and try again.';
     });
   }
 
-  window.OrganizationalSponsorFund = { renderBalance, renderSettings };
+  window.OrganizationalSponsorFund = { renderBalance, renderSettings, day };
 })();

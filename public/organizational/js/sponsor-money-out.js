@@ -64,41 +64,49 @@
     const recallList = (recalls && recalls.res.ok && recalls.data.recalls) || [];
     const held = project.status === 'on_hold';
 
+    const day = (d) => window.OrganizationalSponsorFund.day(d);
+    const chip = (tone, text) => '<span class="organizational-sp-chip' + (tone ? ' organizational-sp-chip-' + tone : '') + '">' + esc(text) + '</span>';
+    const REQ_TONE = { submitted: 'warn', in_review: 'warn', needs_info: 'warn', approved: 'good', rejected: 'danger', withdrawn: '' };
+    const head = (t) => '<h3 class="organizational-sp-head">' + esc(t) + '</h3>';
+    const table = (cols, rows) => '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table"><thead><tr>' +
+      cols.map((c) => '<th' + (c.num ? ' class="organizational-sp-num"' : '') + '>' + esc(c.label || c) + '</th>').join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div></section>';
+    const cell = (text, title) => '<td class="organizational-sp-name" title="' + esc(title != null ? title : text) + '">' + esc(text) + '</td>';
+    const amount = (c) => '<td class="organizational-sp-num">' + money(c) + '</td>';
+
     el.innerHTML =
       (held ? '<p class="organizational-sp-mo-hold"><strong>On hold</strong>: ' + esc(project.hold_reason || '') +
         '. Payments and requests are blocked.' + (project.hold_kind === 'report_overdue' ? ' Lifts by itself when the report is received.' : '') + '</p>' : '') +
       (ctx.canMoney ? '<p class="organizational-sp-mo-links"><a href="#" data-a="hold">' + (held ? 'Lift hold' : 'Put on hold') + '</a> · <a href="#" data-a="recall">Recall funds</a>' +
-        (!closings.length && (project.status === 'winding_down' || project.status === 'on_hold') ? ' · <a href="#" data-a="close">Close the project</a>' : '') + '</p>' : '') +
-      (closings.length ? '<p class="organizational-sp-rec-line"><strong>Closing</strong>: ' + money(closings[0].amount_cents) + ' to ' + esc(closings[0].destination_name || destinations[closings[0].destination_kind] || '') +
-        ' on ' + esc(closings[0].closing_date) + ' · ' + esc(closings[0].reason) + ' <span class="organizational-hint">' + (closings[0].status === 'posted' ? 'posted, project ended' : 'waiting for Accounting') + '</span></p>' : '') +
+        (!closings.length && (project.status === 'winding_down' || project.status === 'on_hold') ? ' · <a href="#" data-a="close">Close the project</a>' : '') + '</p>'
+        : '<p class="organizational-hint organizational-sp-mo-links">Holds, recalls and closing are for finance and admins.</p>') +
+      (closings.length ? head('Closing') + '<p class="organizational-sp-rec-line">' + money(closings[0].amount_cents) + ' to ' + esc(closings[0].destination_name || destinations[closings[0].destination_kind] || '') +
+        ' on ' + esc(day(closings[0].closing_date)) + ' · ' + esc(closings[0].reason) + ' ' + (closings[0].status === 'posted' ? chip('good', 'Posted, project ended') : chip('warn', 'Waiting for Accounting')) + '</p>' : '') +
       '<div data-box="close" hidden></div>' +
-      (isGrant ? '<div class="organizational-panel-section-head">Pre-approved grant</div>' +
-        '<p class="organizational-sp-rec-line">Receiving entity: ' + (grant.receiving_entity ? esc(grant.receiving_entity.display_name) : '<span class="organizational-sp-mo-hold">not named</span>') +
-          ' · W-9: ' + (grant.w9_on_file ? 'on file' + (grant.w9_received_at ? ' since ' + esc(grant.w9_received_at) : '') : '<span class="organizational-sp-mo-hold">missing</span>') +
+      (isGrant ? head('Pre-approved grant') +
+        '<p class="organizational-sp-rec-line">Receiving entity: ' + (grant.receiving_entity ? esc(grant.receiving_entity.display_name) : chip('danger', 'Not named')) +
+          ' · W-9: ' + (grant.w9_on_file ? 'on file' + (grant.w9_received_at ? ' since ' + esc(day(grant.w9_received_at)) : '') : chip('danger', 'Missing')) +
           (ctx.canMoney ? ' · <a href="#" data-a="entity">Change</a>' : '') + '</p><div data-box="entity" hidden></div>' +
-        ((grant.releases || []).length ? '<ul class="organizational-sp-fund-list">' + grant.releases.map((r) => '<li>' + esc(r.date) + ' · ' + money(r.amount_cents) + ' · ' +
-          esc(r.kind === 'property' ? 'property: ' + (r.in_kind_description || 'donated item') : 'grant') + ' · ' + esc(r.status === 'approved' ? (r.posted ? 'paid' : 'approved') : 'waiting for approval') +
-          (r.grant_agreement_document_id ? '' : ' <span class="organizational-sp-mo-hold">no grant agreement</span>') + '</li>').join('') + '</ul>'
+        ((grant.releases || []).length ? table(['Date', 'Kind', { label: 'Amount', num: true }, 'Status', 'Grant agreement'], grant.releases.map((r) => '<tr><td>' + esc(day(r.date)) + '</td>' +
+          cell(r.kind === 'property' ? 'Property: ' + (r.in_kind_description || 'donated item') : 'Grant') + amount(r.amount_cents) + '<td>' +
+          (r.status === 'approved' ? (r.posted ? chip('good', 'Paid') : chip('warn', 'Approved')) : chip('warn', 'Waiting for approval')) + '</td><td>' +
+          (r.grant_agreement_document_id ? 'Attached' : chip('danger', 'Missing')) + '</td></tr>'))
           : '<p class="organizational-hint organizational-sp-rec-line">No releases yet.</p>') : '') +
-      '<div class="organizational-panel-section-head">Payment requests</div>' +
-      (requests.length ? '<ul class="organizational-sp-fund-list organizational-sp-mo-requests">' +
-        requests.map((r) => '<li><span>' + esc(String(r.created_at || '').slice(0, 10)) + ' · ' + esc(r.payee_name || '') + ' · <strong>' + money(r.amount_cents) + '</strong> · ' + esc(r.purpose) +
-          ' <span class="organizational-hint">' + esc(METHOD_LABELS[r.method] || r.method) + (r.needed_by ? ', by ' + esc(String(r.needed_by).slice(0, 10)) : '') + '</span> · ' +
-          esc(STATUS_LABELS[r.status] || r.status) + (r.decision_reason ? ' <span class="organizational-hint">' + esc(r.decision_reason) + '</span>' : '') + '</span>' +
+      head('Payment requests') +
+      (requests.length ? table(['Asked', 'Payee', 'For', { label: 'Amount', num: true }, 'How', 'Needed by', 'Status', ''], requests.map((r) => '<tr><td>' + esc(day(r.created_at)) + '</td>' +
+          cell(r.payee_name || '') + cell(r.purpose) + amount(r.amount_cents) + '<td>' + esc(METHOD_LABELS[r.method] || r.method) + '</td><td>' + esc(day(r.needed_by)) + '</td>' +
+          '<td title="' + esc(r.decision_reason || '') + '">' + chip(REQ_TONE[r.status], STATUS_LABELS[r.status] || r.status) + '</td><td>' +
           (ctx.canMoney && ['submitted', 'in_review', 'needs_info'].includes(r.status)
             ? '<span class="organizational-sp-mo-actions"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-rq="approve" data-id="' + r.id + '">Approve</button>' +
               '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-rq="needs_info" data-id="' + r.id + '">Ask</button>' +
               '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-rq="reject" data-id="' + r.id + '">Reject</button></span>' : '') +
-          '</li>').join('') + '</ul>'
-        : '<p class="organizational-hint" style="margin:4px 0;">No payment requests yet.</p>') +
-      (ctx.canEnter && !held ? '<p style="margin:6px 0 0;"><a href="#" data-a="new-request">Enter a payment request</a></p>' : '') +
+          '</td></tr>'))
+        : '<p class="organizational-hint organizational-sp-rec-line">No payment requests yet.</p>') +
+      (ctx.canEnter && !held ? '<p class="organizational-sp-rec-line"><a href="#" data-a="new-request">Enter a payment request</a></p>' : '') +
       '<div data-box="request" hidden></div>' +
-      (recallList.length ? '<div class="organizational-panel-section-head">Recalls</div><ul class="organizational-sp-fund-list">' +
-        recallList.map((r) => '<li>' + esc(r.recall_date) + ' · ' + money(r.amount_cents) + ' · ' + esc(r.reason) + ' <span class="organizational-hint">' +
-          ({ pending: 'waiting for Accounting', posted: 'posted', void: 'cancelled' })[r.status] + '</span></li>').join('') + '</ul>' : '') +
+      (recallList.length ? head('Recalls') + table(['Date', 'Reason', { label: 'Amount', num: true }, 'Status'], recallList.map((r) => '<tr><td>' + esc(day(r.recall_date)) + '</td>' + cell(r.reason) + amount(r.amount_cents) + '<td>' +
+          ({ pending: chip('warn', 'Waiting for Accounting'), posted: chip('good', 'Posted'), void: chip('', 'Cancelled') })[r.status] + '</td></tr>')) : '') +
       '<div data-box="recall" hidden></div>' +
-      (overrides.length ? '<div class="organizational-panel-section-head">Approved over the available balance</div><ul class="organizational-sp-fund-list">' +
-        overrides.map((o) => '<li>' + money(o.amount_cents) + ' · ' + esc(o.reason) + ' <span class="organizational-hint">' + esc(o.by_email || '') + ', ' + esc(String(o.at || '').slice(0, 10)) + '</span></li>').join('') + '</ul>' : '');
+      (overrides.length ? head('Approved over the available balance') + table(['When', 'Who', 'Reason', { label: 'Amount', num: true }], overrides.map((o) => '<tr><td>' + esc(day(o.at)) + '</td>' + cell(o.by_email || '') + cell(o.reason) + amount(o.amount_cents) + '</tr>')) : '');
 
     const done = () => { render(el, ctx); if (ctx.onChange) ctx.onChange(); };
     const holdLink = el.querySelector('[data-a="hold"]');

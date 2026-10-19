@@ -9,8 +9,10 @@ Test database: `createdb test_db`, load `build-specs/schema.sql`, then every fil
 
 - U1 screens: `sponsored-projects.html` and `js/sponsored-projects.js` rebuilt as one module page: four-number strip, tabs Projects / Money out / Intake / Reports / Agreements, gear for Sponsorship settings (fee and threshold settings plus public-page spam check), project page `?project=<id>&view=` with sub-tabs Overview, Money in, Money out, Agreement and documents, Reports, Lead link and public page, History. `sponsor-fund.js`, `sponsor-money-out.js` and `sponsor-records.js` take a `parts` list so each tab shows its slice; workspace forms open in the slide-in panel. Gift Postings and the Document Vault link to the project. Checked in a browser at 1280 px and 390 px as admin and board member, no console errors. Pull request from `build/sponsorship-ui-u1`.
 
+- U2: settings grouped (fee accounts, approval thresholds, holds and reports, statements, tax thresholds, public pages) with a red "Not set" call for missing fee accounts; lists in the money-out and records components are now tables with right-aligned money, status chips and truncated long text; one date format ("Oct 19, 2026") through `OrganizationalSponsorFund.day`; collapsible blocks replaced by links (fee history, standing terms); one text size; table cells stay on one line and tables scroll inside their box on phones. Pull request from `build/sponsorship-ui-u2` (contains U1; merge U1 first).
+
 ## Next
-- U2: layout polish (grouped settings, plain section headings instead of collapsible blocks, one date format, money alignment, empty states, status chips in the components).
+- U3: `scripts/seed-sponsorship-demo.js` (dry run, `--apply`, `--remove`, marker on every row, made through the library functions) with tests, and `docs/public/sponsorship-wiring-tour.md`.
 
 ## Blocked or needs the owner
 - Nothing yet.
@@ -26,6 +28,7 @@ Test database: `createdb test_db`, load `build-specs/schema.sql`, then every fil
 
 ## After merge (owner actions per pull request)
 - U1: no migration. Restart the app.
+- U2: no migration. Restart the app (or just reload pages; only front-end files changed).
 
 ## Earlier: Sponsorship build (S1 to S6, merged)
 

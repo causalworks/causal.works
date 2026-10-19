@@ -56,10 +56,7 @@
   }
 
   function fmtDate(iso) {
-    if (!iso) return '';
-    const d = new Date(String(iso).length === 10 ? iso + 'T00:00:00' : iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return window.OrganizationalSponsorFund ? window.OrganizationalSponsorFund.day(iso) : (iso || '');
   }
 
   function statusLabel(s) { return STATUS_LABELS[s] || s || ''; }
@@ -365,27 +362,28 @@
   async function renderPublicSettings(el) {
     const isAdmin = myAccess.role === 'admin';
     const head = '<h2 class="organizational-subheading">Public pages and lead links</h2>';
-    const leadLine = '<p class="organizational-hint organizational-sp-card-foot">Lead links last 180 days and can be turned off on the project. Each project\'s public page is turned on under its Lead link and public page tab.</p>';
+    const leadLine = '<p class="organizational-hint organizational-panel-field-full">Lead links last 180 days and can be turned off on the project. A project\'s public page is turned on under its Lead link and public page tab.</p>';
     if (!isAdmin) {
-      el.innerHTML = head + '<section class="organizational-card">' + leadLine + '<p class="organizational-hint organizational-sp-card-foot">The optional spam check on public forms is set by admins.</p></section>';
+      el.innerHTML = head + '<section class="organizational-card organizational-sp-settings-card"><div class="organizational-panel-fields">' + leadLine +
+        '<p class="organizational-hint organizational-panel-field-full">The optional spam check on public forms is set by admins.</p></div></section>';
       return;
     }
     const out = await api('/public-settings');
     const s = (out && out.res.ok && out.data.settings) || {};
-    el.innerHTML = head + '<section class="organizational-card">' + leadLine +
-      '<p class="organizational-hint organizational-sp-card-foot">Optional spam check on public forms: when a verify address and secret are saved, every public form must pass the check. Leave empty to turn it off.</p>' +
-      '<div class="organizational-sp-fund-form">' +
-      '<label>Verify address <input class="organizational-input" type="url" data-p="url" placeholder="https://" value="' + esc(s.challenge_verify_url || '') + '"></label>' +
-      '<label>Site key <input class="organizational-input" type="text" data-p="key" value="' + esc(s.challenge_site_key || '') + '"></label>' +
-      '<label>Secret <input class="organizational-input" type="password" data-p="secret" autocomplete="new-password" placeholder="' + (s.has_secret ? 'saved; type to replace' : '') + '"></label>' +
-      '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-p="save">Save</button><span class="organizational-hint" data-p="msg"></span></div></div></section>';
+    el.innerHTML = head + '<section class="organizational-card organizational-sp-settings-card"><div class="organizational-panel-fields">' + leadLine +
+      '<p class="organizational-hint organizational-panel-field-full">Optional spam check on public forms. When a verify address and secret are saved, every public form must pass the check. Leave the address empty to turn it off.</p>' +
+      '<label class="organizational-label">Verify address<input class="organizational-input" type="url" data-p="url" placeholder="https://" value="' + esc(s.challenge_verify_url || '') + '"></label>' +
+      '<label class="organizational-label">Site key<input class="organizational-input" type="text" data-p="key" value="' + esc(s.challenge_site_key || '') + '"></label>' +
+      '<label class="organizational-label">Secret<input class="organizational-input" type="password" data-p="secret" autocomplete="new-password" placeholder="' + (s.has_secret ? 'Saved. Type to replace it.' : '') + '"></label>' +
+      '</div></section>' +
+      '<div class="organizational-sp-settings-actions"><span class="organizational-hint" data-p="msg"></span><button type="button" class="organizational-btn" data-p="save">Save spam check</button></div>';
     el.querySelector('[data-p="save"]').addEventListener('click', async () => {
       const body = { challenge_verify_url: el.querySelector('[data-p="url"]').value.trim() || null, challenge_site_key: el.querySelector('[data-p="key"]').value.trim() || null };
       const secret = el.querySelector('[data-p="secret"]').value;
       if (secret) body.challenge_secret = secret;
       if (!body.challenge_verify_url) body.challenge_secret = '';
       const r = await api('/public-settings', { method: 'PUT', body: JSON.stringify(body) });
-      el.querySelector('[data-p="msg"]').textContent = r && r.res.ok ? 'Saved.' : ((r && r.data && r.data.error) || 'Could not save.');
+      el.querySelector('[data-p="msg"]').textContent = r && r.res.ok ? 'Saved.' : ((r && r.data && r.data.error) || 'Could not save. Check the address and try again.');
     });
   }
 
@@ -450,7 +448,7 @@
       window.OrganizationalSponsorFund.renderBalance(at('fee'), { ...ctx, parts: ['fee'] });
       window.OrganizationalSponsorRecords.renderProject(at('letters'), { ...ctx, parts: ['letters', 'property'], onChange: refresh });
     } else if (view === 'money-out') {
-      viewEl.innerHTML = box('disbursements') + box('moneyout');
+      viewEl.innerHTML = box('moneyout') + box('disbursements');
       renderDisbursements(at('disbursements'), p, refresh);
       window.OrganizationalSponsorMoneyOut.render(at('moneyout'), { ...ctx, onChange: refresh });
     } else if (view === 'agreement') {
@@ -477,7 +475,7 @@
       fact('Ends', esc(p.end_date ? fmtDate(p.end_date) : 'Ongoing')) +
       fact('Program', esc(prog ? prog.name : 'Not linked')) +
       fact('Yearly budget', p.annual_budget_estimate != null ? esc(money(Math.round(Number(p.annual_budget_estimate) * 100))) : 'Not set') +
-      fact('Next report due', esc(fmtDate(p.next_report_due) || 'Not set')) +
+      fact('Next report due', esc(fmtDate((rowFor(p.id) || {}).next_report_due || p.next_report_due) || 'Not set')) +
       fact('Documents', String(p.document_count || 0)) +
       '</div>' +
       (p.description ? '<p class="organizational-sp-rec-line organizational-sp-description">' + esc(p.description) + '</p>' : '') +
@@ -492,7 +490,7 @@
     const POSTING = { posted: 'In the books', unposted: 'Waiting for Accounting', not_applicable: 'Not posted', void: 'Voided' };
     el.innerHTML = gifts.length
       ? '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Received</th><th>Type</th><th>Campaign</th><th class="organizational-sp-num">Amount</th><th>Fee</th><th>Books</th></tr></thead><tbody>' +
-        gifts.map((g) => '<tr><td>' + esc(fmtDate(g.received_at)) + '</td><td>' + esc(String(g.gift_type || '').replace(/_/g, ' ')) + '</td><td>' + esc(g.campaign || '') + '</td><td class="organizational-sp-num">' + money(g.amount_cents) + '</td><td>' +
+        gifts.map((g) => '<tr><td>' + esc(fmtDate(g.received_at)) + '</td><td>' + esc(String(g.gift_type || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())) + '</td><td>' + esc(g.campaign || '') + '</td><td class="organizational-sp-num">' + money(g.amount_cents) + '</td><td>' +
           (g.sponsor_fee_exempt ? '<span title="' + esc(g.sponsor_fee_exempt_reason || '') + '">Exempt</span>' : '') + '</td><td>' + esc(POSTING[g.posting_status] || g.posting_status) + '</td></tr>').join('') +
         '</tbody></table></div></section>'
       : '<p class="organizational-empty">No gifts tagged to this project yet. Gifts are tagged to a project when they are recorded in Funding.</p>';
@@ -556,10 +554,16 @@
     const out = await api('/sponsored-projects/' + p.id + '/history', { method: 'GET', skip403Redirect: true });
     if (!out || !out.res.ok) { el.innerHTML = '<p class="organizational-hint">' + esc((out && out.data && out.data.error) || 'Could not load the history.') + '</p>'; return; }
     const rows = out.data.entries || [];
+    const RECORDS = {
+      org_sponsored_projects: 'Project', org_sponsor_payment_requests: 'Payment request', org_sponsored_project_disbursements: 'Disbursement',
+      org_sponsor_recalls: 'Recall', org_sponsor_closings: 'Closing', org_sponsor_fee_rules: 'Fee rule', org_sponsor_agreements: 'Agreement',
+      org_sponsor_agreement_amendments: 'Amendment', org_sponsor_reports: 'Report', org_sponsor_approvals: 'Approval', org_sponsor_acknowledgments: 'Acknowledgment',
+      org_sponsor_statements: 'Statement', org_documents: 'Document', org_public_links: 'Lead link', org_gifts: 'Gift',
+    };
     const what = (e) => {
-      const t = String(e.table_name || '').replace(/^org_sponsor(ed_project)?_?/, '').replace(/_/g, ' ').replace(/s$/, '') || 'project';
+      const t = RECORDS[e.table_name] || String(e.table_name || '').replace(/^org_/, '').replace(/_/g, ' ');
       const m = e.metadata || {};
-      if (e.field_name) return t + ': ' + e.field_name.replace(/_/g, ' ') + (e.old_value != null || e.new_value != null ? ' from ' + (e.old_value == null ? 'empty' : e.old_value) + ' to ' + (e.new_value == null ? 'empty' : e.new_value) : '');
+      if (e.field_name) return t + ': ' + e.field_name.replace(/_/g, ' ') + (e.old_value != null || e.new_value != null ? ' changed from ' + (e.old_value == null ? 'empty' : e.old_value) + ' to ' + (e.new_value == null ? 'empty' : e.new_value) : ' changed');
       return t + ' ' + ({ create: 'added', update: 'changed', delete: 'removed' })[e.action] + (m.reason ? ': ' + m.reason : m.summary ? ': ' + m.summary : '');
     };
     el.innerHTML = rows.length

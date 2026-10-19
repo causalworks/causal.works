@@ -6015,6 +6015,7 @@ body.organizational-number-colors .organizational-num-pos { color: var(--green) 
 .organizational-sp-rec-due_soon { color: var(--organizational-status-warning); font-weight: 600; }
 .organizational-sp-rec-received { color: var(--organizational-status-success); }
 select.organizational-sp-rec-type { width: auto; max-width: 160px; display: inline-block; }
+input.organizational-sp-rec-month { width: auto; max-width: 150px; display: inline-block; }
 @media (max-width: 600px) {
   .organizational-sp-fund-table th { white-space: normal; }
   .organizational-sp-fund-form { grid-template-columns: 1fr; }

@@ -51,10 +51,15 @@
   async function renderProject(el, ctx) {
     if (!el) return;
     const base = '/sponsored-projects/' + ctx.projectId;
-    const [ag, docs, reps, st, apprs, tpls] = await Promise.all([
+    const [ag, docs, reps, st, apprs, tpls, stm, dl, prop] = await Promise.all([
       api(ctx.slug, base + '/agreements'), api(ctx.slug, base + '/documents'), api(ctx.slug, base + '/reports'),
       api(ctx.slug, base + '/standing'), api(ctx.slug, '/sponsor-approvals'), api(ctx.slug, '/sponsor-agreement-templates'),
+      api(ctx.slug, base + '/statements'), api(ctx.slug, base + '/donor-letters'), api(ctx.slug, base + '/property'),
     ]);
+    const statements = (stm && stm.res.ok && stm.data.statements) || [];
+    const letters = (dl && dl.res.ok && dl.data.gifts) || [];
+    const property = (prop && prop.res.ok && prop.data.items) || [];
+    const lastMonth = (() => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 7); })();
     const agreements = (ag && ag.res.ok && ag.data.agreements) || [];
     const amendments = (ag && ag.res.ok && ag.data.amendments) || [];
     const docList = (docs && docs.res.ok && docs.data.documents) || [];
@@ -111,6 +116,24 @@
         '<details class="organizational-collapsible"><summary class="organizational-section-heading">Standing terms acknowledged</summary><div class="organizational-section-body"><ul class="organizational-sp-fund-list">' +
         standing.acknowledgments.map((a) => '<li>' + esc(a.label) + ' · ' + (a.acknowledged_on ? esc(a.acknowledged_on) : '<span class="organizational-hint">not yet</span>') +
           (ctx.canStaff ? ' · <a href="#" data-a="ack" data-key="' + a.key + '">Record</a>' : '') + '</li>').join('') + '</ul></div></details>' : '') +
+      // Statements
+      '<div class="organizational-panel-section-head">Monthly statements</div>' +
+      (statements.length ? '<ul class="organizational-sp-fund-list">' + statements.slice(0, 6).map((m) => '<li>' + esc(String(m.month).slice(0, 7)) + ' · closing ' + money(m.closing_cents) +
+        ' · ' + docLink(ctx.slug, m.generated_document_id, 'PDF') + ' · <span class="organizational-hint">' + esc(({ sent: 'emailed to ' + (m.sent_to || 'the lead'), failed: 'email failed', skipped: 'no lead email', not_sent: 'not emailed', pending: 'waiting' })[m.send_status] || m.send_status) + '</span>' +
+        (ctx.canStaff && (m.send_status === 'failed' || m.send_status === 'not_sent') ? ' · <a href="#" data-a="stmt" data-month="' + esc(String(m.month).slice(0, 7)) + '" data-send="1">Email it</a>' : '') + '</li>').join('') + '</ul>'
+        : '<p class="organizational-hint organizational-sp-rec-line">Statements are made on the statement day each month.</p>') +
+      (ctx.canStaff ? '<p class="organizational-sp-rec-line">Make a statement for <input type="month" class="organizational-input organizational-sp-rec-month" data-f="stmt-month" value="' + lastMonth + '"> ' +
+        '<a href="#" data-a="stmt" data-send="0">Make PDF</a> · <a href="#" data-a="stmt" data-send="1">Make and email</a></p>' : '') +
+      // Donor letters
+      (letters.length ? '<div class="organizational-panel-section-head">Donor letters</div><ul class="organizational-sp-fund-list">' + letters.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.donor_name || 'Donor') + ' · ' + money(g.amount_cents) +
+        ' · ' + (g.missing ? '<span class="organizational-sp-rec-overdue">letter missing</span> · <a href="/api/organizational/orgs/' + encodeURIComponent(ctx.slug) + '/sponsored-projects/' + ctx.projectId + '/gifts/' + g.id + '/donor-letter-template">template</a>' +
+          (ctx.canStaff ? ' · <a href="#" data-a="letter" data-id="' + g.id + '">Attach signed letter</a>' : '') : docLink(ctx.slug, g.donor_letter_document_id, 'signed letter')) + '</li>').join('') + '</ul>' : '') +
+      // Donated property
+      (property.length ? '<div class="organizational-panel-section-head">Donated property</div><ul class="organizational-sp-fund-list">' + property.map((g) => '<li>' + esc(g.received_at) + ' · ' + esc(g.in_kind_description || 'Donated item') + ' · ' + money(g.amount_cents) +
+        (g.release_id ? ' · released (' + esc(g.release_status) + (g.release_posted ? ', posted' : '') + ')'
+          : g.held_as === 'asset' && g.posting_status === 'posted' && ctx.canStaff ? ' · <a href="#" data-a="release" data-id="' + g.id + '">Release to the project at value</a>'
+            : ' <span class="organizational-hint">' + (g.posting_status !== 'posted' ? 'waiting for Accounting to post' : 'booked as an expense') + '</span>') + '</li>').join('') + '</ul>' : '') +
+      '<div data-box="gift" hidden></div>' +
       // Approvals
       '<div class="organizational-panel-section-head">Items using the sponsor\'s name</div>' +
       (approvals.length ? '<ul class="organizational-sp-fund-list">' + approvals.map((a) => '<li>' + esc(APPROVAL_KINDS[a.kind] || a.kind) + ': ' + esc(a.title) + ' · ' + esc(a.status) +
@@ -227,6 +250,24 @@
         if (await post(ctx.slug, base + '/approvals', { kind: f('kind').value, title: f('title').value, draft_document_id: Number(f('doc').value) || null })) done();
       });
     });
+    on('[data-a="stmt"]', async (a) => {
+      const month = a.dataset.month || el.querySelector('[data-f="stmt-month"]').value;
+      const data = await post(ctx.slug, base + '/statements', { month, send: a.dataset.send === '1' });
+      if (data) { if (data.created === false && a.dataset.send !== '1') window.alert('The statement for ' + month + ' already exists.'); done(); }
+    });
+    on('[data-a="letter"]', (a) => {
+      const box = el.querySelector('[data-box="gift"]');
+      box.hidden = false;
+      box.innerHTML = '<div class="organizational-sp-fund-form"><label>Signed letter * ' + docSelect(docList, 'data-f="doc"', 'Upload it under Documents, then choose it') + '</label>' +
+        '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-f="go">Attach</button></div></div>';
+      box.querySelector('[data-f="go"]').addEventListener('click', async () => {
+        if (await post(ctx.slug, base + '/gifts/' + a.dataset.id + '/donor-letter', { document_id: Number(box.querySelector('[data-f="doc"]').value) || null })) done();
+      });
+    });
+    on('[data-a="release"]', async (a) => {
+      if (!window.confirm('Release this donated item to the project as a grant at its recorded value? It then needs approval, and Accounting posts it.')) return;
+      if (await post(ctx.slug, base + '/property-releases', { gift_id: Number(a.dataset.id), release_date: today() })) done();
+    });
     on('[data-a="decide"]', async (a) => {
       const body = { decision: a.dataset.d };
       if (a.dataset.d === 'decline') {
@@ -265,6 +306,10 @@
       '<details class="organizational-collapsible"' + (approvals.length ? ' open' : '') + '><summary class="organizational-section-heading">Waiting for approval' + (approvals.length ? ' · ' + approvals.length : '') + '</summary><div class="organizational-section-body">' +
         (approvals.length ? '<ul class="organizational-sp-fund-list">' + approvals.map((a) => '<li>' + esc(a.project_name) + ' · ' + esc(APPROVAL_KINDS[a.kind] || a.kind) + ': ' + esc(a.title) + '</li>').join('') + '</ul>' : '<p class="organizational-hint">Nothing waiting.</p>') +
         '<p class="organizational-hint">Approve or decline from the project.</p>' +
+      '</div></details>' +
+      '<details class="organizational-collapsible"><summary class="organizational-section-heading">Year-end sheet</summary><div class="organizational-section-body">' +
+        '<p class="organizational-sp-rec-line">Fiscal year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="fy" value="' + (new Date().getFullYear() - 1) + '"> ' +
+        '<a href="#" data-a="year-end">Show</a> · <a href="#" data-a="year-end-csv">Download CSV</a></p><div data-box="year-end"></div>' +
       '</div></details>' +
       '<details class="organizational-collapsible"><summary class="organizational-section-heading">Agreement templates</summary><div class="organizational-section-body">' +
         '<ul class="organizational-sp-fund-list">' + templates.map((t) => '<li>' + esc(t.title) + (t.is_default ? ' <span class="organizational-hint">shared default</span>' : '') +
@@ -321,6 +366,19 @@
         ['mission', 'activities', 'leaders', 'expected_funders', 'risks'].forEach((k) => { body[k] = f(k).value; });
         if (await post(ctx.slug, '/sponsor-applications', body)) done();
       });
+    });
+    on('[data-a="year-end-csv"]', () => {
+      window.location.href = '/api/organizational/orgs/' + encodeURIComponent(ctx.slug) + '/sponsor-reports/year-end?format=csv&fiscal_year=' + encodeURIComponent(el.querySelector('[data-f="fy"]').value);
+    });
+    on('[data-a="year-end"]', async () => {
+      const box = el.querySelector('[data-box="year-end"]');
+      const out = await api(ctx.slug, '/sponsor-reports/year-end?fiscal_year=' + encodeURIComponent(el.querySelector('[data-f="fy"]').value));
+      if (!out || !out.res.ok) { box.textContent = (out && out.data && out.data.error) || 'Could not load the sheet.'; return; }
+      const rows = out.data.rows || [];
+      box.innerHTML = '<p class="organizational-hint">' + esc(out.data.start_date + ' to ' + out.data.end_date) + '. The last column compares each project with its program in the books.</p>' +
+        '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Project</th><th>Opening</th><th>Received</th><th>Noncash</th><th>Fee</th><th>Spent</th><th>Closing</th><th>Difference</th></tr></thead><tbody>' +
+        rows.map((r) => '<tr><td>' + esc(r.project_name) + '</td>' + ['opening_cents', 'income_cents', 'noncash_cents', 'fees_cents', 'expenses_cents', 'closing_cents'].map((k) => '<td>' + money(r[k]) + '</td>').join('') +
+          '<td>' + (r.difference_cents == null ? 'no program' : money(r.difference_cents)) + '</td></tr>').join('') + '</tbody></table></div>';
     });
     on('[data-a="tpl-copy"]', (a) => {
       const t = templates.find((x) => String(x.id) === a.dataset.id);

@@ -20,7 +20,7 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 ## Decisions to review
 - Available balance counts only money that is in the books (posted). Money recorded in Funding but not yet posted is shown on its own line.
-- Fees are worked out per fiscal quarter. Tiered rates are marginal over the fiscal year. The quarterly minimum and a flat fee apply only to complete quarters.
+- Fees accrue on money that is in the books (posted receipts), the same basis as the available balance and statements. Fees are worked out per fiscal quarter. Tiered rates are marginal over the fiscal year. The quarterly minimum and a flat fee apply only to complete quarters.
 - Pledges count as received when an installment is collected, not when the pledge is booked; the tie-out line names open pledges as a known difference.
 - In-kind gifts are not counted as money received (noncash items are S4/S5).
 - The workspace default fee rate and default model stay in `org_settings` (no second copy); `org_sponsor_settings` holds the rest.

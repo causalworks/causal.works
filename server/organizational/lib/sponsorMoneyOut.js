@@ -201,7 +201,7 @@ async function approveDisbursement(pool, { orgId, userId, role, projectId, disbu
   if (closed) return closed;
   const amountCents = Number(d.amount_cents);
   let overrideReason = null;
-  if (!skipBalance) {
+  if (!skipBalance && d.kind !== 'property') {
     const bal = await balanceRefusal(pool, { orgId, projectId, amountCents, alreadyCountedCents: amountCents, override, role });
     if (bal.refusal) return bal.refusal;
     if (bal.overridden) overrideReason = bal.reason;

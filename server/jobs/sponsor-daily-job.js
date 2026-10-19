@@ -1,6 +1,9 @@
-// Daily sponsorship work: add the quarterly report rows, place or lift overdue-report holds, and send report reminders.
+// Daily sponsorship work: add the quarterly report rows, place or lift overdue-report holds, send report reminders,
+// and make and send last month's project statements once the statement day has come.
 const cron = require('node-cron');
 const { sendReportReminders } = require('../organizational/lib/sponsorReports');
+const { runStatementJob } = require('../organizational/lib/sponsorStatements');
+const { wrapPoolWithOrgScoping } = require('../organizational/lib/scopedPool');
 
 async function runSponsorDailyJob(pool) {
   try {
@@ -20,6 +23,12 @@ async function runSponsorDailyJob(pool) {
     if (out.sent || out.failed || out.skipped) console.log('[sponsor-daily-job] reminders sent ' + out.sent + ', failed ' + out.failed + ', skipped ' + out.skipped);
   } catch (err) {
     console.error('[sponsor-daily-job] reminders failed:', err.message);
+  }
+  try {
+    const out = await runStatementJob(pool, wrapPoolWithOrgScoping(pool));
+    if (out.made || out.failed) console.log('[sponsor-daily-job] statements made ' + out.made + ', failed ' + out.failed);
+  } catch (err) {
+    console.error('[sponsor-daily-job] statements failed:', err.message);
   }
 }
 

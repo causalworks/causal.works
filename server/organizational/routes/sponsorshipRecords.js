@@ -16,6 +16,9 @@ const { calendar, addFunderReport, markReceived } = require('../lib/sponsorRepor
 const { loadStanding, recordAcknowledgment, reactivate, ACK_ITEMS } = require('../lib/sponsorStanding');
 const { createApplication, decideApplication } = require('../lib/sponsorIntake');
 const { isoDate } = require('../lib/sponsorFees');
+const { generateStatement, yearEndSheet, yearEndCsv } = require('../lib/sponsorStatements');
+const { donorLetters, donorLetterTemplate, attachDonorLetter, createPropertyRelease } = require('../lib/sponsorGifts');
+const { loadOrgDocInfo } = require('../lib/orgLetterhead');
 
 const APPROVAL_KINDS = ['letter_of_inquiry', 'proposal', 'pledge', 'agreement', 'solicitation', 'publicity'];
 
@@ -223,6 +226,86 @@ function registerSponsorshipRecordRoutes(app, pool) {
     const project = await projectOr404(req, res);
     if (!project) return null;
     return reactivate(pool, { orgId: req.orgId, userId: uid(req), role: req.coopOrgRole, projectId: project.id, reason: req.body && req.body.reason });
+  }));
+
+  // Statements and year end
+  app.get(P + '/sponsored-projects/:id/statements', ...read, wrap('GET .../statements', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    const r = await pool.query(
+      `SELECT id, month::text AS month, opening_cents, income_cents, fees_cents, expenses_cents, closing_cents, generated_document_id, send_status, sent_at, sent_to
+         FROM org_sponsor_statements WHERE org_id = $1 AND sponsored_project_id = $2 ORDER BY month DESC LIMIT 36`, [req.orgId, project.id]);
+    const n = (v) => (v == null ? null : Number(v));
+    return { httpStatus: 200, body: { statements: r.rows.map((x) => ({ ...x, opening_cents: n(x.opening_cents), income_cents: n(x.income_cents), fees_cents: n(x.fees_cents), expenses_cents: n(x.expenses_cents), closing_cents: n(x.closing_cents) })) } };
+  }));
+
+  app.post(P + '/sponsored-projects/:id/statements', ...staffWrite, wrap('POST .../statements', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    const b = req.body || {};
+    return generateStatement(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, month: String(b.month || ''), send: !!b.send });
+  }));
+
+  app.get(P + '/sponsor-reports/year-end', ...staffRead, wrap('GET /sponsor-reports/year-end', async (req, res) => {
+    const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);
+    if (!Number.isInteger(fy) || fy < 1900 || fy > 2200) return { httpStatus: 400, body: { error: 'Choose the fiscal year.' } };
+    const sheet = await yearEndSheet(pool, req.orgId, fy);
+    if (req.query.format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="sponsored-projects-' + fy + '.csv"');
+      res.send(yearEndCsv(sheet));
+      return null;
+    }
+    return { httpStatus: 200, body: sheet };
+  }));
+
+  // Donor letters and donated property
+  app.get(P + '/sponsored-projects/:id/donor-letters', ...read, wrap('GET .../donor-letters', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    return { httpStatus: 200, body: await donorLetters(pool, req.orgId, project.id) };
+  }));
+
+  app.get(P + '/sponsored-projects/:id/gifts/:giftId/donor-letter-template', ...read, wrap('GET .../donor-letter-template', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    const g = await pool.query(
+      `SELECT g.amount_cents, g.received_at::date::text AS d, g.payment_method::text AS m, c.display_name FROM org_gifts g
+         LEFT JOIN org_constituents c ON c.id = g.constituent_id WHERE g.id = $1 AND g.org_id = $2 AND g.sponsored_project_id = $3`,
+      [posInt(req.params.giftId), req.orgId, project.id]);
+    if (!g.rows.length) return { httpStatus: 404, body: { error: 'That gift is not tagged to this project.' } };
+    const info = await loadOrgDocInfo(pool, req.orgId);
+    const x = g.rows[0];
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="letter-of-gift-' + req.params.giftId + '.txt"');
+    res.send(donorLetterTemplate({ sponsorName: info.name, projectName: project.name, donorName: x.display_name, amountCents: x.amount_cents, date: x.d, method: ['check', 'ach', 'wire'].includes(x.m) ? x.m : 'check' }));
+    return null;
+  }));
+
+  app.post(P + '/sponsored-projects/:id/gifts/:giftId/donor-letter', ...staffWrite, wrap('POST .../donor-letter', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    return attachDonorLetter(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, giftId: posInt(req.params.giftId), documentId: posInt(req.body && req.body.document_id) });
+  }));
+
+  app.get(P + '/sponsored-projects/:id/property', ...read, wrap('GET .../property', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    const r = await pool.query(
+      `SELECT g.id, g.amount_cents, g.received_at::date::text AS received_at, g.in_kind_description, g.posting_status, a.type::text AS held_as,
+              d.id AS release_id, d.status AS release_status, d.ledger_transaction_id AS release_posted
+         FROM org_gifts g LEFT JOIN org_accounts a ON a.id = g.in_kind_expense_account_id
+         LEFT JOIN org_sponsored_project_disbursements d ON d.property_gift_id = g.id AND d.status <> 'void'
+        WHERE g.org_id = $1 AND g.sponsored_project_id = $2 AND g.payment_method = 'in_kind' AND g.posting_status <> 'void'
+        ORDER BY g.received_at DESC`, [req.orgId, project.id]);
+    return { httpStatus: 200, body: { items: r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })) } };
+  }));
+
+  app.post(P + '/sponsored-projects/:id/property-releases', ...staffWrite, wrap('POST .../property-releases', async (req, res) => {
+    const project = await projectOr404(req, res);
+    if (!project) return null;
+    const b = req.body || {};
+    return createPropertyRelease(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, giftId: posInt(b.gift_id), releaseDate: b.release_date, notes: b.notes });
   }));
 
   // Approvals queue (items that use the sponsor's name)

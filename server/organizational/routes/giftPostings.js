@@ -76,7 +76,7 @@ function registerGiftPostingRoutes(app, pool) {
       }));
       const d = await pool.query(
         `SELECT d.id, d.disbursement_date, d.amount_cents, d.admin_fee_cents, d.notes, p.id AS project_id, p.name AS project_name,
-                p.program_id, p.disbursement_expense_account_id, COALESCE(p.sponsorship_model::text, s.sponsorship_model::text) AS model
+                p.program_id, p.disbursement_expense_account_id, COALESCE(p.sponsorship_model::text, s.sponsorship_model::text) AS model, d.kind
            FROM org_sponsored_project_disbursements d
            JOIN org_sponsored_projects p ON p.id = d.sponsored_project_id
            LEFT JOIN org_settings s ON s.org_id = d.org_id
@@ -113,7 +113,7 @@ function registerGiftPostingRoutes(app, pool) {
         disbursements: d.rows.map((x) => ({
           id: x.id, date: String(x.disbursement_date).slice(0, 10), amount_cents: Number(x.amount_cents), admin_fee_cents: x.admin_fee_cents != null ? Number(x.admin_fee_cents) : null,
           notes: x.notes || null, project_id: x.project_id, project_name: x.project_name, program_id: x.program_id != null ? Number(x.program_id) : null,
-          expense_account_id: x.disbursement_expense_account_id != null ? Number(x.disbursement_expense_account_id) : null, model: x.model || null,
+          expense_account_id: x.disbursement_expense_account_id != null ? Number(x.disbursement_expense_account_id) : null, model: x.model || null, kind: x.kind || 'cash',
         })),
       });
     } catch (e) {

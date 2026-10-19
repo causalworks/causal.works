@@ -226,7 +226,8 @@
         '<div><label class="organizational-label" style="font-size:0.75rem;">Posting date</label><input type="date" class="organizational-input" id="gp-posting-date" value="' + today + '"></div>' +
         '<div><label class="organizational-label" style="font-size:0.75rem;">Program</label><select class="organizational-select" id="gp-program">' + programOpts(d.program_id) + '</select></div>' +
         '<div><label class="organizational-label" style="font-size:0.75rem;">Disbursement expense account</label><select class="organizational-select" id="gp-expense"><option value="">— select —</option>' + acctOpts((a) => a.type === 'expense', d.expense_account_id) + '</select></div>' +
-        '<div><label class="organizational-label" style="font-size:0.75rem;">Paid from (bank account)</label><select class="organizational-select" id="gp-bank"><option value="">— select —</option>' + acctOpts((a) => a.is_cash_account) + '</select></div>' +
+        (d.kind === 'property' ? '<div class="organizational-hint" style="font-size:0.8125rem;">Donated property: the item\'s asset account is credited at its recorded value. No bank account is involved.</div>'
+          : '<div><label class="organizational-label" style="font-size:0.75rem;">Paid from (bank account)</label><select class="organizational-select" id="gp-bank"><option value="">— select —</option>' + acctOpts((a) => a.is_cash_account) + '</select></div>') +
       '</div>' +
       '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;"><button type="button" class="organizational-btn organizational-btn-primary" id="gp-post-btn">Post</button>' +
       '<button type="button" class="organizational-btn organizational-btn-outline" id="gp-cancel-btn">Cancel</button><span id="gp-status" style="font-size:0.8125rem;color:var(--text-secondary);"></span></div>';
@@ -238,7 +239,7 @@
       const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/gift-postings/disbursement/' + d.id + '/post', {
         method: 'POST', body: JSON.stringify({
           posting_date: document.getElementById('gp-posting-date').value, program_id: Number(document.getElementById('gp-program').value) || null,
-          expense_account_id: Number(document.getElementById('gp-expense').value) || null, bank_account_id: Number(document.getElementById('gp-bank').value) || null }),
+          expense_account_id: Number(document.getElementById('gp-expense').value) || null, bank_account_id: document.getElementById('gp-bank') ? Number(document.getElementById('gp-bank').value) || null : null }),
       });
       if (!out || !out.res.ok) { statusEl.textContent = (out && out.data && out.data.error) || 'Could not post'; return; }
       postPanel.hidden = true;

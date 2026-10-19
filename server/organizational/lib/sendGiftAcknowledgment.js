@@ -1,6 +1,7 @@
 'use strict';
 
 const { loadOrgDocInfo, detailLines } = require('./orgLetterhead');
+const { sponsoredReceiptInfo, sponsoredReceiptLines } = require('./sponsorGifts');
 
 function formatDollars(amountCents) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountCents / 100);
@@ -13,7 +14,7 @@ function formatDate(dt) {
 
 const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
+function buildAcknowledgmentHtml({ gift, constituent, org, info, sponsored }) {
   const donorName = constituent.display_name ||
     [constituent.first_name, constituent.last_name].filter(Boolean).join(' ') ||
     constituent.email;
@@ -24,15 +25,18 @@ function buildAcknowledgmentHtml({ gift, constituent, org, info }) {
   const signoff = (info && info.acknowledgmentSignoff) || 'With gratitude,';
   const detail = info ? detailLines(info) : (org.ein ? ['EIN ' + org.ein] : []);
   const ein = detail.length ? `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">${detail.map(esc).join('<br>')}</p>` : '';
+  const sponsorLines = sponsored ? sponsoredReceiptLines({ sponsorName: orgName, ...sponsored }) : [];
+  const giftText = sponsored && sponsored.inKind ? 'your generous donation' : `your generous gift of <strong>${amount}</strong>`;
 
   return `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#111827;">
       <p style="margin:0 0 20px;font-size:17px;font-weight:600;">${orgName}</p>
       <p style="margin:0 0 16px;line-height:1.6;">Dear ${donorName},</p>
       <p style="margin:0 0 16px;line-height:1.6;">
-        Thank you for your generous gift of <strong>${amount}</strong> received on ${date}.
+        Thank you for ${giftText} received on ${date}.
         ${esc(message)}
       </p>
+      ${sponsorLines.map((l) => `<p style="margin:0 0 16px;line-height:1.6;">${esc(l)}</p>`).join('')}
       <p style="margin:0 0 16px;line-height:1.6;color:#374151;font-size:14px;">
         No goods or services were provided in exchange for this contribution.
         Your contribution is tax-deductible to the extent allowed by law.
@@ -50,12 +54,14 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
 
   const orgName = org.display_name;
   const info = await loadOrgDocInfo(pool, gift.org_id);
-  const html = buildAcknowledgmentHtml({ gift, constituent, org, info });
+  const sponsored = await sponsoredReceiptInfo(pool, gift);
+  const html = buildAcknowledgmentHtml({ gift, constituent, org, info, sponsored });
   const text = [
     `Dear ${constituent.display_name || constituent.email},`,
     '',
-    `Thank you for your generous gift of ${formatDollars(Number(gift.amount_cents))} received on ${formatDate(gift.received_at)}. ${(info && info.acknowledgmentMessage) || 'Your support makes our work possible.'}`,
+    `Thank you for ${sponsored && sponsored.inKind ? 'your generous donation' : 'your generous gift of ' + formatDollars(Number(gift.amount_cents))} received on ${formatDate(gift.received_at)}. ${(info && info.acknowledgmentMessage) || 'Your support makes our work possible.'}`,
     '',
+    ...(sponsored ? sponsoredReceiptLines({ sponsorName: orgName, ...sponsored }).concat(['']) : []),
     'No goods or services were provided in exchange for this contribution.',
     'Your contribution is tax-deductible to the extent allowed by law.',
     org.ein ? `EIN: ${org.ein}` : '',
@@ -95,4 +101,4 @@ async function sendGiftAcknowledgment(pool, gift, constituent, org) {
   return result;
 }
 
-module.exports = { sendGiftAcknowledgment };
+module.exports = { sendGiftAcknowledgment, buildAcknowledgmentHtml };

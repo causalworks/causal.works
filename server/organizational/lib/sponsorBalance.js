@@ -85,14 +85,15 @@ async function loadSponsorSettings(pool, orgId) {
   return r.rows[0] || null;
 }
 
-async function loadReceipts(pool, orgId, projectIds) {
+async function loadReceipts(pool, orgId, projectIds, upTo) {
   const gifts = await pool.query(
     `SELECT g.id, g.sponsored_project_id, g.received_at::date::text AS date, g.amount_cents, g.sponsor_fee_exempt,
             (g.ledger_transaction_id IS NOT NULL AND t.status = 'posted') AS posted
        FROM org_gifts g LEFT JOIN org_ledger_transactions t ON t.id = g.ledger_transaction_id
       WHERE g.org_id = $1 AND g.sponsored_project_id = ANY($2::int[])
         AND g.posting_status <> 'void' AND g.review_status <> 'dismissed'
-        AND g.gift_type <> 'pledge' AND g.payment_method IS DISTINCT FROM 'in_kind'`, [orgId, projectIds]);
+        AND g.gift_type <> 'pledge' AND g.payment_method IS DISTINCT FROM 'in_kind'
+        AND ($3::date IS NULL OR g.received_at::date <= $3::date)`, [orgId, projectIds, upTo]);
   const inst = await pool.query(
     `SELECT i.id, g.sponsored_project_id, i.collected_at::text AS date, i.amount_cents, g.sponsor_fee_exempt,
             (t.status = 'posted') AS posted
@@ -100,7 +101,7 @@ async function loadReceipts(pool, orgId, projectIds) {
        JOIN org_gifts g ON g.id = i.gift_id
        LEFT JOIN org_ledger_transactions t ON t.id = i.ledger_transaction_id
       WHERE i.org_id = $1 AND g.sponsored_project_id = ANY($2::int[]) AND i.status = 'collected' AND i.collected_at IS NOT NULL
-        AND g.posting_status <> 'void'`, [orgId, projectIds]);
+        AND g.posting_status <> 'void' AND ($3::date IS NULL OR i.collected_at <= $3::date)`, [orgId, projectIds, upTo]);
   return [
     ...gifts.rows.map((r) => ({ kind: 'gift', id: r.id, project_id: r.sponsored_project_id, date: r.date, cents: Number(r.amount_cents), exempt: !!r.sponsor_fee_exempt, posted: !!r.posted })),
     ...inst.rows.map((r) => ({ kind: 'pledge_installment', id: r.id, project_id: r.sponsored_project_id, date: r.date, cents: Number(r.amount_cents), exempt: !!r.sponsor_fee_exempt, posted: !!r.posted })),
@@ -114,34 +115,36 @@ async function loadFeeRules(pool, orgId, projectIds) {
   return r.rows;
 }
 
-async function loadFeePostings(pool, orgId, projectIds) {
+async function loadFeePostings(pool, orgId, projectIds, upTo) {
   const r = await pool.query(
     `SELECT f.id, f.sponsored_project_id, f.period_start::text AS period_start, f.period_end::text AS period_end, f.amount_cents,
             f.ledger_transaction_id, f.voided_at, f.void_reason, f.created_at,
             (f.voided_at IS NULL AND f.ledger_transaction_id IS NOT NULL AND t.status = 'posted') AS live
        FROM org_sponsor_fee_postings f LEFT JOIN org_ledger_transactions t ON t.id = f.ledger_transaction_id
-      WHERE f.org_id = $1 AND f.sponsored_project_id = ANY($2::int[])
-      ORDER BY f.period_end, f.id`, [orgId, projectIds]);
+      WHERE f.org_id = $1 AND f.sponsored_project_id = ANY($2::int[]) AND ($3::date IS NULL OR f.period_end <= $3::date)
+      ORDER BY f.period_end, f.id`, [orgId, projectIds, upTo]);
   return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents), live: !!x.live }));
 }
 
-async function loadDisbursements(pool, orgId, projectIds) {
+async function loadDisbursements(pool, orgId, projectIds, upTo) {
   const r = await pool.query(
     `SELECT d.id, d.sponsored_project_id, d.status, d.amount_cents,
             (d.ledger_transaction_id IS NOT NULL AND t.status = 'posted') AS posted
        FROM org_sponsored_project_disbursements d LEFT JOIN org_ledger_transactions t ON t.id = d.ledger_transaction_id
-      WHERE d.org_id = $1 AND d.sponsored_project_id = ANY($2::int[]) AND d.status <> 'void'`, [orgId, projectIds]);
+      WHERE d.org_id = $1 AND d.sponsored_project_id = ANY($2::int[]) AND d.status <> 'void' AND d.kind = 'cash'
+        AND ($3::date IS NULL OR d.disbursement_date <= $3::date)`, [orgId, projectIds, upTo]);
   return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents), posted: !!x.posted }));
 }
 
-async function loadRequests(pool, orgId, projectIds) {
+async function loadRequests(pool, orgId, projectIds, upTo) {
   const r = await pool.query(
     `SELECT id, sponsored_project_id, status, amount_cents, disbursement_id
-       FROM org_sponsor_payment_requests WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[])`, [orgId, projectIds]);
+       FROM org_sponsor_payment_requests WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[])
+        AND ($3::date IS NULL OR created_at::date <= $3::date)`, [orgId, projectIds, upTo]);
   return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) }));
 }
 
-async function loadLedgerNet(pool, orgId, programIds) {
+async function loadLedgerNet(pool, orgId, programIds, upTo) {
   if (!programIds.length) return new Map();
   const r = await pool.query(
     `SELECT l.program_id, COALESCE(SUM(l.credit_cents - l.debit_cents), 0)::bigint AS net
@@ -149,11 +152,12 @@ async function loadLedgerNet(pool, orgId, programIds) {
        JOIN org_ledger_transactions t ON t.id = l.transaction_id
        JOIN org_accounts a ON a.id = l.account_id
       WHERE t.org_id = $1 AND t.status = 'posted' AND l.program_id = ANY($2::int[]) AND a.type IN ('income', 'expense')
-      GROUP BY l.program_id`, [orgId, programIds]);
+        AND ($3::date IS NULL OR t.transaction_date <= $3::date)
+      GROUP BY l.program_id`, [orgId, programIds, upTo]);
   return new Map(r.rows.map((x) => [Number(x.program_id), Number(x.net)]));
 }
 
-async function loadOtherSpending(pool, orgId, programIds) {
+async function loadOtherSpending(pool, orgId, programIds, upTo) {
   if (!programIds.length) return new Map();
   const r = await pool.query(
     `SELECT l.program_id, COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS spent
@@ -163,14 +167,15 @@ async function loadOtherSpending(pool, orgId, programIds) {
       WHERE t.org_id = $1 AND t.status = 'posted' AND l.program_id = ANY($2::int[]) AND a.type = 'expense'
         AND t.source NOT IN ('sponsor_fee', 'sponsor_recall')
         AND NOT EXISTS (SELECT 1 FROM org_sponsored_project_disbursements d WHERE d.org_id = t.org_id AND d.ledger_transaction_id = t.id)
-      GROUP BY l.program_id`, [orgId, programIds]);
+        AND ($3::date IS NULL OR t.transaction_date <= $3::date)
+      GROUP BY l.program_id`, [orgId, programIds, upTo]);
   return new Map(r.rows.map((x) => [Number(x.program_id), Number(x.spent)]));
 }
 
-async function loadRecalls(pool, orgId, projectIds) {
+async function loadRecalls(pool, orgId, projectIds, upTo) {
   const r = await pool.query(
     `SELECT id, sponsored_project_id, status, amount_cents FROM org_sponsor_recalls
-      WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND status <> 'void'`, [orgId, projectIds]);
+      WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND status <> 'void' AND ($3::date IS NULL OR recall_date <= $3::date)`, [orgId, projectIds, upTo]);
   return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) }));
 }
 
@@ -188,20 +193,22 @@ async function loadOpenPledges(pool, orgId, projectIds) {
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 
 // Balances for many projects in one pass. Returns Map(projectId -> { project, balance, feePeriods, receipts, feePostings }).
+// opts.asOf sets the fee calculation date; with opts.historical every component is limited to that date (statements, year end).
 async function loadProjectBalances(pool, orgId, projectIds, opts) {
   const ids = [...new Set((projectIds || []).map(Number).filter((n) => n > 0))];
   const out = new Map();
   if (!ids.length) return out;
   const asOf = isoDate((opts && opts.asOf) || todayIso());
+  const upTo = opts && opts.historical ? asOf : null;
   const projR = await pool.query(
     `SELECT p.*, s.default_admin_rate FROM org_sponsored_projects p LEFT JOIN org_settings s ON s.org_id = p.sponsor_org_id
       WHERE p.sponsor_org_id = $1 AND p.id = ANY($2::int[])`, [orgId, ids]);
   const [settings, fyEndMonth, receipts, rules, postings, disb, requests, openPledges, recalls] = await Promise.all([
-    loadSponsorSettings(pool, orgId), getFiscalYearEndMonth(pool, orgId), loadReceipts(pool, orgId, ids), loadFeeRules(pool, orgId, ids),
-    loadFeePostings(pool, orgId, ids), loadDisbursements(pool, orgId, ids), loadRequests(pool, orgId, ids), loadOpenPledges(pool, orgId, ids), loadRecalls(pool, orgId, ids),
+    loadSponsorSettings(pool, orgId), getFiscalYearEndMonth(pool, orgId), loadReceipts(pool, orgId, ids, upTo), loadFeeRules(pool, orgId, ids),
+    loadFeePostings(pool, orgId, ids, upTo), loadDisbursements(pool, orgId, ids, upTo), loadRequests(pool, orgId, ids, upTo), loadOpenPledges(pool, orgId, ids), loadRecalls(pool, orgId, ids, upTo),
   ]);
   const programIds = [...new Set(projR.rows.map((p) => p.program_id).filter((x) => x != null).map(Number))];
-  const [ledgerNet, otherSpending] = await Promise.all([loadLedgerNet(pool, orgId, programIds), loadOtherSpending(pool, orgId, programIds)]);
+  const [ledgerNet, otherSpending] = await Promise.all([loadLedgerNet(pool, orgId, programIds, upTo), loadOtherSpending(pool, orgId, programIds, upTo)]);
   const programCount = new Map();
   if (programIds.length) {
     const pc = await pool.query(

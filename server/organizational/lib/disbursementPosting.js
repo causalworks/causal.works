@@ -14,17 +14,26 @@ async function postDisbursement(pool, { orgId, userId, disbursementId, postingDa
   if (d.ledger_transaction_id) return { httpStatus: 409, body: { error: 'This disbursement is already posted.', code: 'already_posted' } };
   const expense = expenseAccountId || d.disbursement_expense_account_id;
   const program = programId || d.project_program_id;
-  if (!expense || !bankAccountId || !program) {
-    return { httpStatus: 400, body: { error: 'An expense account, a bank account and a program are all needed to post a disbursement.' } };
-  }
   const amount = Number(d.amount_cents);
+  let creditLine;
+  if (d.kind === 'property') {
+    const g = await pool.query('SELECT in_kind_expense_account_id FROM org_gifts WHERE id = $1 AND org_id = $2', [d.property_gift_id, orgId]);
+    const held = g.rows[0] && g.rows[0].in_kind_expense_account_id;
+    if (!expense || !held || !program) return { httpStatus: 400, body: { error: 'An expense account and a program are needed to post a release of donated property.' } };
+    creditLine = { account_id: held, program_id: program, donor_restriction_class: 'temporarily_restricted', debit_cents: 0, credit_cents: amount };
+  } else {
+    if (!expense || !bankAccountId || !program) {
+      return { httpStatus: 400, body: { error: 'An expense account, a bank account and a program are all needed to post a disbursement.' } };
+    }
+    creditLine = { account_id: bankAccountId, program_id: program, debit_cents: 0, credit_cents: amount };
+  }
   const result = await postLedgerTransaction(pool, {
     orgId, userId, transactionDate: postingDate,
-    memo: 'Disbursement to ' + d.project_name + (d.notes ? ': ' + d.notes : ''),
+    memo: (d.kind === 'property' ? 'Donated property released to ' : 'Disbursement to ') + d.project_name + (d.notes ? ': ' + d.notes : ''),
     payee: null, referenceNumber: null,
     lines: [
-      { account_id: expense, program_id: program, debit_cents: amount, credit_cents: 0 },
-      { account_id: bankAccountId, program_id: program, debit_cents: 0, credit_cents: amount },
+      { account_id: expense, program_id: program, donor_restriction_class: d.kind === 'property' ? 'temporarily_restricted' : null, debit_cents: amount, credit_cents: 0 },
+      creditLine,
     ],
     source: 'sponsored_disbursement',
     internalApproval: { approvedBy: userId, sourceRefId: disbursementId, sourceRefType: 'org_sponsored_project_disbursements' },

@@ -10,8 +10,10 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 - S2: migration 361 (payment requests, recalls, hold fields, second approval and override fields on disbursements, new project statuses, ledger source `sponsor_recall`, function `org_apply_sponsor_report_holds()`), `lib/sponsorMoneyOut.js` (every money-out rule and refusal), routes for requests, review, hold, lift, recalls and recall posting, daily job `server/jobs/sponsor-report-hold-job.js`, dashboard flag for negative or held projects, screens on the project page and in Gift Postings, tests in `tests/sponsorship/moneyout.db.test.js`. Pull request from `build/sponsorship-s2`.
 
+- S3: migration 362 (applications, agreement templates with two shared defaults, agreements and amendments, `org_documents.sponsor_doc_type` kept across versions by a trigger, reports calendar and reminder log, acknowledgments, approvals queue, project lead and receiving entity as contacts, report-driven holds, functions for quarterly report rows and reminders), libraries `sponsorDocuments`, `sponsorAgreements`, `sponsorReports`, `sponsorStanding`, `sponsorIntake`, routes in `routes/sponsorshipRecords.js`, daily job renamed `server/jobs/sponsor-daily-job.js` (report rows, holds, reminders), compliance calendar and dashboard items, screens. Pull request from `build/sponsorship-s3`.
+
 ## Next
-- S3: intake, agreements, documents, reports calendar, acknowledgments, approvals queue, good standing.
+- S4: monthly statements, year-end sheet, donor letters, receipt wording, noncash gifts.
 
 ## Blocked or needs the owner
 - None.
@@ -30,6 +32,11 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S2: recalls post as an expense on the project's program (restricted) and income on the fee income program (unrestricted), using the recall accounts if set, otherwise the fee accounts.
 - S2: program leads cannot load the contact list, so staff enter requests for now; lead links come in S6.
 
+- S3: quarterly reports follow the workspace's fiscal quarters and are due 30 days after each quarter ends. Reminders go to the project lead 7 days before the due date and once when overdue; a lead with no email is logged as skipped.
+- S3: good standing is worked out, not stored: signed agreement, a report received in the last year (not needed in the first year), fees current (balance not negative and no fee quarter more than 45 days past its end left unposted), and a lobbying acknowledgment in the last year. Reactivating a lapsed project needs good standing, or an admin with a reason.
+- S3: deciding applications, generating and recording agreements, marking reports received and deciding approvals are for the sponsor's staff (sponsorship writers who are not program leads). The person who asked for an approval cannot decide it.
+- S3: agreement PDFs use the existing PDF code (needs Chrome on the server, as invoices do).
+
 ## Hooks left for later
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
@@ -37,6 +44,8 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S1: apply `db/migrations/360_sponsor_funds_and_fees.sql`; restart. In each fiscal-sponsor workspace set the fee income account, fee expense account and fee income program in sponsorship settings before the first fee run. No new NOT NULL column lacks a default, so the demo snapshot needs no rerun.
 
 - S2: apply `db/migrations/361_sponsor_requests_holds.sql`; restart (the daily hold job starts with the server and runs once at boot). Optionally set recall accounts in Sponsorship settings. No snapshot rerun needed.
+
+- S3: apply `db/migrations/362_sponsor_intake_agreements_reports.sql`; restart. On the first daily run (also at boot) quarterly report rows are created back to each project's start date, so older projects may show overdue reports and be put on hold 30 days after their due dates. Before deploying, mark old reports received or set project start dates, or lift holds with a reason. Email reminders need the live email key. No snapshot rerun needed.
 
 ## Testing
 - Pure rules: `node --test tests/`.

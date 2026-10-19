@@ -112,6 +112,7 @@
           '<span class="organizational-badge">' + escapeHtml(statusLabel(p.status)) + '</span>' +
           '</div>' +
           (p.status === 'on_hold' ? '<div class="organizational-sp-mo-hold">On hold: ' + escapeHtml(p.hold_reason || '') + '</div>' : '') +
+          (!p.agreement_signed_at && ['accepted', 'active', 'on_hold', 'winding_down'].indexOf(p.status) !== -1 ? '<div class="organizational-sp-mo-hold">No signed agreement</div>' : '') +
           '<div style="font-size: 0.9375rem; margin-bottom: 8px;">' + escapeHtml(p.description || '') + '</div>' +
           '<div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">' +
           (p.start_date ? 'Start: ' + formatDate(p.start_date) : '') +
@@ -294,6 +295,7 @@
       if (window.OrganizationalSponsorMoneyOut) {
         window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
       }
+      renderRecords(project);
       const progLabel = project.program_id ? escapeHtml(programName(project.program_id)) : null;
       el.insertAdjacentHTML('beforeend', '<p class="organizational-hint" style="margin: 0;"><em>Managed projects post through the sponsor\'s own regular expense accounts -- ' +
         (progLabel ? 'code bills and other expenses to <strong>' + progLabel + '</strong> (the linked program/activity above)' : 'link a program or activity above, then code bills to it') +
@@ -331,6 +333,7 @@
       if (window.OrganizationalSponsorMoneyOut) {
         window.OrganizationalSponsorMoneyOut.render(document.getElementById('organizational-sp-moneyout'), { ...moneyCtx(project), onChange: function () { loadProjectFinances(project); } });
       }
+      renderRecords(project);
       const btn = document.getElementById('organizational-sp-record-disbursement');
       if (btn) btn.addEventListener('click', function () { openDisbursementForm(project); });
       el.querySelectorAll('.organizational-sp-unpost-disb').forEach(function (unBtn) {
@@ -590,6 +593,16 @@
     }
   }
 
+  function renderRecords(project) {
+    const host = document.getElementById('organizational-sp-moneyout');
+    if (!host || !window.OrganizationalSponsorRecords) return;
+    host.insertAdjacentHTML('afterend', '<div id="organizational-sp-records" style="margin-top:12px;"></div>');
+    const ctx = moneyCtx(project);
+    window.OrganizationalSponsorRecords.renderProject(document.getElementById('organizational-sp-records'), {
+      slug: currentSlug, projectId: project.id, canStaff: ctx.canEnter && myAccess.role !== 'program', canEnter: ctx.canEnter, isAdmin: ctx.isAdmin,
+    });
+  }
+
   async function loadMyAccess(slug) {
     try {
       const out = await window.apiJson('/api/organizational/orgs/' + encodeURIComponent(slug) + '/my-access', { method: 'GET' });
@@ -642,6 +655,12 @@
 
     wireSpModal();
     await Promise.all([loadOrgInfo(slug), loadPrograms(slug), loadMyAccess(slug)]);
+    const workspaceEl = document.getElementById('organizational-sp-workspace');
+    if (workspaceEl && canReadFund() && myAccess.role !== 'program' && window.OrganizationalSponsorRecords) {
+      window.OrganizationalSponsorRecords.renderWorkspace(workspaceEl, {
+        slug, canStaff: !!(myAccess.write && myAccess.write.sponsorship), programs: programsCache.filter((p) => !p.parent_id), onProjectsChanged: loadSponsoredProjects,
+      });
+    }
     const settingsEl = document.getElementById('organizational-sp-settings');
     if (settingsEl && canReadFund() && window.OrganizationalSponsorFund) {
       settingsEl.closest('details').hidden = false;

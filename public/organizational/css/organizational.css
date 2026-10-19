@@ -6010,6 +6010,11 @@ body.organizational-number-colors .organizational-num-pos { color: var(--green) 
 .organizational-sp-mo-links { margin: 0 0 8px; font-size: 0.8125rem; }
 .organizational-sp-mo-requests li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 0.5px solid var(--organizational-border-subtle, var(--border-subtle)); }
 .organizational-sp-mo-actions { display: inline-flex; gap: 4px; }
+.organizational-sp-rec-line { margin: 4px 0; font-size: 0.8125rem; }
+.organizational-sp-rec-overdue { color: var(--organizational-status-danger); font-weight: 600; }
+.organizational-sp-rec-due_soon { color: var(--organizational-status-warning); font-weight: 600; }
+.organizational-sp-rec-received { color: var(--organizational-status-success); }
+select.organizational-sp-rec-type { width: auto; max-width: 160px; display: inline-block; }
 @media (max-width: 600px) {
   .organizational-sp-fund-table th { white-space: normal; }
   .organizational-sp-fund-form { grid-template-columns: 1fr; }

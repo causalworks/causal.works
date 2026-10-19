@@ -12,8 +12,11 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 - S3: migration 362 (applications, agreement templates with two shared defaults, agreements and amendments, `org_documents.sponsor_doc_type` kept across versions by a trigger, reports calendar and reminder log, acknowledgments, approvals queue, project lead and receiving entity as contacts, report-driven holds, functions for quarterly report rows and reminders), libraries `sponsorDocuments`, `sponsorAgreements`, `sponsorReports`, `sponsorStanding`, `sponsorIntake`, routes in `routes/sponsorshipRecords.js`, daily job renamed `server/jobs/sponsor-daily-job.js` (report rows, holds, reminders), compliance calendar and dashboard items, screens. Pull request from `build/sponsorship-s3`.
 
+- S4: migration 363 (statements log, donor letter on gifts, property releases on disbursements, statement claim function), `lib/sponsorStatements.js` (monthly statement PDF and email, scheduled run, year-end sheet and CSV), `lib/sponsorGifts.js` (donor letters, receipt wording, property releases), as-of-date filtering in the balance helper, property posting in `disbursementPosting.js`, sponsor wording in gift acknowledgments, statement step in the daily job, screens. Pull request from `build/sponsorship-s4`.
+- Fees now accrue on posted receipts only; the fix was also pushed to the S1, S2 and S3 branches.
+
 ## Next
-- S4: monthly statements, year-end sheet, donor letters, receipt wording, noncash gifts.
+- S5: pre-approved grant model releases and project closing.
 
 ## Blocked or needs the owner
 - None.
@@ -37,6 +40,11 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S3: deciding applications, generating and recording agreements, marking reports received and deciding approvals are for the sponsor's staff (sponsorship writers who are not program leads). The person who asked for an approval cannot decide it.
 - S3: agreement PDFs use the existing PDF code (needs Chrome on the server, as invoices do).
 
+- S4: a statement shows money held: received and in the books, less fees charged, payments, recalls and other spending; amounts approved but not yet paid are a separate line. The statement email goes to the project lead (contact email, else the older lead email field) with replies to the workspace's reply address. Scheduled statements start from the month the workspace's sponsorship settings were created, on or after the statement day.
+- S4: a donor letter is required above the threshold for checks, bank transfers and wires to a project. The template is a plain-text letter to download; the signed copy is uploaded and attached to the gift.
+- S4: donated property can be released to its project only if it was booked as an asset; posting debits the project's expense account and credits that asset. Property releases are not counted as cash.
+- S4: statements are stored as project documents of type correspondence.
+
 ## Hooks left for later
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
@@ -46,6 +54,8 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S2: apply `db/migrations/361_sponsor_requests_holds.sql`; restart (the daily hold job starts with the server and runs once at boot). Optionally set recall accounts in Sponsorship settings. No snapshot rerun needed.
 
 - S3: apply `db/migrations/362_sponsor_intake_agreements_reports.sql`; restart. Quarterly report rows start from the later of each project's start date and the date its workspace's sponsorship settings were created (the 360 migration date for existing sponsors), so existing projects are not held for old reports. Set `next_report_due` on a project if an earlier report is still owed. Email reminders need the live email key. No snapshot rerun needed.
+
+- S4: apply `db/migrations/363_sponsor_statements_year_end.sql`; restart. Statement PDFs need Chrome on the server and emails need the live email key. Check the statement day in Sponsorship settings (default the 5th). No snapshot rerun needed.
 
 ## Testing
 - Pure rules: `node --test tests/`.

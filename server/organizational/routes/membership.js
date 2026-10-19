@@ -12,6 +12,7 @@ const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 const S = require('../lib/membershipStatus');
 const M = require('../lib/membership');
+const J = require('../lib/membershipJoin');
 
 const { cents, day, text } = M;
 
@@ -444,7 +445,7 @@ function registerMembershipRoutes(app, pool) {
       if (!tier) return fail(res, 400, 'Pick a tier.');
       if (prev) {
         const settings = await M.getSettings(pool, req.orgId);
-        const later = terms.find((t) => t.starts_on > prev.ends_on && t.status_override !== 'ended');
+        const later = terms.find((t) => t.starts_on > M.today() && t.status_override !== 'ended');
         if (later) return fail(res, 409, 'A renewal already exists for this dues member. Open it to record payment.');
         const asOf = day(b.on) || M.today();
         if (!S.renewalOpen(prev.ends_on, asOf, settings) && !b.starts_on) {
@@ -610,6 +611,51 @@ function registerMembershipRoutes(app, pool) {
     } catch (e) {
       console.error('POST membership/terms/:id/end:', e.message);
       return fail(res, 500, 'Could not end the term.');
+    }
+  });
+
+  // --- Join requests from the public form ---
+
+  app.get(`${B}/join-requests`, ...read, async (req, res) => {
+    try {
+      const r = await pool.query(
+        `SELECT j.id, j.status, j.kind, j.email, j.details, j.price_cents, j.extra_gift_cents, j.created_at, j.confirmed_at, t.name AS tier_name
+           FROM org_membership_join_requests j LEFT JOIN org_membership_tiers t ON t.id = j.tier_id
+          WHERE j.org_id = $1 AND j.status = 'awaiting_approval' ORDER BY j.confirmed_at`, [req.orgId]);
+      return res.json({ join_requests: r.rows.map((x) => ({ ...x, display_name: (x.details || {}).display_name || null, details: undefined,
+        phone: (x.details || {}).phone || null, mailing_address: (x.details || {}).mailing_address || null, annual_budget_cents: (x.details || {}).annual_budget_cents ?? null })) });
+    } catch (e) {
+      console.error('GET membership/join-requests:', e.message);
+      return fail(res, 500, 'Could not load join requests.');
+    }
+  });
+
+  app.post(`${B}/join-requests/:id/approve`, ...write, async (req, res) => {
+    try {
+      const r = await pool.query('SELECT status FROM org_membership_join_requests WHERE id = $1 AND org_id = $2', [intId(req.params.id), req.orgId]);
+      if (!r.rows.length) return fail(res, 404, 'That join request was not found.');
+      if (r.rows[0].status !== 'awaiting_approval') return fail(res, 409, 'This join request is not waiting for approval.');
+      const out = await J.acceptJoin(pool, { orgId: req.orgId, requestId: intId(req.params.id), userId: userIdOf(req) });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST membership/join-requests/:id/approve:', e.message);
+      return fail(res, 500, 'Could not approve the join request.');
+    }
+  });
+
+  app.post(`${B}/join-requests/:id/decline`, ...write, async (req, res) => {
+    const reason = text((req.body || {}).reason);
+    if (!reason) return fail(res, 400, 'Give the reason for declining.');
+    try {
+      const r = await pool.query(
+        `UPDATE org_membership_join_requests SET status = 'declined', decision_reason = $1, decided_by = $2, decided_at = now(), details = '{}'::jsonb
+          WHERE id = $3 AND org_id = $4 AND status IN ('awaiting_approval', 'unconfirmed') RETURNING id`, [reason, userIdOf(req), intId(req.params.id), req.orgId]);
+      if (!r.rows.length) return fail(res, 404, 'That join request was not found or is already decided.');
+      await audit(req, 'update', 'org_membership_join_requests', r.rows[0].id, { fields: [{ fieldName: 'status', oldValue: null, newValue: 'declined' }], metadata: { reason } });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('POST membership/join-requests/:id/decline:', e.message);
+      return fail(res, 500, 'Could not decline the join request.');
     }
   });
 

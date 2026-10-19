@@ -4,6 +4,18 @@ const { postLedgerTransaction, buildReversingLines } = require('./ledgerPosting'
 const { logAudit } = require('./auditLog');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SPONSORED_RESTRICTION = 'temporarily_restricted';
+
+async function sponsoredGiftCoding(pool, orgId, sponsoredProjectId) {
+  if (sponsoredProjectId == null) return null;
+  const r = await pool.query('SELECT id, name, program_id FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [sponsoredProjectId, orgId]);
+  const p = r.rows[0];
+  if (!p) return null;
+  if (p.program_id == null) {
+    return { error: 'This gift is for the sponsored project ' + p.name + ', which has no program yet. Link the project to a program, then post the gift.', code: 'sponsored_project_no_program' };
+  }
+  return { programId: Number(p.program_id), restrictionClass: SPONSORED_RESTRICTION, projectId: Number(p.id) };
+}
 
 async function postInKindGift(pool, opts) {
   const { orgId, userId, giftId, postingDate } = opts;
@@ -18,9 +30,11 @@ async function postInKindGift(pool, opts) {
     return { httpStatus: 409, body: { error: `Gift posting_status is ${gift.posting_status}, expected unposted`, code: 'invalid_posting_status' } };
   }
 
+  const sponsored = await sponsoredGiftCoding(pool, orgId, gift.sponsored_project_id);
+  if (sponsored && sponsored.error) return { httpStatus: 400, body: { error: sponsored.error, code: sponsored.code } };
   const revenueAccountId = opts.revenueAccountId || gift.in_kind_revenue_account_id;
   const expenseAccountId = opts.expenseAccountId || gift.in_kind_expense_account_id;
-  const programId = opts.programId || gift.program_id;
+  const programId = sponsored ? sponsored.programId : (opts.programId || gift.program_id);
   if (!revenueAccountId || !expenseAccountId || !programId) {
     return { httpStatus: 400, body: { error: 'revenue_account_id, expense_account_id, and program_id are all required to post an in-kind gift' } };
   }
@@ -43,7 +57,7 @@ async function postInKindGift(pool, opts) {
   }
 
   const amountCents = Number(gift.amount_cents);
-  const restrictionClass = opts.donorRestrictionClass !== undefined ? opts.donorRestrictionClass : null;
+  const restrictionClass = sponsored ? sponsored.restrictionClass : (opts.donorRestrictionClass !== undefined ? opts.donorRestrictionClass : null);
 
   const result = await postLedgerTransaction(pool, {
     orgId, userId, transactionDate: postingDate,
@@ -89,9 +103,11 @@ async function postPledgeCommitment(pool, opts) {
     return { httpStatus: 409, body: { error: `Gift posting_status is ${gift.posting_status}, expected unposted`, code: 'invalid_posting_status' } };
   }
 
+  const sponsored = await sponsoredGiftCoding(pool, orgId, gift.sponsored_project_id);
+  if (sponsored && sponsored.error) return { httpStatus: 400, body: { error: sponsored.error, code: sponsored.code } };
   const revenueAccountId = opts.revenueAccountId;
   const receivableAccountId = opts.receivableAccountId || gift.receivable_account_id;
-  const programId = opts.programId || gift.program_id;
+  const programId = sponsored ? sponsored.programId : (opts.programId || gift.program_id);
   if (!revenueAccountId || !receivableAccountId || !programId) {
     return { httpStatus: 400, body: { error: 'revenue_account_id, receivable_account_id, and program_id are all required to post a pledge commitment' } };
   }
@@ -116,9 +132,9 @@ async function postPledgeCommitment(pool, opts) {
     return { httpStatus: 400, body: { error: 'Could not resolve a positive commitment amount for this pledge (check total_pledged_cents / discounted_present_value_cents)' } };
   }
 
-  const restrictionClass = opts.donorRestrictionClass !== undefined
+  const restrictionClass = sponsored ? sponsored.restrictionClass : (opts.donorRestrictionClass !== undefined
     ? opts.donorRestrictionClass
-    : (gift.is_multi_year_pledge ? 'temporarily_restricted' : null);
+    : (gift.is_multi_year_pledge ? 'temporarily_restricted' : null));
 
   const result = await postLedgerTransaction(pool, {
     orgId, userId, transactionDate: postingDate,
@@ -193,4 +209,4 @@ async function voidGiftPosting(pool, { orgId, userId, giftId, voidReason }) {
   return { httpStatus: 200, body: { id: giftId, posting_status: 'void', reversal_transaction_id: result.body.id } };
 }
 
-module.exports = { postInKindGift, postPledgeCommitment, voidGiftPosting };
+module.exports = { postInKindGift, postPledgeCommitment, voidGiftPosting, sponsoredGiftCoding, SPONSORED_RESTRICTION };

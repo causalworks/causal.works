@@ -81,7 +81,7 @@ async function loadExpected(pool, orgId, kind, id) {
   }
   if (kind === 'grant_gift' || kind === 'crm_gift') {
     const r = await pool.query(
-      `SELECT id, constituent_id, amount_cents, gift_type, posting_status FROM org_gifts
+      `SELECT id, constituent_id, amount_cents, gift_type, posting_status, sponsored_project_id FROM org_gifts
         WHERE id = $1 AND org_id = $2 AND ledger_transaction_id IS NULL
           AND ((gift_type = 'grant' AND posting_status = 'unposted') OR (gift_type = 'donation' AND posting_status = 'not_applicable'))`, [id, orgId]);
     const row = r.rows[0];

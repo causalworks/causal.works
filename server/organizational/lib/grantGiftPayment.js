@@ -1,6 +1,7 @@
 'use strict';
 
 const { postLedgerTransaction } = require('./ledgerPosting');
+const { sponsoredGiftCoding } = require('./giftPosting');
 
 async function recordGrantGiftPayment(pool, { orgId, userId, giftId, bankAccountId, paymentDate, amountCents, reference }) {
   const r = await pool.query(
@@ -21,10 +22,13 @@ async function recordGrantGiftPayment(pool, { orgId, userId, giftId, bankAccount
   if (!gift.revenue_account_id) {
     return { httpStatus: 400, body: { error: 'This gift\'s grant has no default revenue account set -- set one on the grant before matching.', code: 'no_revenue_account' } };
   }
-  const programId = gift.program_id || gift.primary_program_id;
+  const sponsored = await sponsoredGiftCoding(pool, orgId, gift.sponsored_project_id);
+  if (sponsored && sponsored.error) return { httpStatus: 400, body: { error: sponsored.error, code: sponsored.code } };
+  const programId = sponsored ? sponsored.programId : (gift.program_id || gift.primary_program_id);
   if (!programId) {
     return { httpStatus: 400, body: { error: 'Could not resolve a program for this grant gift (neither the gift nor its grant has one set).' } };
   }
+  const restriction = sponsored ? sponsored.restrictionClass : null;
 
   const postResult = await postLedgerTransaction(pool, {
     orgId, userId,
@@ -33,8 +37,8 @@ async function recordGrantGiftPayment(pool, { orgId, userId, giftId, bankAccount
     payee: null,
     referenceNumber: reference || null,
     lines: [
-      { account_id: bankAccountId, program_id: programId, grant_id: gift.grant_id, debit_cents: amountCents, credit_cents: 0 },
-      { account_id: gift.revenue_account_id, program_id: programId, grant_id: gift.grant_id, debit_cents: 0, credit_cents: amountCents },
+      { account_id: bankAccountId, program_id: programId, grant_id: gift.grant_id, donor_restriction_class: restriction, debit_cents: amountCents, credit_cents: 0 },
+      { account_id: gift.revenue_account_id, program_id: programId, grant_id: gift.grant_id, donor_restriction_class: restriction, debit_cents: 0, credit_cents: amountCents },
     ],
     source: 'bank_reconciliation',
     constituentId: gift.constituent_id,

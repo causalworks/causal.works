@@ -4,6 +4,7 @@ const { addFileInfo } = require('../lib/recordFiles');
 const { findExpectedGifts, loadExpected } = require('../lib/giftMatch');
 const { pledgeReceiptLines, markInstallmentCollected } = require('../lib/pledgeReceipt');
 const { suggestGiftForTransaction, voidGiftsForTransaction, syncGiftAfterRecode } = require('../lib/giftIntake');
+const { sponsoredGiftCoding } = require('../lib/giftPosting');
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole, FINANCE_ROLES } = require('../middleware/requireOrgMembership');
@@ -543,6 +544,12 @@ function registerOrganizationalLedgerRoutes(app, pool) {
         const contribTotal = lines.filter((l) => contribIds.has(l.account_id)).reduce((t, l) => t + Number(l.credit_cents || 0), 0);
         if (contribTotal !== Number(applied.amount_cents)) {
           return res.status(400).json({ error: 'The contribution lines add up to ' + (contribTotal / 100).toFixed(2) + ', but the gift Funding expects is ' + (Number(applied.amount_cents) / 100).toFixed(2) + '. Make them agree, or save this as a new gift.' });
+        }
+        const sponsored = await sponsoredGiftCoding(pool, req.orgId, applied.sponsored_project_id);
+        if (sponsored && sponsored.error) return res.status(400).json({ error: sponsored.error, code: sponsored.code });
+        if (sponsored) {
+          lines = lines.map((l) => (contribIds.has(l.account_id)
+            ? { ...l, program_id: sponsored.programId, donor_restriction_class: sponsored.restrictionClass } : l));
         }
       }
     } else {

@@ -87,7 +87,19 @@ function registerGiftPostingRoutes(app, pool) {
            FROM org_gifts g LEFT JOIN org_constituents c ON c.id = g.constituent_id LEFT JOIN users u ON u.id = g.not_gift_flagged_by
           WHERE g.org_id = $1 AND g.not_gift_flagged_at IS NOT NULL AND g.review_status <> 'dismissed' AND g.posting_status <> 'void'
           ORDER BY g.not_gift_flagged_at`, [req.orgId]);
+      const u = await pool.query(
+        `SELECT g.id, g.amount_cents, g.received_at, g.gift_type::text AS gift_type, g.posting_status, g.ledger_transaction_id, c.display_name AS constituent_name
+           FROM org_gifts g
+           JOIN org_settings s ON s.org_id = g.org_id AND s.fiscal_sponsorship_mode
+           JOIN org_sponsor_settings ss ON ss.org_id = g.org_id
+           LEFT JOIN org_constituents c ON c.id = g.constituent_id
+          WHERE g.org_id = $1 AND g.sponsored_project_id IS NULL AND g.sponsor_untagged_reviewed_at IS NULL
+            AND g.posting_status <> 'void' AND g.review_status <> 'dismissed'
+            AND g.created_at >= ss.untagged_review_from
+          ORDER BY g.received_at DESC, g.id DESC LIMIT 200`, [req.orgId]);
       return res.json({
+        sponsor_untagged: u.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, gift_type: x.gift_type,
+          in_books: !!x.ledger_transaction_id, constituent_name: x.constituent_name || null })),
         flagged: f.rows.map((x) => ({ id: x.id, amount_cents: Number(x.amount_cents), received_at: x.received_at, note: x.not_gift_note, flagged_at: x.not_gift_flagged_at,
           flagged_by: x.flagged_by, ledger_transaction_id: x.ledger_transaction_id, constituent_name: x.constituent_name || null })),
         gift_postings: rows,
@@ -245,6 +257,38 @@ function registerGiftPostingRoutes(app, pool) {
       return res.status(500).json({ error: 'Could not resolve the flag' });
     } finally {
       client.release();
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/sponsor-review', ...writeAuth, async (req, res) => {
+    const giftId = Number.parseInt(String(req.params.giftId), 10);
+    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
+    const body = req.body || {};
+    const orgId = req.orgId;
+    const userId = req.user.user_id ?? req.user.id;
+    const projectId = body.sponsored_project_id != null && body.sponsored_project_id !== '' ? Number.parseInt(String(body.sponsored_project_id), 10) : null;
+    if (!projectId && !body.own) return res.status(400).json({ error: 'Choose the project this gift is for, or mark it as the workspace\'s own.' });
+    try {
+      const g = await pool.query('SELECT id, ledger_transaction_id, sponsored_project_id FROM org_gifts WHERE id = $1 AND org_id = $2', [giftId, orgId]);
+      if (!g.rows.length) return res.status(404).json({ error: 'Gift not found' });
+      if (projectId) {
+        if (g.rows[0].ledger_transaction_id) {
+          return res.status(409).json({ error: 'This gift is already in the books under another program. Recode the entry in Transactions to the project\'s program, then tag the gift in Funding.', code: 'already_in_books' });
+        }
+        const p = await pool.query('SELECT id, name FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
+        if (!p.rows.length) return res.status(400).json({ error: 'Choose a sponsored project from this workspace.' });
+        await pool.query('UPDATE org_gifts SET sponsored_project_id = $1, sponsor_untagged_reviewed_at = now(), sponsor_untagged_reviewed_by = $2 WHERE id = $3 AND org_id = $4', [projectId, userId, giftId, orgId]);
+        await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+          fields: [{ fieldName: 'Sponsored project', oldValue: null, newValue: p.rows[0].name }] });
+        return res.json({ id: giftId, sponsored_project_id: projectId });
+      }
+      await pool.query('UPDATE org_gifts SET sponsor_untagged_reviewed_at = now(), sponsor_untagged_reviewed_by = $1 WHERE id = $2 AND org_id = $3', [userId, giftId, orgId]);
+      await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
+        fields: [{ fieldName: 'Sponsored project', oldValue: 'not tagged, flagged for review', newValue: 'the workspace\'s own gift' }] });
+      return res.json({ id: giftId, sponsored_project_id: null, reviewed: true });
+    } catch (e) {
+      console.error('POST /gift-postings/:giftId/sponsor-review:', e.message);
+      return res.status(500).json({ error: 'Could not save the review' });
     }
   });
 

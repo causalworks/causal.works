@@ -25,6 +25,7 @@ const READ_AREAS = {
   audit_log:     { who: 'finance and admins', roles: ADMIN_FINANCE },
   finance_admin: { who: 'finance and admins', roles: ADMIN_FINANCE },
   org_summary:   { who: 'finance, admins and board members', roles: [...ADMIN_FINANCE, 'board'] },
+  sponsorship:   { who: 'finance, admins, board members, the Sponsorship manager and the project\'s program lead', roles: [...ADMIN_FINANCE, 'board', 'program'], manager: 'manage_sponsorship' },
 };
 
 function canRead(req, area) {

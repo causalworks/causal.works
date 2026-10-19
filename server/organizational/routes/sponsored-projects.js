@@ -4,8 +4,9 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, leadMayTouch, canWrite, boardApproverAllowed } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, leadMayTouch, canWrite, boardApproverAllowed } = require('../middleware/requireWriteAccess');
 const { logAudit, reqMeta } = require('../lib/auditLog');
+const { loadProjectBalance } = require('../lib/sponsorBalance');
 
 function requireFiscalSponsorship(pool) {
   return async function (req, res, next) {
@@ -26,7 +27,8 @@ function withEffectiveFields(project, orgDefaults) {
   return {
     ...project,
     effective_sponsorship_model: project.sponsorship_model || orgDefaults.sponsorship_model || null,
-    effective_admin_rate: project.admin_rate != null ? project.admin_rate : orgDefaults.default_admin_rate,
+    effective_admin_rate: project.current_fee_rate != null ? project.current_fee_rate
+      : project.admin_rate != null ? project.admin_rate : orgDefaults.default_admin_rate,
   };
 }
 
@@ -70,6 +72,11 @@ function registerSponsoredProjectsRoutes(app, pool) {
                   last_report_received_at,
                   created_at,
                   updated_at,
+                  agreement_signed_at,
+                  (SELECT r.rate FROM org_sponsor_fee_rules r WHERE r.sponsored_project_id = org_sponsored_projects.id AND r.kind = 'percent'
+                     AND r.effective_from <= CURRENT_DATE ORDER BY r.effective_from DESC LIMIT 1) AS current_fee_rate,
+                  (SELECT r.kind FROM org_sponsor_fee_rules r WHERE r.sponsored_project_id = org_sponsored_projects.id
+                     AND r.effective_from <= CURRENT_DATE ORDER BY r.effective_from DESC LIMIT 1) AS current_fee_kind,
                   (SELECT COUNT(*)::int FROM org_documents d WHERE d.sponsored_project_id = org_sponsored_projects.id AND d.archived_at IS NULL) AS document_count
            FROM org_sponsored_projects
            WHERE sponsor_org_id = $1
@@ -151,6 +158,12 @@ function registerSponsoredProjectsRoutes(app, pool) {
          status, notesMarkdown, sponsorshipModel, programId, adminRate, nextReportDue]
       );
 
+      if (adminRate !== null) {
+        await pool.query(
+          `INSERT INTO org_sponsor_fee_rules (org_id, sponsored_project_id, kind, rate, effective_from, created_by)
+           VALUES ($1, $2, 'percent', $3, COALESCE($4::date, CURRENT_DATE), $5)`,
+          [req.orgId, r.rows[0].id, adminRate, startDate, req.user.user_id ?? req.user.id]);
+      }
       const orgDefaults = await loadOrgDefaults(pool, req.orgId);
       return res.status(201).json({ sponsored_project: withEffectiveFields(r.rows[0], orgDefaults) });
     } catch (e) {
@@ -287,6 +300,10 @@ function registerSponsoredProjectsRoutes(app, pool) {
       }
 
       if (body.admin_rate !== undefined) {
+        const hasRule = await pool.query('SELECT 1 FROM org_sponsor_fee_rules WHERE sponsored_project_id = $1 AND org_id = $2 LIMIT 1', [id, req.orgId]);
+        if (hasRule.rows.length) {
+          return res.status(409).json({ code: 'fee_rule_exists', error: 'This project has a fee rule. Change the fee in the project\'s Fees section.' });
+        }
         const rate = body.admin_rate !== null ? Number(body.admin_rate) : null;
         if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 100)) {
           return res.status(400).json({ error: 'admin_rate must be between 0 and 100' });
@@ -361,7 +378,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/sponsored-projects/:id/tracking', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/sponsored-projects/:id/tracking', ...orgAuth, requireReadAccess('sponsorship'), boardSeesAllPrograms, async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) {
       return res.status(400).json({ error: 'Invalid sponsored project ID' });
@@ -375,7 +392,8 @@ function registerSponsoredProjectsRoutes(app, pool) {
 
       const [giftsR, disbR] = await Promise.all([
         pool.query(
-          `SELECT id, amount_cents, currency, received_at, campaign, gift_type::text AS gift_type
+          `SELECT id, amount_cents, currency, received_at, campaign, gift_type::text AS gift_type, sponsor_fee_exempt, sponsor_fee_exempt_reason,
+                  posting_status, ledger_transaction_id
            FROM org_gifts WHERE org_id = $1 AND sponsored_project_id = $2 AND posting_status <> 'void' AND review_status <> 'dismissed'
            ORDER BY received_at DESC`,
           [req.orgId, id]
@@ -388,22 +406,18 @@ function registerSponsoredProjectsRoutes(app, pool) {
         ),
       ]);
 
-      const totalReceivedCents = giftsR.rows.reduce((sum, g) => sum + Number(g.amount_cents), 0);
-      const approvedDisbursements = disbR.rows.filter((d) => d.status === 'approved');
-      const totalDisbursedCents = approvedDisbursements.reduce((sum, d) => sum + Number(d.amount_cents), 0);
-      const totalFeeCents = approvedDisbursements.reduce((sum, d) => sum + Number(d.admin_fee_cents || 0), 0);
-      const pendingDisbursedCents = disbR.rows
-        .filter((d) => d.status === 'pending_approval')
-        .reduce((sum, d) => sum + Number(d.amount_cents), 0);
+      const b = await loadProjectBalance(pool, req.orgId, id);
+      const bal = b.balance;
 
       return res.json({
         summary: {
-          total_received_cents: totalReceivedCents,
-          total_disbursed_cents: totalDisbursedCents,
-          total_admin_fee_cents: totalFeeCents,
-          pending_disbursed_cents: pendingDisbursedCents,
-          balance_cents: totalReceivedCents - totalDisbursedCents - totalFeeCents,
+          total_received_cents: bal.received_posted_cents + bal.received_unposted_cents,
+          total_disbursed_cents: bal.disbursed_posted_cents,
+          total_admin_fee_cents: Math.max(bal.fees_accrued_cents, bal.fees_posted_cents),
+          pending_disbursed_cents: bal.pending_disbursements_cents,
+          balance_cents: bal.available_cents,
         },
+        balance: bal,
         gifts: giftsR.rows,
         disbursements: disbR.rows,
       });

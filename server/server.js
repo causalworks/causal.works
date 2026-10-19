@@ -67,6 +67,7 @@ const { fetchUSReps, committeesToTurnarounds } = require('./rep/us-reps');
 const { matchReps } = require('./rep/rep-matcher');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(requestContextMiddleware);
 app.use(cookieParser());
 app.use(probeWatch);

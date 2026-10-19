@@ -2,6 +2,7 @@
 
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('./fiscalYear');
 const { loadProjectBalances } = require('./sponsorBalance');
+const { needsAgreement } = require('./sponsorOverview');
 
 function dayDiff(isoDate) {
   if (!isoDate) return null;
@@ -76,8 +77,8 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     for (const sp of flagR.rows) {
       const b = balances.get(Number(sp.id));
       const negative = b && b.balance.negative;
-      if (!sp.agreement_signed_at && ['accepted', 'active', 'on_hold', 'winding_down'].includes(sp.status)) {
-        items.push({ type: 'sponsored_project', flag: 'danger', urgency_days: 0, title: (sp.name || 'Sponsored project') + ' has no signed agreement', due_date: null, href: `${base}/sponsored-projects?focus=${sp.id}` });
+      if (needsAgreement(sp)) {
+        items.push({ type: 'sponsored_project', flag: 'danger', urgency_days: 0, title: (sp.name || 'Sponsored project') + ' has no signed agreement', due_date: null, href: `${base}/sponsored-projects?project=${sp.id}&view=agreement` });
       }
       if (sp.status !== 'on_hold' && !negative) continue;
       items.push({
@@ -87,7 +88,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
         title: (sp.name || 'Sponsored project') + (negative ? ' is negative (' + (b.balance.available_cents / 100).toFixed(2) + ')' : '')
           + (negative && sp.status === 'on_hold' ? ' and' : '') + (sp.status === 'on_hold' ? ' is on hold: ' + (sp.hold_reason || 'no reason given') : ''),
         due_date: null,
-        href: `${base}/sponsored-projects?focus=${sp.id}`,
+        href: `${base}/sponsored-projects?project=${sp.id}`,
       });
     }
     for (const sp of spR.rows) {
@@ -98,7 +99,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
           urgency_days: dueIn,
           title: `${sp.name || 'Sponsored project'}'s report due ${sp.next_report_due}`,
           due_date: sp.next_report_due,
-          href: `${base}/sponsored-projects?focus=${sp.id}`,
+          href: `${base}/sponsored-projects?project=${sp.id}&view=reports`,
         });
       }
     }

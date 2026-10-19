@@ -3,7 +3,7 @@
 // Sponsored-project good standing: the standing terms each project acknowledges, the conditions to stay active,
 // and reactivating a lapsed project. One rule set used by the project page, the list, the compliance calendar and reactivation.
 
-const { loadProjectBalance } = require('./sponsorBalance');
+const { loadProjectBalances } = require('./sponsorBalance');
 const { logAudit } = require('./auditLog');
 const { isoDate } = require('./sponsorFees');
 
@@ -45,30 +45,48 @@ function computeStanding(facts) {
   return { good: items.every((i) => i.ok), items };
 }
 
-async function loadStanding(pool, orgId, projectId, opts) {
+// Standing for many projects in one pass. Returns Map(projectId -> standing). opts.balances reuses balances already loaded.
+async function loadStandings(pool, orgId, projectIds, opts) {
   const today = isoDate((opts && opts.today) || new Date());
-  const p = await pool.query('SELECT id, start_date, created_at, agreement_signed_at, last_report_received_at, status FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2', [projectId, orgId]);
-  const project = p.rows[0];
-  if (!project) return null;
-  const [rep, ack, acks, bal] = await Promise.all([
-    pool.query(`SELECT max(received_at)::text AS last FROM org_sponsor_reports WHERE org_id = $1 AND sponsored_project_id = $2 AND kind = 'project_quarterly'`, [orgId, projectId]),
-    pool.query(`SELECT max(acknowledged_on)::text AS last FROM org_sponsor_acknowledgments WHERE org_id = $1 AND sponsored_project_id = $2 AND item_key = 'lobbying_political'`, [orgId, projectId]),
-    pool.query(`SELECT DISTINCT ON (item_key) item_key, acknowledged_on::text AS acknowledged_on, note FROM org_sponsor_acknowledgments
-                 WHERE org_id = $1 AND sponsored_project_id = $2 ORDER BY item_key, acknowledged_on DESC, id DESC`, [orgId, projectId]),
-    loadProjectBalance(pool, orgId, projectId, { asOf: today }),
+  const ids = [...new Set((projectIds || []).map(Number).filter((n) => n > 0))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const [p, rep, ack, acks, balances] = await Promise.all([
+    pool.query('SELECT id, start_date, created_at, agreement_signed_at, last_report_received_at, status FROM org_sponsored_projects WHERE sponsor_org_id = $1 AND id = ANY($2::int[])', [orgId, ids]),
+    pool.query(`SELECT sponsored_project_id, max(received_at)::text AS last FROM org_sponsor_reports
+                 WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND kind = 'project_quarterly' GROUP BY sponsored_project_id`, [orgId, ids]),
+    pool.query(`SELECT sponsored_project_id, max(acknowledged_on)::text AS last FROM org_sponsor_acknowledgments
+                 WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND item_key = 'lobbying_political' GROUP BY sponsored_project_id`, [orgId, ids]),
+    pool.query(`SELECT DISTINCT ON (sponsored_project_id, item_key) sponsored_project_id, item_key, acknowledged_on::text AS acknowledged_on, note FROM org_sponsor_acknowledgments
+                 WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) ORDER BY sponsored_project_id, item_key, acknowledged_on DESC, id DESC`, [orgId, ids]),
+    opts && opts.balances ? opts.balances : loadProjectBalances(pool, orgId, ids, { asOf: today }),
   ]);
-  const postedEnds = new Map();
-  bal.feePostings.filter((f) => f.live).forEach((f) => postedEnds.set(f.period_end, (postedEnds.get(f.period_end) || 0) + f.amount_cents));
-  const unposted = bal.feePeriods.filter((q) => q.complete && q.fee_cents !== (postedEnds.get(q.period_end) || 0)).map((q) => q.period_end);
-  const lastReport = [rep.rows[0].last, project.last_report_received_at ? isoDate(project.last_report_received_at) : null].filter(Boolean).sort().pop() || null;
-  const standing = computeStanding({
-    today, startDate: project.start_date || project.created_at, agreementSignedAt: project.agreement_signed_at,
-    lastReportReceivedAt: lastReport, lastLobbyingAckOn: ack.rows[0].last, negative: bal.balance.negative, unpostedFeePeriodEnds: unposted,
-  });
-  const byKey = new Map(acks.rows.map((r) => [r.item_key, r]));
-  standing.acknowledgments = ACK_ITEMS.map((i) => ({ ...i, acknowledged_on: byKey.get(i.key) ? byKey.get(i.key).acknowledged_on : null }));
-  standing.status = project.status;
-  return standing;
+  const byProject = (rows) => new Map(rows.map((r) => [Number(r.sponsored_project_id), r.last]));
+  const lastRep = byProject(rep.rows);
+  const lastAck = byProject(ack.rows);
+  for (const project of p.rows) {
+    const pid = Number(project.id);
+    const bal = balances.get(pid);
+    if (!bal) continue;
+    const postedEnds = new Map();
+    bal.feePostings.filter((f) => f.live).forEach((f) => postedEnds.set(f.period_end, (postedEnds.get(f.period_end) || 0) + f.amount_cents));
+    const unposted = bal.feePeriods.filter((q) => q.complete && q.fee_cents !== (postedEnds.get(q.period_end) || 0)).map((q) => q.period_end);
+    const lastReport = [lastRep.get(pid) || null, project.last_report_received_at ? isoDate(project.last_report_received_at) : null].filter(Boolean).sort().pop() || null;
+    const standing = computeStanding({
+      today, startDate: project.start_date || project.created_at, agreementSignedAt: project.agreement_signed_at,
+      lastReportReceivedAt: lastReport, lastLobbyingAckOn: lastAck.get(pid) || null, negative: bal.balance.negative, unpostedFeePeriodEnds: unposted,
+    });
+    const byKey = new Map(acks.rows.filter((r) => Number(r.sponsored_project_id) === pid).map((r) => [r.item_key, r]));
+    standing.acknowledgments = ACK_ITEMS.map((i) => ({ ...i, acknowledged_on: byKey.get(i.key) ? byKey.get(i.key).acknowledged_on : null }));
+    standing.status = project.status;
+    out.set(pid, standing);
+  }
+  return out;
+}
+
+async function loadStanding(pool, orgId, projectId, opts) {
+  const m = await loadStandings(pool, orgId, [projectId], opts);
+  return m.get(Number(projectId)) || null;
 }
 
 async function recordAcknowledgment(pool, { orgId, userId, projectId, itemKey, acknowledgedOn, documentId, note }) {
@@ -101,4 +119,4 @@ async function reactivate(pool, { orgId, userId, role, projectId, reason }) {
   return { httpStatus: 200, body: { id: projectId, status: 'active' } };
 }
 
-module.exports = { ACK_ITEMS, computeStanding, loadStanding, recordAcknowledgment, reactivate };
+module.exports = { ACK_ITEMS, computeStanding, loadStanding, loadStandings, recordAcknowledgment, reactivate };

@@ -125,12 +125,12 @@ async function complianceItems(pool, orgId, slug, opts) {
   const reports = (await calendar(pool, orgId, { today })).filter((r) => r.source === 'sponsorship' && !r.received_at && r.due_date <= in90);
   const items = reports.map((r) => ({
     id: null, source: 'sponsorship', category: 'sponsorship', title: (r.kind === 'funder' ? r.title : 'Quarterly report') + ': ' + r.project_name,
-    next_due_date: r.due_date, status: r.status, href: base + '?focus=' + r.sponsored_project_id,
+    next_due_date: r.due_date, status: r.status, href: base + '?project=' + r.sponsored_project_id + '&view=reports',
   }));
   const missing = await pool.query(
     `SELECT id, name FROM org_sponsored_projects WHERE sponsor_org_id = $1 AND status IN ('accepted', 'active', 'on_hold', 'winding_down') AND agreement_signed_at IS NULL`, [orgId]);
   missing.rows.forEach((p) => items.push({
-    id: null, source: 'sponsorship', category: 'sponsorship', title: 'No signed agreement: ' + p.name, next_due_date: null, status: 'overdue', href: base + '?focus=' + p.id,
+    id: null, source: 'sponsorship', category: 'sponsorship', title: 'No signed agreement: ' + p.name, next_due_date: null, status: 'overdue', href: base + '?project=' + p.id + '&view=agreement',
   }));
   return items;
 }

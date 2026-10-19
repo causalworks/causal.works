@@ -1,8 +1,29 @@
-# PROGRESS: Sponsorship build
+# PROGRESS: Sponsorship screens (U1 to U3)
+
+Branch `build/sponsorship-ui` (cut from `main`). One pull request per milestone, each from a branch `build/sponsorship-ui-uN` pointing at the end of that milestone. Spec: `build-specs/sponsorship-ui.md` on the `cloud-specs` branch.
+
+Test database: `createdb test_db`, load `build-specs/schema.sql`, then every file in `db/migrations/` numbered 344 or higher. Run tests with `TEST_DATABASE_URL=postgresql://<user>@/test_db?host=/var/run/postgresql npm test`.
+
+## Done
+- U1 server: `lib/sponsorOverview.js` (grid rows, the four top numbers, project flags, money-out queue, project history), batched `loadStandings` in `lib/sponsorStanding.js`, read routes `GET /sponsorship/overview`, `GET /sponsorship/money-out`, `GET /sponsored-projects/:id/history`, dashboard and compliance links now open `?project=<id>&view=...`, tests `tests/sponsorship/overview*.test.js`.
+
+## Next
+- U1 screens: page title, four-number strip, tabs (Projects, Money out, Intake, Reports, Agreements), gear for Sponsorship settings, project page with sub-tabs, slide-in panels for add/edit and intake.
+
+## Blocked or needs the owner
+- Nothing yet.
+
+## Decisions to review
+- The four numbers sit above the tabs, as the spec says (Budget puts its strip under the tabs).
+
+## After merge (owner actions per pull request)
+- U1: no migration. Restart the app.
+
+## Earlier: Sponsorship build (S1 to S6, merged)
 
 Branch `build/sponsorship` (cut from `main`). One pull request per milestone, each from a branch `build/sponsorship-sN` pointing at the end of that milestone.
 
-## Done
+### Done
 - S1 server: migration 360 (sponsorship settings, fee rules, posted fee periods, gift fee-exemption and review flags, ledger source `sponsor_fee`, helper `org_allow_ledger_source`), `lib/sponsorFees.js`, `lib/sponsorBalance.js`, `lib/sponsorFeePosting.js`, routes in `routes/sponsorship.js`, gift coding to the project fund in the existing posting paths, untagged-gift flag in Gift Postings, tests in `tests/sponsorship/`.
 
 - S1 screens: project balance panel with fee line and tie-out, fee rule change and amendment form, fee exemptions on gifts, sponsorship settings section (Sponsored Projects page), "Run sponsorship fees" with posted entries and reversal, and the "No project?" review rows (Gift Postings). Checked in a browser at desktop and phone width.
@@ -20,15 +41,15 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S6: the shared public module was not on `main` (or on `build/membership`), so it is built here: migration 365 (`org_public_links`, `org_public_link_uses`, `org_public_settings`, public page fields on projects), `lib/rateLimit.js`, `lib/publicLinks.js`, routes in `server/organizational/public/index.js` (the route audit now also scans that folder; every public route is in the allowlist), admin settings route `routes/publicSettings.js`, staff routes for lead links, pages `public/p/lead.html` and `public/p/project.html`. Pull request from `build/sponsorship-s6`.
 - All six milestones are built. Pull requests: S1 #1, S2 #2, S3 #3, S4 #4, S5 #5, S6 #6 (stacked; merge in order).
 
-## Next
+### Next
 - Nothing planned. Review feedback on the pull requests.
 
-## Blocked or needs the owner
+### Blocked or needs the owner
 - Public rate limits key on `req.ip`. If the app runs behind a proxy, set Express `trust proxy` in `server/server.js`, or every visitor will share one limit.
 - The optional challenge check is enforced by the server once a workspace saves a verify address and secret (`PUT .../public-settings`), but the lead page does not yet load a challenge widget. Add the widget for the chosen service before turning the check on, or lead forms will be refused.
 - Set `BASE_URL` so lead links carry the full address.
 
-## Decisions to review
+### Decisions to review
 - Available balance counts only money that is in the books (posted). Money recorded in Funding but not yet posted is shown on its own line.
 - Fees accrue on money that is in the books (posted receipts), the same basis as the available balance and statements. Fees are worked out per fiscal quarter. Tiered rates are marginal over the fiscal year. The quarterly minimum and a flat fee apply only to complete quarters.
 - Pledges count as received when an installment is collected, not when the pledge is booked; the tie-out line names open pledges as a known difference.
@@ -60,16 +81,16 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S6: a payee typed by a lead becomes a contact (matched by exact name and kind first). Lead requests still need staff approval; the person-approval rules apply to staff only.
 - S6: the public project page shows the name and public summary only, and only when turned on. The donate button is left out because the Membership payment provider code is not on `main`.
 
-## Notes for the Membership build
+### Notes for the Membership build
 - Reuse `lib/publicLinks.js` (`createLink`, `createSignInLink` for 30-minute single-use sign-in links, `checkLink`, `recordUse`, `revokeLink`, `guardForm`, `issueFormToken`, `enterWorkspace`), `lib/rateLimit.js` (`publicRateLimit`) and the `org_public_links` table (purpose key, `constituent_id` for dues members). Add Membership's public routes as another file in `server/organizational/public/`; the audit scans that folder.
 - `org_public_settings` holds the optional challenge check, so Membership can use the same setting.
 - Migration 360 adds `org_allow_ledger_source(text)`, which adds a ledger source without dropping the others; use it for `membership_dues` instead of rewriting the constraint.
 
-## Hooks left for later
+### Hooks left for later
 - Recurring gifts to a project: when Membership's provider supports subscriptions, a recurring gift should arrive as an ordinary gift tagged to the project (`org_gifts.sponsored_project_id`), so balances, fees and statements pick it up with no change here. The donate button belongs on `public/p/project.html` (it already shows a `donate_url` when the API returns one).
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
-## After merge (owner actions per pull request)
+### After merge (owner actions per pull request)
 - S1: apply `db/migrations/360_sponsor_funds_and_fees.sql`; restart. In each fiscal-sponsor workspace set the fee income account, fee expense account and fee income program in sponsorship settings before the first fee run. No new NOT NULL column lacks a default, so the demo snapshot needs no rerun.
 
 - S2: apply `db/migrations/361_sponsor_requests_holds.sql`; restart (the daily hold job starts with the server and runs once at boot). Optionally set recall accounts in Sponsorship settings. No snapshot rerun needed.
@@ -82,6 +103,6 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 - S6: apply `db/migrations/365_public_links.sql`; restart. Set `BASE_URL`, and `trust proxy` if behind a proxy. Test a lead link end to end on the real workspace. No snapshot rerun needed.
 
-## Testing
+### Testing
 - Pure rules: `node --test tests/`.
 - Database tests: build a throwaway database from `build-specs/schema.sql` plus `db/migrations/36*.sql`, then `TEST_DATABASE_URL=postgresql://user@host/test_db node --test tests/`. Without the variable these tests are skipped.

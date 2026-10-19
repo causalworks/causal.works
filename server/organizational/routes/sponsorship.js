@@ -16,6 +16,7 @@ const { releaseHistory, createClosing, postClosing, voidClosing, DESTINATIONS } 
 const { createLink, revokeLink } = require('../lib/publicLinks');
 const { sendPlainEmail } = require('../lib/sendPlainEmail');
 const { loadOrgDocInfo } = require('../lib/orgLetterhead');
+const { loadOverview, loadMoneyOut, loadHistory } = require('../lib/sponsorOverview');
 
 const LEAD_LINK_DAYS = 180;
 
@@ -101,6 +102,36 @@ function registerSponsorshipRoutes(app, pool) {
     if (!r.rows.length) { res.status(404).json({ error: 'Sponsored project not found' }); return null; }
     return r.rows[0];
   }
+
+  // Overview: the Projects grid, the four numbers at the top, the money-out queue and a project's history
+  app.get(P + '/sponsorship/overview', ...read, async (req, res) => {
+    try {
+      return res.json(await loadOverview(pool, req.orgId));
+    } catch (e) {
+      console.error('GET /sponsorship/overview:', e.message);
+      return res.status(500).json({ error: 'Could not load the sponsored projects overview' });
+    }
+  });
+
+  app.get(P + '/sponsorship/money-out', ...read, async (req, res) => {
+    try {
+      return res.json(await loadMoneyOut(pool, req.orgId));
+    } catch (e) {
+      console.error('GET /sponsorship/money-out:', e.message);
+      return res.status(500).json({ error: 'Could not load money waiting to go out' });
+    }
+  });
+
+  app.get(P + '/sponsored-projects/:id/history', ...read, requireReadAccess('audit_log'), async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      return res.json({ entries: await loadHistory(pool, req.orgId, project.id) });
+    } catch (e) {
+      console.error('GET .../sponsored-projects/:id/history:', e.message);
+      return res.status(500).json({ error: 'Could not load the project history' });
+    }
+  });
 
   // Balance
   app.get(P + '/sponsored-projects/:id/balance', ...read, async (req, res) => {

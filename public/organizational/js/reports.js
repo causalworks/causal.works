@@ -1875,7 +1875,11 @@
 
     sfeCache = d;
     renderStmtFunctionalExpenses();
-    if (meta) meta.textContent = lines.length + ' expense accounts · FY' + fy;
+    var missing = lines.filter(function (l) { return l.missing_classification; }).length;
+    if (meta) {
+      meta.textContent = lines.length + ' expense accounts · FY' + fy + (missing ? ' · ' + missing + ' without an allocation (shown as program services), so this is a draft until they are set' : '');
+      meta.style.color = missing ? 'var(--organizational-status-warning)' : '';
+    }
   }
 
   function renderStmtFunctionalExpenses() {
@@ -2249,7 +2253,37 @@
     loadSavedCopies(name);
   }
 
-  function renderSchedule(name) {
+  var scheduleView = {};
+  var scheduleFilter = {};
+
+  function scheduleControls(name, cfg, d) {
+    var id = cfg.prefix + '-controls';
+    var el = document.getElementById(id);
+    var tiles = document.getElementById(cfg.prefix + '-tiles');
+    if (!el && tiles) {
+      el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:4px 16px 10px;font-size:0.8125rem;';
+      tiles.insertAdjacentElement('afterend', el);
+      el.addEventListener('click', function (e) {
+        var a = e.target.closest('[data-schedule-view]');
+        if (!a) return;
+        e.preventDefault();
+        scheduleView[name] = a.getAttribute('data-schedule-view');
+        renderSchedule(name);
+      });
+      el.addEventListener('input', function (e) {
+        var f = scheduleFilter[name] = scheduleFilter[name] || {};
+        if (e.target.matches('[data-schedule-q]')) f.q = e.target.value;
+        if (e.target.matches('[data-schedule-type]')) f.type = e.target.value;
+        if (e.target.matches('[data-schedule-age]')) f.age = e.target.value;
+        renderSchedule(name, true);
+      });
+    }
+    return el;
+  }
+
+  function renderSchedule(name, keepControls) {
     var cfg = SCHEDULES[name];
     var d = scheduleCache[name];
     var body = document.getElementById(cfg.prefix + '-body');
@@ -2268,9 +2302,43 @@
     }
     if (meta) meta.textContent = d.items.length + ' item' + (d.items.length === 1 ? '' : 's');
     var state = scheduleSort[name] = scheduleSort[name] || { index: -1, dir: null };
+    var view = scheduleView[name] || 'items';
+    var flt = scheduleFilter[name] = scheduleFilter[name] || {};
+    var ctl = scheduleControls(name, cfg, d);
+    var linkStyle = 'color:var(--organizational-accent);text-decoration:underline;';
+    var viewLink = function (v, label) { return v === view ? '<b>' + label + '</b>' : '<a href="#" data-schedule-view="' + v + '" style="' + linkStyle + '">' + label + '</a>'; };
+    if (ctl && !keepControls) {
+      var kinds = Object.keys(cfg.labels);
+      ctl.innerHTML = viewLink('items', 'Open items') + ' · ' + viewLink('ledger', 'Ledger entries by account') +
+        (view === 'items'
+          ? '<span style="flex:1 1 20px;"></span><input type="search" data-schedule-q placeholder="Contact or reference" value="' + escapeHtml(flt.q || '') + '" class="organizational-input" style="width:190px;font-size:0.8125rem;padding:4px 7px;">' +
+            '<select data-schedule-type class="organizational-input" style="width:auto;font-size:0.8125rem;padding:4px 7px;"><option value="">All types</option>' +
+            kinds.map(function (k) { return '<option value="' + k + '"' + (flt.type === k ? ' selected' : '') + '>' + escapeHtml(cfg.labels[k]) + '</option>'; }).join('') + '</select>' +
+            '<select data-schedule-age class="organizational-input" style="width:auto;font-size:0.8125rem;padding:4px 7px;"><option value="">All ages</option>' +
+            Object.keys(BUCKET_LABELS).map(function (b) { return '<option value="' + b + '"' + (flt.age === b ? ' selected' : '') + '>' + escapeHtml(BUCKET_LABELS[b]) + '</option>'; }).join('') + '</select>'
+          : '');
+    }
+    var needle = String(flt.q || '').trim().toLowerCase();
+    var filtered = view !== 'items' ? d.items : d.items.filter(function (i) {
+      if (flt.type && i.kind !== flt.type) return false;
+      if (flt.age && i.bucket !== flt.age) return false;
+      return !needle || (String(i.contact_name || '') + ' ' + String(i.reference || '')).toLowerCase().indexOf(needle) >= 0;
+    });
     var shown = window.OrganizationalTableSort && state.index >= 0 && state.dir
-      ? window.OrganizationalTableSort.sortArray(d.items, SCHEDULE_COLUMNS[state.index], state.dir) : d.items;
-    if (!shown.length) {
+      ? window.OrganizationalTableSort.sortArray(filtered, SCHEDULE_COLUMNS[state.index], state.dir) : filtered;
+    if (view === 'ledger') {
+      var lines = d.ledger.lines || [];
+      body.innerHTML = !lines.length ? '<p class="organizational-empty" style="padding:16px 20px;">No ledger entries on these accounts.</p>'
+        : '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Account</th><th>Date</th><th>Contact</th><th>Memo</th><th style="text-align:right;">Amount</th><th>Origin</th></tr></thead><tbody>' +
+          lines.map(function (l) {
+            var href = slugBase + '/transactions?txn=' + encodeURIComponent(l.transaction_id);
+            return '<tr data-txn-href="' + escapeHtml(href) + '" style="cursor:pointer;" title="Open this entry"><td>' + escapeHtml(l.account) + '</td><td style="white-space:nowrap;">' + escapeHtml(l.date) + '</td><td>' + escapeHtml(l.contact) + '</td><td>' + escapeHtml(l.memo) + '</td>' +
+              dollarCell(l.amount_cents) + '<td>' + (l.direct ? 'Entered directly' : 'From a record') + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+      body.querySelectorAll('tr[data-txn-href]').forEach(function (tr) {
+        tr.addEventListener('click', function () { window.location.href = tr.getAttribute('data-txn-href'); });
+      });
+    } else if (!shown.length) {
       body.innerHTML = '<p class="organizational-empty" style="padding:16px 20px;">Nothing is open.</p>';
     } else {
       body.innerHTML = '<div class="organizational-table-wrap"><table class="organizational-table" data-schedule-table="1" aria-label="' + escapeHtml(name) + '"><thead><tr>' +
@@ -2282,7 +2350,7 @@
             '<td style="white-space:nowrap;">' + escapeHtml(String(i.date || '').slice(0, 10)) + '</td><td style="white-space:nowrap;">' + escapeHtml(String(i.due_date || '').slice(0, 10)) + '</td>' +
             dollarCell(i.balance_cents) + '<td style="text-align:right;">' + (i.days_past_due > 0 ? i.days_past_due : '') + '</td><td>' + escapeHtml(BUCKET_LABELS[i.bucket] || '') + '</td></tr>';
         }).join('') +
-        '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="5">Total</td>' + dollarCell(d.totals.total) + '<td></td><td></td></tr></tbody></table></div>';
+        '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="5">Total' + (filtered.length !== d.items.length ? ' (filtered)' : '') + '</td>' + dollarCell(filtered.reduce(function (n, i) { return n + Number(i.balance_cents); }, 0)) + '<td></td><td></td></tr></tbody></table></div>';
       var table = body.querySelector('table[data-schedule-table]');
       if (window.OrganizationalTableSort && table) {
         window.OrganizationalTableSort.attach(table, { columns: SCHEDULE_COLUMNS.concat([null]), state: state, onChange: function () { renderSchedule(name); } });
@@ -2295,7 +2363,7 @@
       var accts = d.ledger.accounts.map(function (a) { return escapeHtml(a.code + ' ' + a.name) + ' ' + escapeHtml(money2(a.balance_cents)); }).join(' · ');
       var diff = Number(d.ledger.difference_cents);
       ledgerEl.innerHTML = '<strong>' + escapeHtml(cfg.ledgerLabel) + ': ' + escapeHtml(money2(d.ledger.balance_cents)) + '</strong> (' + accts + '). ' +
-        (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + escapeHtml(money2(diff)) + '. It comes from entries made directly in the ledger and from the discount on multi-year pledges.');
+        (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + escapeHtml(money2(diff)) + '. See Ledger entries by account for the entries made directly.');
     }
   }
 

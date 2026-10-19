@@ -48,7 +48,19 @@ function registerReceivablesPayablesRoutes(app, pool) {
         GROUP BY a.id, a.code, a.name
         ORDER BY a.code`, [orgId, asOf]);
     const accounts = r.rows.map((a) => ({ id: a.id, code: a.code, name: a.name, balance_cents: String(sign * Number(a.net)) }));
-    return { accounts, balance_cents: accounts.reduce((n, a) => n + Number(a.balance_cents), 0) };
+    const ln = await pool.query(
+      `SELECT t.id AS transaction_id, t.transaction_date::text AS date, t.source, a.code, a.name AS account_name,
+              COALESCE(NULLIF(c.display_name, ''), t.payee, '') AS contact, COALESCE(NULLIF(l.line_memo, ''), t.memo, '') AS memo,
+              (l.debit_cents - l.credit_cents) AS net
+         FROM org_ledger_lines l
+         JOIN org_ledger_transactions t ON t.id = l.transaction_id AND t.status = 'posted' AND t.transaction_date <= $2
+         JOIN org_accounts a ON a.id = l.account_id
+         LEFT JOIN org_constituents c ON c.id = t.constituent_id
+        WHERE a.org_id = $1 AND ${accountFilterSql}
+        ORDER BY a.code, t.transaction_date, t.id, l.id`, [orgId, asOf]);
+    const lines = ln.rows.map((x) => ({ transaction_id: x.transaction_id, date: x.date, account: x.code + ' ' + x.account_name, contact: x.contact, memo: x.memo,
+      amount_cents: String(sign * Number(x.net)), direct: x.source === 'manual' || x.source === 'bank_reconciliation' }));
+    return { accounts, lines, balance_cents: accounts.reduce((n, a) => n + Number(a.balance_cents), 0) };
   }
 
   function summarize(items, asOf, ledger) {

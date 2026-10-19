@@ -320,7 +320,7 @@
     if (t.reverses_transaction_id) kv('Reverses', '<a href="#" class="ledger-open-link" data-id="' + t.reverses_transaction_id + '">#' + esc(String(t.reverses_transaction_id)) + '</a>');
     if ((t.reversed_by || []).length) kv('Reversed by', t.reversed_by.map((x) => '<a href="#" class="ledger-open-link" data-id="' + x + '">#' + esc(String(x)) + '</a>').join(', '));
     const trail = [];
-    trail.push('Entered ' + whenText(t.created_at) + (t.created_by ? ' by ' + esc(t.created_by) : ''));
+    trail.push(((out.data.source_links || []).some(function (l) { return l.type === 'expense_claim'; }) ? 'Submitted ' : 'Entered ') + whenText(t.created_at) + (t.created_by ? ' by ' + esc(t.created_by) : ''));
     if (t.approved_at) trail.push('Approved ' + whenText(t.approved_at) + (t.approved_by ? ' by ' + esc(t.approved_by) : ''));
     if (t.voided_at) trail.push('Voided ' + whenText(t.voided_at) + (t.voided_by ? ' by ' + esc(t.voided_by) : '') + (t.void_reason ? ': ' + esc(t.void_reason) : ''));
     const actions = [];

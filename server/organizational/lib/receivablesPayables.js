@@ -45,9 +45,10 @@ async function payableItems(pool, orgId) {
        FROM org_bills b JOIN org_constituents c ON c.id = b.constituent_id
       WHERE b.org_id = $1 AND b.status IN ('approved', 'scheduled', 'partially_paid')`, [orgId]);
   const claims = await pool.query(
-    `SELECT e.id, e.description, e.claim_date AS date, e.ledger_transaction_id, u.email AS contact_name,
+    `SELECT e.id, e.description, e.claim_date AS date, e.ledger_transaction_id, COALESCE(NULLIF(pc.display_name, ''), u.email) AS contact_name,
             COALESCE((SELECT SUM(amount_cents) FROM org_expense_claim_lines WHERE claim_id = e.id), 0) AS balance_cents
        FROM org_expense_claims e LEFT JOIN users u ON u.id = e.submitted_by
+       LEFT JOIN LATERAL (SELECT c.display_name FROM org_constituents c WHERE c.org_id = e.org_id AND lower(c.email) = lower(u.email) ORDER BY c.id LIMIT 1) pc ON TRUE
       WHERE e.org_id = $1 AND e.status = 'approved'`, [orgId]);
   return [
     ...bills.rows.filter((r) => Number(r.balance_cents) > 0).map((r) => ({

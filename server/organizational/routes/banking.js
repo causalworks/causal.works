@@ -816,11 +816,13 @@ function registerBankingRoutes(app, pool) {
           .map((r) => ({ id: r.id, grant_id: r.grant_id, grant_name: r.grant_name, amount_cents: String(r.amount_cents) }));
 
         const duesR = await pool.query(
-          `SELECT p.id, p.amount_cents, p.payment_date, c.display_name, t.id AS tier_id, t.name AS tier_name, t.revenue_account_id
+          `SELECT p.id, p.amount_cents, p.payment_date, c.display_name, t.id AS tier_id, t.name AS tier_name,
+                  COALESCE(t.revenue_account_id, ms.dues_revenue_account_id) AS revenue_account_id
            FROM org_membership_payments p
            JOIN org_constituents c ON c.id = p.constituent_id
            JOIN org_membership_terms mt ON mt.id = p.term_id
            LEFT JOIN org_membership_tiers t ON t.id = mt.tier_id
+           LEFT JOIN org_membership_settings ms ON ms.org_id = p.org_id
            WHERE p.org_id = $1 AND p.kind = 'payment' AND p.posting_status = 'unposted'
              AND p.amount_cents BETWEEN $2 AND $3
              AND p.payment_date::date BETWEEN $4 AND $5

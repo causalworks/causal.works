@@ -65,6 +65,7 @@ const { registerRecurringSchedulesRoutes } = require('./routes/recurringSchedule
 const { registerConversionBalancesRoutes } = require('./routes/conversionBalances');
 const { registerFinancialStatementRoutes } = require('./routes/financialStatements');
 const { registerGiftPostingRoutes } = require('./routes/giftPostings');
+const { registerDuesPostingRoutes } = require('./routes/duesPostings');
 const { registerIndirectCostRecoveryRoutes } = require('./routes/indirectCostRecovery');
 const { wrapPoolWithOrgScoping } = require('./lib/scopedPool');
 
@@ -135,6 +136,7 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerConversionBalancesRoutes(app, pool);
   registerFinancialStatementRoutes(app, pool);
   registerGiftPostingRoutes(app, pool);
+  registerDuesPostingRoutes(app, pool);
   registerIndirectCostRecoveryRoutes(app, pool);
 }
 

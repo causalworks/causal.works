@@ -15,8 +15,10 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S4: migration 363 (statements log, donor letter on gifts, property releases on disbursements, statement claim function), `lib/sponsorStatements.js` (monthly statement PDF and email, scheduled run, year-end sheet and CSV), `lib/sponsorGifts.js` (donor letters, receipt wording, property releases), as-of-date filtering in the balance helper, property posting in `disbursementPosting.js`, sponsor wording in gift acknowledgments, statement step in the daily job, screens. Pull request from `build/sponsorship-s4`.
 - Fees now accrue on posted receipts only; the fix was also pushed to the S1, S2 and S3 branches.
 
+- S5: migration 364 (W-9 fields and receiving entity on projects, payee and grant agreement on disbursements, `org_sponsor_closings`, ledger source `sponsor_closing`), grant-model rules in `lib/sponsorMoneyOut.js`, `lib/sponsorGrants.js` (release history, information-return sheet, closing), closing in the balance helper and statements, ended projects take no new income, routes, Gift Postings rows for closings, screens; model labels now read "Comprehensive" and "Pre-approved grant". Pull request from `build/sponsorship-s5`.
+
 ## Next
-- S5: pre-approved grant model releases and project closing.
+- S6: shared public module (check `main` first), scoped lead links, optional public project page.
 
 ## Blocked or needs the owner
 - None.
@@ -45,6 +47,10 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S4: donated property can be released to its project only if it was booked as an asset; posting debits the project's expense account and credits that asset. Property releases are not counted as cash.
 - S4: statements are stored as project documents of type correspondence.
 
+- S5: under the pre-approved grant model every release (cash or property) goes to the project's receiving entity, needs the entity's W-9 on file, and needs a signed grant agreement attached before approval. Changing the receiving entity clears the W-9 unless a new one is given.
+- S5: the information-return sheet groups posted releases by receiving entity for a calendar year (by posting date), cash plus property at value, and flags totals at or above that year's threshold (the latest earlier year's threshold if the year has none).
+- S5: closing needs the project in winding down (or on hold), no pending payments, an amount no more than what is available, a reason, a destination, and for a new sponsor the written agreement. Accounting posts it; the project then ends. Cancelling a posted closing voids the entry and sets the project back to winding down.
+
 ## Hooks left for later
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
@@ -56,6 +62,8 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - S3: apply `db/migrations/362_sponsor_intake_agreements_reports.sql`; restart. Quarterly report rows start from the later of each project's start date and the date its workspace's sponsorship settings were created (the 360 migration date for existing sponsors), so existing projects are not held for old reports. Set `next_report_due` on a project if an earlier report is still owed. Email reminders need the live email key. No snapshot rerun needed.
 
 - S4: apply `db/migrations/363_sponsor_statements_year_end.sql`; restart. Statement PDFs need Chrome on the server and emails need the live email key. Check the statement day in Sponsorship settings (default the 5th). No snapshot rerun needed.
+
+- S5: apply `db/migrations/364_sponsor_grant_model_closing.sql`; restart. For each pre-approved grant project, name the receiving entity and attach its W-9 before the next release. No snapshot rerun needed.
 
 ## Testing
 - Pure rules: `node --test tests/`.

@@ -76,7 +76,7 @@
   }
 
   function sponsorshipModelLabel(model) {
-    const labels = { model_c: 'Standard (pass-through)', model_a: 'Managed (comprehensive)', other: 'Other' };
+    const labels = { model_c: 'Pre-approved grant', model_a: 'Comprehensive', other: 'Other' };
     return labels[model] || 'Not set';
   }
 

@@ -85,7 +85,10 @@
     const recalls = ((out && out.res.ok && out.data && out.data.sponsor_recalls) || []).map((r) => ({
       id: 'r' + r.id, recall: r, received_at: r.recall_date, constituent_name: r.project_name, amount_cents: r.amount_cents,
     }));
-    renderRows(flagged.concat(untagged, rows, dis, recalls));
+    const closings = ((out && out.res.ok && out.data && out.data.sponsor_closings) || []).map((c) => ({
+      id: 'c' + c.id, closing: c, received_at: c.closing_date, constituent_name: c.project_name, amount_cents: c.amount_cents,
+    }));
+    renderRows(flagged.concat(untagged, rows, dis, recalls, closings));
   }
 
   function renderRows(rows) {
@@ -105,6 +108,13 @@
           + (g.flag.ledger_transaction_id ? ' · <a href="/organizational/o/' + encodeURIComponent(currentSlug) + '/transactions?txn=' + g.flag.ledger_transaction_id + '">Open the entry</a> to recode it first' : '') + '</td>'
           + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-accept" data-id="' + g.id + '">Not a gift</button> '
           + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-flag-keep" data-id="' + g.id + '">Keep as gift</button></td></tr>';
+      }
+      if (g.closing) {
+        const c = g.closing;
+        return '<tr data-id="' + g.id + '"><td>Closing</td><td>' + esc(c.closing_date || '') + '</td><td>' + esc(c.project_name) + '</td><td>' + fmtUsd(c.amount_cents) + '</td>'
+          + '<td style="font-size:0.8125rem;color:var(--text-secondary);">Remaining balance' + (c.destination_name ? ' to ' + esc(c.destination_name) : '') + ': ' + esc(c.reason) + '</td>'
+          + '<td style="white-space:nowrap;"><button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-closing-post" data-id="' + c.id + '">Post…</button> '
+          + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline gp-closing-void" data-id="' + c.id + '">Cancel</button></td></tr>';
       }
       if (g.recall) {
         const rc = g.recall;
@@ -162,6 +172,31 @@
     };
     tbody.querySelectorAll('.gp-untagged-project').forEach((sel) => sel.addEventListener('change', () => {
       if (sel.value) reviewUntagged(sel.dataset.id, { sponsored_project_id: Number(sel.value) });
+    }));
+    tbody.querySelectorAll('.gp-closing-post').forEach((b) => b.addEventListener('click', () => {
+      const c = rows.find((x) => x.closing && String(x.closing.id) === b.dataset.id).closing;
+      postPanel.innerHTML = '<p style="margin:0 0 4px;font-weight:600;font-size:0.875rem;">Post the closing transfer from ' + esc(c.project_name) + '</p>' +
+        '<p class="organizational-hint" style="margin:0 0 10px;">' + fmtUsd(c.amount_cents) + (c.destination_name ? ' to ' + esc(c.destination_name) : '') + '. Posting charges the project fund and credits the bank account the money leaves from. The project then ends.</p>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">' +
+        '<div><label class="organizational-label" style="font-size:0.75rem;">Posting date</label><input type="date" class="organizational-input" id="gp-close-date" value="' + esc(c.closing_date) + '"></div>' +
+        '<div><label class="organizational-label" style="font-size:0.75rem;">Expense account</label><select class="organizational-select" id="gp-close-expense"><option value="">— select —</option>' + acctOpts((a) => a.type === 'expense', c.disbursement_expense_account_id) + '</select></div>' +
+        '<div><label class="organizational-label" style="font-size:0.75rem;">Paid from (bank account)</label><select class="organizational-select" id="gp-close-bank"><option value="">— select —</option>' + acctOpts((a) => a.is_cash_account) + '</select></div></div>' +
+        '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;"><button type="button" class="organizational-btn organizational-btn-primary" id="gp-close-go">Post</button><span id="gp-close-status" style="font-size:0.8125rem;"></span></div>';
+      postPanel.hidden = false;
+      document.getElementById('gp-close-go').addEventListener('click', async () => {
+        const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsor-closings/' + c.id + '/post', { method: 'POST', body: JSON.stringify({
+          posting_date: document.getElementById('gp-close-date').value, expense_account_id: Number(document.getElementById('gp-close-expense').value) || null,
+          bank_account_id: Number(document.getElementById('gp-close-bank').value) || null }) });
+        if (!r || !r.res.ok) { document.getElementById('gp-close-status').textContent = (r && r.data && r.data.error) || 'Could not post.'; return; }
+        postPanel.hidden = true;
+        await loadPending();
+      });
+    }));
+    tbody.querySelectorAll('.gp-closing-void').forEach((b) => b.addEventListener('click', async () => {
+      const reason = window.prompt('Why is this closing being cancelled? (required)');
+      if (!reason || !reason.trim()) return;
+      const r = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/sponsor-closings/' + b.dataset.id + '/void', { method: 'POST', body: JSON.stringify({ reason }) });
+      if (r && r.res.ok) await loadPending(); else window.alert((r && r.data && r.data.error) || 'Could not cancel the closing.');
     }));
     tbody.querySelectorAll('.gp-recall-post').forEach((b) => b.addEventListener('click', async () => {
       if (!window.confirm('Post this recall? It charges the project fund and credits the workspace.')) return;

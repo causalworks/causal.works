@@ -311,6 +311,11 @@
         '<p class="organizational-sp-rec-line">Fiscal year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="fy" value="' + (new Date().getFullYear() - 1) + '"> ' +
         '<a href="#" data-a="year-end">Show</a> · <a href="#" data-a="year-end-csv">Download CSV</a></p><div data-box="year-end"></div>' +
       '</div></details>' +
+      '<details class="organizational-collapsible"><summary class="organizational-section-heading">Grant releases by entity</summary><div class="organizational-section-body">' +
+        '<p class="organizational-sp-rec-line">Calendar year <input type="number" class="organizational-input organizational-sp-rec-month" data-f="iry" value="' + (new Date().getFullYear() - 1) + '"> ' +
+        '<a href="#" data-a="ir">Show</a> · <a href="#" data-a="ir-csv">Download CSV</a></p><div data-box="ir"></div>' +
+        '<p class="organizational-hint">Check the information-return threshold against the IRS instructions each year (Sponsorship settings).</p>' +
+      '</div></details>' +
       '<details class="organizational-collapsible"><summary class="organizational-section-heading">Agreement templates</summary><div class="organizational-section-body">' +
         '<ul class="organizational-sp-fund-list">' + templates.map((t) => '<li>' + esc(t.title) + (t.is_default ? ' <span class="organizational-hint">shared default</span>' : '') +
           (ctx.canStaff ? ' · <a href="#" data-a="tpl-copy" data-id="' + t.id + '">' + (t.is_default ? 'Copy and edit' : 'Edit') + '</a>' : '') + '</li>').join('') + '</ul>' +
@@ -379,6 +384,20 @@
         '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Project</th><th>Opening</th><th>Received</th><th>Noncash</th><th>Fee</th><th>Spent</th><th>Closing</th><th>Difference</th></tr></thead><tbody>' +
         rows.map((r) => '<tr><td>' + esc(r.project_name) + '</td>' + ['opening_cents', 'income_cents', 'noncash_cents', 'fees_cents', 'expenses_cents', 'closing_cents'].map((k) => '<td>' + money(r[k]) + '</td>').join('') +
           '<td>' + (r.difference_cents == null ? 'no program' : money(r.difference_cents)) + '</td></tr>').join('') + '</tbody></table></div>';
+    });
+    on('[data-a="ir-csv"]', () => {
+      window.location.href = '/api/organizational/orgs/' + encodeURIComponent(ctx.slug) + '/sponsor-reports/information-returns?format=csv&year=' + encodeURIComponent(el.querySelector('[data-f="iry"]').value);
+    });
+    on('[data-a="ir"]', async () => {
+      const box = el.querySelector('[data-box="ir"]');
+      const out = await api(ctx.slug, '/sponsor-reports/information-returns?year=' + encodeURIComponent(el.querySelector('[data-f="iry"]').value));
+      if (!out || !out.res.ok) { box.textContent = (out && out.data && out.data.error) || 'Could not load the sheet.'; return; }
+      const rows = out.data.rows || [];
+      box.innerHTML = rows.length ? '<p class="organizational-hint">Threshold: ' + (out.data.threshold_cents == null ? 'not set for this year' : money(out.data.threshold_cents)) + '</p>' +
+        '<div class="organizational-table-wrap"><table class="organizational-table"><thead><tr><th>Receiving entity</th><th>Projects</th><th>Cash</th><th>Property</th><th>Total</th><th>Information return</th></tr></thead><tbody>' +
+        rows.map((r) => '<tr><td>' + esc(r.entity_name) + '</td><td>' + esc(r.projects.join(', ')) + '</td><td>' + money(r.cash_cents) + '</td><td>' + money(r.property_cents) + '</td><td>' + money(r.total_cents) + '</td><td>' +
+          (r.needs_information_return ? '<span class="organizational-sp-rec-overdue">needed</span>' : 'no') + '</td></tr>').join('') + '</tbody></table></div>'
+        : '<p class="organizational-hint">No grant releases posted in that year.</p>';
     });
     on('[data-a="tpl-copy"]', (a) => {
       const t = templates.find((x) => String(x.id) === a.dataset.id);

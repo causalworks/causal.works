@@ -16,8 +16,29 @@
   }
 
   // Sends a money action; when the server refuses for balance and the person is an admin, offers the override.
+  async function chooseProjectDocument(ctx, message) {
+    const docs = await api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/documents');
+    const list = ((docs && docs.res.ok && docs.data.documents) || []).filter((d) => d.is_current);
+    if (!list.length) { window.alert(message + '\n\nUpload it under the project\'s Documents first.'); return null; }
+    const pick = window.prompt(message + '\n\nType the number of the document:\n' + list.map((d, i) => (i + 1) + '. ' + d.title).join('\n'));
+    const n = Number(pick);
+    return Number.isInteger(n) && n >= 1 && n <= list.length ? list[n - 1].id : null;
+  }
+
   async function sendWithOverride(ctx, path, body) {
     let out = await api(ctx.slug, path, { method: 'POST', body: JSON.stringify(body) });
+    if (out && !out.res.ok && out.data && out.data.code === 'grant_agreement_missing') {
+      const docId = await chooseProjectDocument(ctx, out.data.error);
+      if (!docId) return null;
+      const m = path.match(/\/disbursements\/(\d+)\/approve$/);
+      if (m) {
+        const att = await api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/disbursements/' + m[1] + '/grant-agreement', { method: 'POST', body: JSON.stringify({ document_id: docId }) });
+        if (!att || !att.res.ok) { window.alert((att && att.data && att.data.error) || 'Could not attach the grant agreement.'); return null; }
+      } else {
+        body = { ...body, grant_agreement_document_id: docId };
+      }
+      out = await api(ctx.slug, path, { method: 'POST', body: JSON.stringify(body) });
+    }
     if (out && !out.res.ok && out.data && out.data.code === 'over_balance' && ctx.isAdmin) {
       const reason = window.prompt(out.data.error + '\n\nTo approve it anyway, enter the reason (required):');
       if (!reason || !reason.trim()) return null;
@@ -30,7 +51,13 @@
   async function render(el, ctx) {
     if (!el) return;
     const base = '/sponsored-projects/' + ctx.projectId;
-    const [bal, reqs, recalls] = await Promise.all([api(ctx.slug, base + '/balance'), api(ctx.slug, base + '/payment-requests'), api(ctx.slug, base + '/recalls')]);
+    const [bal, reqs, recalls, rel, clo] = await Promise.all([api(ctx.slug, base + '/balance'), api(ctx.slug, base + '/payment-requests'), api(ctx.slug, base + '/recalls'),
+      api(ctx.slug, base + '/releases'), api(ctx.slug, base + '/closing')]);
+    const grant = (rel && rel.res.ok && rel.data) || {};
+    const isGrant = grant.model === 'model_c';
+    const closings = ((clo && clo.res.ok && clo.data.closings) || []).filter((c) => c.status !== 'void');
+    const destinations = (clo && clo.res.ok && clo.data.destinations) || {};
+    const available = bal && bal.res.ok ? bal.data.balance.available_cents : 0;
     const project = (bal && bal.res.ok && bal.data.project) || {};
     const overrides = (bal && bal.res.ok && bal.data.overrides) || [];
     const requests = (reqs && reqs.res.ok && reqs.data.requests) || [];
@@ -40,7 +67,19 @@
     el.innerHTML =
       (held ? '<p class="organizational-sp-mo-hold"><strong>On hold</strong>: ' + esc(project.hold_reason || '') +
         '. Payments and requests are blocked.' + (project.hold_kind === 'report_overdue' ? ' Lifts by itself when the report is received.' : '') + '</p>' : '') +
-      (ctx.canMoney ? '<p class="organizational-sp-mo-links"><a href="#" data-a="hold">' + (held ? 'Lift hold' : 'Put on hold') + '</a> · <a href="#" data-a="recall">Recall funds</a></p>' : '') +
+      (ctx.canMoney ? '<p class="organizational-sp-mo-links"><a href="#" data-a="hold">' + (held ? 'Lift hold' : 'Put on hold') + '</a> · <a href="#" data-a="recall">Recall funds</a>' +
+        (!closings.length && (project.status === 'winding_down' || project.status === 'on_hold') ? ' · <a href="#" data-a="close">Close the project</a>' : '') + '</p>' : '') +
+      (closings.length ? '<p class="organizational-sp-rec-line"><strong>Closing</strong>: ' + money(closings[0].amount_cents) + ' to ' + esc(closings[0].destination_name || destinations[closings[0].destination_kind] || '') +
+        ' on ' + esc(closings[0].closing_date) + ' · ' + esc(closings[0].reason) + ' <span class="organizational-hint">' + (closings[0].status === 'posted' ? 'posted, project ended' : 'waiting for Accounting') + '</span></p>' : '') +
+      '<div data-box="close" hidden></div>' +
+      (isGrant ? '<div class="organizational-panel-section-head">Pre-approved grant</div>' +
+        '<p class="organizational-sp-rec-line">Receiving entity: ' + (grant.receiving_entity ? esc(grant.receiving_entity.display_name) : '<span class="organizational-sp-mo-hold">not named</span>') +
+          ' · W-9: ' + (grant.w9_on_file ? 'on file' + (grant.w9_received_at ? ' since ' + esc(grant.w9_received_at) : '') : '<span class="organizational-sp-mo-hold">missing</span>') +
+          (ctx.canMoney ? ' · <a href="#" data-a="entity">Change</a>' : '') + '</p><div data-box="entity" hidden></div>' +
+        ((grant.releases || []).length ? '<ul class="organizational-sp-fund-list">' + grant.releases.map((r) => '<li>' + esc(r.date) + ' · ' + money(r.amount_cents) + ' · ' +
+          esc(r.kind === 'property' ? 'property: ' + (r.in_kind_description || 'donated item') : 'grant') + ' · ' + esc(r.status === 'approved' ? (r.posted ? 'paid' : 'approved') : 'waiting for approval') +
+          (r.grant_agreement_document_id ? '' : ' <span class="organizational-sp-mo-hold">no grant agreement</span>') + '</li>').join('') + '</ul>'
+          : '<p class="organizational-hint organizational-sp-rec-line">No releases yet.</p>') : '') +
       '<div class="organizational-panel-section-head">Payment requests</div>' +
       (requests.length ? '<ul class="organizational-sp-fund-list organizational-sp-mo-requests">' +
         requests.map((r) => '<li><span>' + esc(String(r.created_at || '').slice(0, 10)) + ' · ' + esc(r.payee_name || '') + ' · <strong>' + money(r.amount_cents) + '</strong> · ' + esc(r.purpose) +
@@ -86,6 +125,10 @@
     }));
     const newReq = el.querySelector('[data-a="new-request"]');
     if (newReq) newReq.addEventListener('click', (e) => { e.preventDefault(); openRequestForm(el, ctx, done); });
+    const closeLink = el.querySelector('[data-a="close"]');
+    if (closeLink) closeLink.addEventListener('click', (e) => { e.preventDefault(); openClosingForm(el, ctx, destinations, available, done); });
+    const entityLink = el.querySelector('[data-a="entity"]');
+    if (entityLink) entityLink.addEventListener('click', (e) => { e.preventDefault(); openEntityForm(el, ctx, grant, done); });
     const recallLink = el.querySelector('[data-a="recall"]');
     if (recallLink) recallLink.addEventListener('click', (e) => { e.preventDefault(); openRecallForm(el, ctx, done); });
   }
@@ -126,6 +169,57 @@
       const out = await api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/payment-requests', { method: 'POST', body: JSON.stringify(body) });
       if (!out || !out.res.ok) { err.textContent = (out && out.data && out.data.error) || 'Could not save the request.'; return; }
       if (out.data.budget_warning) window.alert(out.data.budget_warning);
+      done();
+    });
+  }
+
+  async function openEntityForm(el, ctx, grant, done) {
+    const box = el.querySelector('[data-box="entity"]');
+    box.hidden = false;
+    const [names, docs] = await Promise.all([api(ctx.slug, '/constituents/names?active=true', { method: 'GET', skip403Redirect: true }), api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/documents')]);
+    const contacts = (names && names.res.ok && Array.isArray(names.data)) ? names.data.filter((c) => c.kind === 'organization') : [];
+    const docList = ((docs && docs.res.ok && docs.data.documents) || []).filter((d) => d.is_current);
+    box.innerHTML = '<div class="organizational-sp-fund-form"><label>Receiving entity <span data-f="entity"></span></label>' +
+      '<label>W-9 <select class="organizational-select" data-f="w9"><option value="">Not on file</option>' + docList.map((d) => '<option value="' + d.id + '"' + (Number(grant.w9_document_id) === Number(d.id) ? ' selected' : '') + '>' + esc(d.title) + '</option>').join('') + '</select></label>' +
+      '<label>W-9 received <input class="organizational-input" type="date" data-f="w9date" value="' + esc(grant.w9_received_at || new Date().toISOString().slice(0, 10)) + '"></label>' +
+      '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-f="go">Save</button></div></div>';
+    if (window.OrganizationalContactPicker) {
+      window.OrganizationalContactPicker.mount(box.querySelector('[data-f="entity"]'), { getCache: () => contacts, role: null, label: 'organization', slug: ctx.slug,
+        selectedId: grant.receiving_entity && grant.receiving_entity.id, valueElementId: 'sp-entity-' + ctx.projectId });
+    }
+    box.querySelector('[data-f="go"]').addEventListener('click', async () => {
+      const out = await api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/grant-entity', { method: 'POST', body: JSON.stringify({
+        receiving_constituent_id: Number(document.getElementById('sp-entity-' + ctx.projectId).value) || null,
+        w9_document_id: Number(box.querySelector('[data-f="w9"]').value) || null, w9_received_at: box.querySelector('[data-f="w9date"]').value }) });
+      if (!out || !out.res.ok) { window.alert((out && out.data && out.data.error) || 'Could not save.'); return; }
+      done();
+    });
+  }
+
+  async function openClosingForm(el, ctx, destinations, available, done) {
+    const box = el.querySelector('[data-box="close"]');
+    box.hidden = false;
+    const [names, docs] = await Promise.all([api(ctx.slug, '/constituents/names?active=true', { method: 'GET', skip403Redirect: true }), api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/documents')]);
+    const contacts = (names && names.res.ok && Array.isArray(names.data)) ? names.data.filter((c) => c.kind === 'organization') : [];
+    const docList = ((docs && docs.res.ok && docs.data.documents) || []).filter((d) => d.is_current);
+    box.innerHTML = '<div class="organizational-sp-fund-form">' +
+      '<label>Remaining balance goes to * <select class="organizational-select" data-f="kind">' + Object.keys(destinations).map((k) => '<option value="' + k + '">' + esc(destinations[k]) + '</option>').join('') + '</select></label>' +
+      '<label>Receiving organization <span data-f="dest"></span></label>' +
+      '<label>Amount * <input class="organizational-input" type="number" min="0" step="0.01" data-f="amount" value="' + (Math.max(0, available) / 100).toFixed(2) + '"></label>' +
+      '<label>Transfer date * <input class="organizational-input" type="date" data-f="date" value="' + new Date().toISOString().slice(0, 10) + '"></label>' +
+      '<label>Reason * <input class="organizational-input" type="text" maxlength="500" data-f="reason"></label>' +
+      '<label>Document (needed for a new sponsor) <select class="organizational-select" data-f="doc"><option value="">None</option>' + docList.map((d) => '<option value="' + d.id + '">' + esc(d.title) + '</option>').join('') + '</select></label>' +
+      '<p class="organizational-hint" style="grid-column:1/-1;margin:0;">Pay the final bills first. The amount cannot be more than the project has available after its liabilities. Accounting posts the transfer, and the project then ends.</p>' +
+      '<div class="organizational-sp-fund-actions"><button type="button" class="organizational-btn organizational-btn-sm" data-f="go">Record the closing transfer</button><span class="organizational-error" data-f="err"></span></div></div>';
+    if (window.OrganizationalContactPicker) {
+      window.OrganizationalContactPicker.mount(box.querySelector('[data-f="dest"]'), { getCache: () => contacts, role: null, label: 'organization', slug: ctx.slug, valueElementId: 'sp-close-dest-' + ctx.projectId });
+    }
+    const f = (n) => box.querySelector('[data-f="' + n + '"]');
+    f('go').addEventListener('click', async () => {
+      const out = await api(ctx.slug, '/sponsored-projects/' + ctx.projectId + '/closing', { method: 'POST', body: JSON.stringify({
+        destination_kind: f('kind').value, destination_constituent_id: Number(document.getElementById('sp-close-dest-' + ctx.projectId).value) || null,
+        amount_cents: toCents(f('amount').value), closing_date: f('date').value, reason: f('reason').value, document_id: Number(f('doc').value) || null }) });
+      if (!out || !out.res.ok) { f('err').textContent = (out && out.data && out.data.error) || 'Could not record the closing.'; return; }
       done();
     });
   }

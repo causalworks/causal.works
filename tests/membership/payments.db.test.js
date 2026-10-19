@@ -226,7 +226,7 @@ test('organizations pay by invoice: the draft uses the tier accounts, the existi
     const prog = await h.one(pool, `INSERT INTO org_programs (org_id, name) VALUES ($1, 'Membership program') RETURNING id`, [s.org.id]);
     await asApp(s.org.id);
     const t = await s.tier({ applies_to: 'organization', revenue_account_id: acct.id, program_id: prog.id });
-    const j = await s.holder(t, { contact: { kind: 'organization', display_name: 'Member business', email: 'biz@example.test' } });
+    const j = await s.holder(t, { contact: { kind: 'organization', display_name: 'Dues-paying business', email: 'biz@example.test' } });
     const draft = await s.scall('POST', '/terms/:id/invoice-draft', 'finance', { params: { id: String(j.term_id) } }, 200);
     assert.deepEqual(draft.body.lines.map((l) => [l.account_id, l.program_id, l.unit_amount_cents]), [[acct.id, prog.id, 12000]]);
     const roles = await pool.query(`SELECT role FROM org_contact_roles WHERE constituent_id = $1 ORDER BY role`, [j.constituent_id]);

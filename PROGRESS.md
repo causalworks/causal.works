@@ -85,3 +85,29 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 ## Testing
 - Pure rules: `node --test tests/`.
 - Database tests: build a throwaway database from `build-specs/schema.sql` plus `db/migrations/36*.sql`, then `TEST_DATABASE_URL=postgresql://user@host/test_db node --test tests/`. Without the variable these tests are skipped.
+
+---
+
+# PROGRESS: Membership build
+
+Branch `build/membership`, cut from `main`. Spec: `build-specs/membership.md` on branch `cloud-specs`.
+
+## Done
+- M1: status helper `server/organizational/lib/membershipStatus.js` (status, term dates in both year modes, renewal window, proration) with table-driven tests in `tests/membership/status.test.js`.
+- Tests run with `node --test tests/` (`tests/index.js` from the Sponsorship build loads every test file).
+
+## Next
+- M1, not started yet: migration `db/migrations/344_membership_core.sql`, new routes, screens. Nothing of it is written.
+- Plan worked out while reading the code (use or change freely):
+  - Migration 344: `org_membership_settings` (one row per workspace, every column with a default); extend `org_membership_tiers` (applies_to, min/suggested price, budget bracket, benefit value, seats included, benefits list, eligibility statement and tick, archived_at) plus `org_membership_tier_prices`; `org_membership_terms`; `org_membership_seats`; reshape `org_membership_payments` (add org_id, term_id, constituent_id, kind, method, discount and reason, processor ref unique, approver, refund_of; replace the policy that joins `org_members` with an org_id policy); `org_membership_templates`, `org_membership_messages`; add `manage_membership` to the `org_access_permissions` permission check; copy `org_members` rows to contacts (match by email) with the `dues_member` role, terms and payments; then drop `org_membership_reminders`, `org_members`, their trigger functions and the unused types `membership_status` and `reminder_type`. RLS plus `GRANT ... TO causal_app` on each new table (pattern: migration 343).
+  - Status history and extensions go to `org_audit_log` through `logAudit` (no extra table).
+  - Waiver: created unapproved; a different person with membership write approves it; only approved waivers count (already how `coveredCents` works).
+  - Guards: write area `membership` in `requireWriteAccess.js` (admin, finance, staff, fundraising, manager `manage_membership`); read areas `membership` (those plus `donor_details` and `manage_donors` holders; needs a small `permissions` list on the read-area rule) and `membership_summary` (adds board). Tiers and settings: `requireOrgRole(['admin', ...FINANCE_ROLES])`. CSV export: same as Donors export (admin and finance).
+  - Files outside the module that read `org_members` and must move to terms when it is dropped: `routes/banking.js` (dues match candidates), `lib/membershipDuesPayment.js`, `routes/donors.js` (giving history), `lib/OrganizationalAttentionFeed.js` (renewals due).
+  - Front end: `public/organizational/js/apiJson` redirects on 403 unless the code is `no_access`; pass `skip403Redirect` for write refusals (`no_write_access`).
+  - Test database: run the schema as superuser; tests that check RLS must grant table rights to `causal_app` and `SET ROLE causal_app`, because `schema.sql` carries no grants.
+
+## Blocked or needs the owner
+
+## After merge (owner actions per pull request)
+- M1 (when built): apply migration 344; rerun the demo snapshot, because the demo restore inserts snapshot rows as-is and new columns on covered tables would be null.

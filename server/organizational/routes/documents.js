@@ -9,6 +9,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { logAudit } = require('../lib/auditLog');
 const { canWrite } = require('../middleware/requireWriteAccess');
+const { resolveRetention } = require('../lib/documentRetention');
 const { hasAccountingAccess } = require('../middleware/requireAccountingAccess');
 const { isFiscalYearLocked } = require('../lib/ledgerPosting');
 const { resourceUrlFor } = require('../lib/podClient');
@@ -339,17 +340,20 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         }
 
         const checksum = await sha256File(file.path);
-        const retentionClass = body.retention_class || 'fixed_term';
-        const retentionYears = body.retention_years ? Number(body.retention_years) : null;
         const documentDate = body.document_date || null;
         const effectiveDate = body.effective_date || null;
         const expirationDate = body.expiration_date || null;
-        const retentionUntil = expirationDate || computeRetentionUntil({
-          retentionClass,
-          retentionYears,
-          effectiveDate,
-          documentDate,
-        });
+        let retentionClass = body.retention_class;
+        let retentionYears = body.retention_years ? Number(body.retention_years) : null;
+        let retentionUntil;
+        if (retentionClass) {
+          retentionUntil = expirationDate || computeRetentionUntil({ retentionClass, retentionYears, effectiveDate, documentDate });
+        } else {
+          const rule = await resolveRetention(pool, orgId, category, effectiveDate || documentDate);
+          retentionClass = rule.retention_class;
+          retentionYears = rule.retention_years;
+          retentionUntil = expirationDate || rule.retention_until;
+        }
 
         const relPath = path.relative(UPLOADS_ROOT, file.path);
         let db = pool;

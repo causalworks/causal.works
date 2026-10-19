@@ -1,4 +1,5 @@
 'use strict';
+const { addFileInfo } = require('../lib/recordFiles');
 
 const multer = require('multer');
 const { displayCents } = require('../lib/voidedDisplay');
@@ -177,7 +178,9 @@ function registerInvoicesRoutes(app, pool) {
          LIMIT 500`,
         params
       );
-      return res.json({ invoices: r.rows.map(rowToInvoice) });
+      const invoices = r.rows.map(rowToInvoice);
+      await addFileInfo(pool, orgId, invoices, 'invoice');
+      return res.json({ invoices });
     } catch (e) {
       console.error('GET invoices:', e.message);
       return res.status(500).json({ error: 'Could not load invoices' });

@@ -194,7 +194,7 @@
       + '<td>' + esc(b.vendor_name) + '</td>'
       + '<td>' + esc(String(b.bill_date || '').slice(0, 10)) + '</td>'
       + '<td>' + esc(String(b.due_date || '').slice(0, 10) || '—') + '</td>'
-      + '<td>' + esc(b.reference || '—') + '</td>'
+      + '<td>' + esc(b.reference || '—') + (window.OrganizationalDocumentAttach ? window.OrganizationalDocumentAttach.clip(b) : '') + '</td>'
       + '<td>' + fmtMoney((b.display_total_cents != null ? b.display_total_cents : b.total_cents) || 0) + '</td>'
       + '<td>' + statusBadge(b.status) + '</td>'
       + '</tr>'

@@ -1,4 +1,5 @@
 'use strict';
+const { addFileInfo } = require('../lib/recordFiles');
 
 const multer = require('multer');
 const { requireAuth } = require('../../auth');
@@ -182,7 +183,9 @@ function registerBillsRoutes(app, pool) {
          LIMIT 500`,
         params
       );
-      return res.json({ bills: r.rows.map(rowToBill) });
+      const bills = r.rows.map(rowToBill);
+      await addFileInfo(pool, orgId, bills, 'bill');
+      return res.json({ bills });
     } catch (e) {
       console.error('GET bills:', e.message);
       return res.status(500).json({ error: 'Could not load bills' });

@@ -249,7 +249,7 @@
         + '<td><button type="button" class="organizational-btn-icon ledger-expand-btn" data-id="' + t.id + '" aria-expanded="' + open + '" title="Show lines" style="font-size:1.125rem;padding:2px 8px;color:var(--organizational-accent, var(--brand-primary));">' + (open ? '▾' : '▸') + '</button></td>'
         + '<td style="white-space:nowrap;">' + esc(t.date) + '</td>'
         + '<td><a href="#" class="ledger-open-link" data-id="' + t.id + '" style="color:var(--organizational-accent, var(--brand-primary));font-weight:500;">' + esc(desc) + '</a>'
-        + (t.reference ? ' <span style="color:var(--text-secondary);font-size:0.75rem;">' + esc(t.reference) + '</span>' : '') + '</td>'
+        + (t.reference ? ' <span style="color:var(--text-secondary);font-size:0.75rem;">' + esc(t.reference) + '</span>' : '') + (window.OrganizationalDocumentAttach ? window.OrganizationalDocumentAttach.clip(t) : '') + '</td>'
         + '<td>' + esc(t.source_label || sourceLabel(t.source, t.entry_type)) + '</td>'
         + (t.status === 'voided'
           ? '<td style="text-align:right;white-space:nowrap;color:var(--text-secondary);" title="Original amount ' + esc(fmtMoney(t.original_total_cents != null ? t.original_total_cents : 0)) + '">' + fmtMoney(0) + '</td>'

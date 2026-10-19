@@ -169,7 +169,7 @@
       + '<td>' + esc(i.customer_name) + '</td>'
       + '<td>' + esc(String(i.invoice_date || '').slice(0, 10)) + '</td>'
       + '<td>' + esc(String(i.due_date || '').slice(0, 10) || '—') + '</td>'
-      + '<td>' + esc(i.reference || '—') + '</td>'
+      + '<td>' + esc(i.reference || '—') + (window.OrganizationalDocumentAttach ? window.OrganizationalDocumentAttach.clip(i) : '') + '</td>'
       + '<td>' + fmtMoney((i.display_total_cents != null ? i.display_total_cents : i.total_cents) || 0) + '</td>'
       + '<td>' + statusBadge(i.status) + '</td>'
       + '</tr>'

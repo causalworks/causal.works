@@ -1,4 +1,5 @@
 'use strict';
+const { addFileInfo } = require('../lib/recordFiles');
 
 const { findExpectedGifts, loadExpected } = require('../lib/giftMatch');
 const { pledgeReceiptLines, markInstallmentCollected } = require('../lib/pledgeReceipt');
@@ -275,15 +276,14 @@ function registerOrganizationalLedgerRoutes(app, pool) {
           LIMIT $${listParams.length - 1} OFFSET $${listParams.length}`,
         listParams
       );
-      return res.json({
-        total, limit, offset,
-        transactions: r.rows.map((row) => ({
+      const transactions = r.rows.map((row) => ({
           id: row.id, date: String(row.transaction_date).slice(0, 10), status: row.status, memo: row.memo, payee: row.payee,
           reference: row.reference_number, source: row.source, entry_type: row.entry_type, reverses_transaction_id: row.reverses_transaction_id,
           constituent_id: row.constituent_id, contact_name: row.contact_name, void_reason: row.void_reason,
           source_label: sourceLabel(row.source, row.entry_type), status_label: statusLabel(row.status), total_cents: String(row.total_cents), original_total_cents: String(row.original_total_cents), lines: row.lines || [],
-        })),
-      });
+        }));
+      await addFileInfo(pool, req.orgId, transactions, 'ledger_transaction');
+      return res.json({ total, limit, offset, transactions });
     } catch (e) {
       console.error('GET /ledger/transaction-list:', e.message);
       return res.status(500).json({ error: 'Could not load transactions' });

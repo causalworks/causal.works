@@ -2346,7 +2346,7 @@
         shown.map(function (i) {
           var href = i.ledger_transaction_id ? slugBase + '/transactions?txn=' + encodeURIComponent(i.ledger_transaction_id) : '';
           return '<tr' + (href ? ' data-txn-href="' + escapeHtml(href) + '" style="cursor:pointer;" title="Open this entry"' : '') + '>' +
-            '<td>' + escapeHtml(i.contact_name || '') + '</td><td>' + escapeHtml(cfg.labels[i.kind] || i.kind) + '</td><td>' + escapeHtml(i.reference || '') + '</td>' +
+            '<td>' + escapeHtml(i.contact_name || '') + '</td><td>' + escapeHtml(cfg.labels[i.kind] || i.kind) + '</td><td>' + escapeHtml(i.reference || '') + (window.OrganizationalDocumentAttach ? window.OrganizationalDocumentAttach.clip(i) : '') + '</td>' +
             '<td style="white-space:nowrap;">' + escapeHtml(String(i.date || '').slice(0, 10)) + '</td><td style="white-space:nowrap;">' + escapeHtml(String(i.due_date || '').slice(0, 10)) + '</td>' +
             dollarCell(i.balance_cents) + '<td style="text-align:right;">' + (i.days_past_due > 0 ? i.days_past_due : '') + '</td><td>' + escapeHtml(BUCKET_LABELS[i.bucket] || '') + '</td></tr>';
         }).join('') +

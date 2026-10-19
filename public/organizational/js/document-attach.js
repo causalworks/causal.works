@@ -126,5 +126,17 @@
     load();
   }
 
-  window.OrganizationalDocumentAttach = { html, wire };
+  // Paperclip shown on a list row whose record has files; opens the first file, the title gives the count.
+  function clip(item) {
+    if (!item || !item.file_count) return '';
+    const m = /^\/organizational\/o\/([^/]+)\//.exec(window.location.pathname || '');
+    if (!m) return '';
+    const n = Number(item.file_count);
+    const href = '/api/organizational/orgs/' + m[1] + '/documents/' + encodeURIComponent(item.first_file_id) + '/download';
+    return ' <a href="' + href + '" class="organizational-file-clip" onclick="event.stopPropagation()" title="' + n + (n === 1 ? ' file attached' : ' files attached') + '" aria-label="Open attached file" style="color:var(--text-secondary);white-space:nowrap;text-decoration:none;">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>'
+      + (n > 1 ? '<span style="font-size:0.6875rem;">' + n + '</span>' : '') + '</a>';
+  }
+
+  window.OrganizationalDocumentAttach = { html, wire, clip };
 })();

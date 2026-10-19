@@ -32,7 +32,7 @@
 
         <div id="organizational-org-dashboard" hidden>
           <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Documents</h1>
-          <p class="organizational-hint" style="margin-top: -8px;">The organization's own records: governance, tax, insurance and policies, with retention dates and an audit binder. Files that back a bill, invoice, grant or other record stay with that record and are also listed under Attached to records.</p>
+          <p class="organizational-hint" style="margin-top: -8px;">The organization's own records: governance, tax, insurance and policies, plus an audit binder. Files that back a bill, invoice, grant or other record stay with that record and are also listed under Attached to records.</p>
 
           <div class="organizational-tabs" id="organizational-documents-tabs" style="margin-top: 20px;">
             <button type="button" class="organizational-tab-trigger active" data-tab="tab-doc-all" id="tab-btn-doc-all">Organization records</button>
@@ -53,7 +53,7 @@
           </div>
 
           <div id="tab-doc-records" class="organizational-tab-panel" hidden>
-            <p class="organizational-hint" style="margin: 16px 0;">Files kept with a bill, invoice, expense claim, ledger entry, grant, obligation or sponsored project. Each stays with its record: add, replace or remove it there. Listed here so retention and audit lookups cover them.</p>
+            <p class="organizational-hint" style="margin: 16px 0;">Files kept with a bill, invoice, expense claim, ledger entry, grant, obligation or sponsored project. Each stays with its record: add, replace or remove it there. Listed here so they can be found in one place.</p>
             <div id="organizational-documents-records-list">
               <p class="organizational-empty">Loading…</p>
             </div>
@@ -98,15 +98,6 @@
 
         <label for="organizational-documents-form-expiration-date">Expiration date (if applicable — insurance, registrations)</label>
         <input id="organizational-documents-form-expiration-date" type="date">
-
-        <label for="organizational-documents-form-retention-class">Retention</label>
-        <select id="organizational-documents-form-retention-class">
-          <option value="permanent">Permanent</option>
-          <option value="fixed_term" selected>Fixed term</option>
-        </select>
-
-        <label for="organizational-documents-form-retention-years" id="organizational-documents-form-retention-years-label">Retain for how many years</label>
-        <input id="organizational-documents-form-retention-years" type="number" min="1" max="100" placeholder="e.g. 7">
 
         <label for="organizational-documents-form-visibility">Visibility</label>
         <select id="organizational-documents-form-visibility">

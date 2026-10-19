@@ -1,4 +1,5 @@
 'use strict';
+const { addFileInfo } = require('../lib/recordFiles');
 
 const multer = require('multer');
 const { displayCents } = require('../lib/voidedDisplay');
@@ -173,7 +174,9 @@ function registerExpenseClaimRoutes(app, pool) {
         LIST_SELECT + (conds.length ? ' AND ' + conds.join(' AND ') : '') + scopeClause + ' ORDER BY c.created_at DESC',
         params
       );
-      return res.json({ claims: r.rows.map(rowToClaim) });
+      const claims = r.rows.map(rowToClaim);
+      await addFileInfo(pool, req.orgId, claims, 'expense_claim');
+      return res.json({ claims });
     } catch (e) {
       console.error('GET /expense-claims:', e.message);
       return res.status(500).json({ error: 'Could not load expense claims' });

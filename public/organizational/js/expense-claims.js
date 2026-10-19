@@ -104,7 +104,7 @@
       '<tr>'
       + '<td>' + esc(c.submitted_by_name || '') + '</td>'
       + '<td>' + esc(String(c.claim_date || '').slice(0, 10)) + '</td>'
-      + '<td>' + esc(c.description || '') + '</td>'
+      + '<td>' + esc(c.description || '') + (window.OrganizationalDocumentAttach ? window.OrganizationalDocumentAttach.clip(c) : '') + '</td>'
       + '<td>' + fmtMoney(Number(c.display_total_cents != null ? c.display_total_cents : c.total_cents)) + '</td>'
       + '<td>' + window.OrganizationalStatusHtml(c.status, STATUS_LABELS[c.status] || c.status) + '</td>'
       + '<td><button type="button" class="organizational-btn organizational-btn-outline expenseclaims-view-btn" data-id="' + c.id + '" style="font-size:0.75rem;">View</button></td>'

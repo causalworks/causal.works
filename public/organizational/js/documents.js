@@ -20,9 +20,6 @@
   const formFiscalYear = document.getElementById('organizational-documents-form-fiscal-year');
   const formDocumentDate = document.getElementById('organizational-documents-form-document-date');
   const formExpirationDate = document.getElementById('organizational-documents-form-expiration-date');
-  const formRetentionClass = document.getElementById('organizational-documents-form-retention-class');
-  const formRetentionYearsLabel = document.getElementById('organizational-documents-form-retention-years-label');
-  const formRetentionYears = document.getElementById('organizational-documents-form-retention-years');
   const formVisibility = document.getElementById('organizational-documents-form-visibility');
   const formNotes = document.getElementById('organizational-documents-form-notes');
   const formCancel = document.getElementById('organizational-documents-form-cancel');
@@ -76,13 +73,6 @@
     other: 'Other',
   };
 
-  const RETENTION_LABELS = {
-    permanent: 'Permanent',
-    retain_until: 'Retain',
-    expiring_soon: 'Expiring soon',
-    expired: 'Expired',
-  };
-
   let slug = '';
   let documents = [];
 
@@ -129,15 +119,10 @@
   }
 
   function retentionBadge(doc) {
-    const cls = 'organizational-badge organizational-badge-doc-' + doc.retention_state;
-    let label = RETENTION_LABELS[doc.retention_state] || doc.retention_state;
-    if (doc.retention_state === 'retain_until' && (doc.expiration_date || doc.retention_until)) {
-      label = 'Until ' + (doc.expiration_date || doc.retention_until);
-    }
-    if (doc.retention_state === 'expiring_soon' && (doc.expiration_date || doc.retention_until)) {
-      label = 'Expires ' + (doc.expiration_date || doc.retention_until);
-    }
-    return '<span class="' + cls + '">' + esc(label) + '</span>';
+    if (!doc.expiration_date || (doc.retention_state !== 'expiring_soon' && doc.retention_state !== 'expired')) return '';
+    const when = doc.expiration_date;
+    const label = (doc.retention_state === 'expired' ? 'Expired ' : 'Expires ') + (when || '');
+    return '<span class="organizational-badge organizational-badge-doc-' + doc.retention_state + '">' + esc(label.trim()) + '</span>';
   }
 
   const CATEGORY_GROUPS = [
@@ -296,8 +281,6 @@
     formFiscalYear.value = doc.fiscal_year || '';
     formDocumentDate.value = doc.document_date || '';
     formExpirationDate.value = doc.expiration_date || '';
-    formRetentionClass.value = doc.retention_class;
-    formRetentionYears.value = doc.retention_years || '';
     formVisibility.value = doc.visibility;
     formNotes.value = doc.notes || '';
     modal.hidden = false;
@@ -320,8 +303,6 @@
         if (formFiscalYear.value) fd.append('fiscal_year', formFiscalYear.value);
         if (formDocumentDate.value) fd.append('document_date', formDocumentDate.value);
         if (formExpirationDate.value) fd.append('expiration_date', formExpirationDate.value);
-        fd.append('retention_class', formRetentionClass.value);
-        if (formRetentionYears.value) fd.append('retention_years', formRetentionYears.value);
         fd.append('visibility', formVisibility.value);
         if (formNotes.value) fd.append('notes', formNotes.value);
 
@@ -346,8 +327,6 @@
             fiscal_year: formFiscalYear.value || null,
             document_date: formDocumentDate.value || null,
             expiration_date: formExpirationDate.value || null,
-            retention_class: formRetentionClass.value,
-            retention_years: formRetentionYears.value || null,
             visibility: formVisibility.value,
             notes: formNotes.value || null,
           }),
@@ -539,14 +518,6 @@
     if (formCancel) formCancel.addEventListener('click', closeModal);
     if (form) form.addEventListener('submit', submitForm);
     if (binderFySelect) binderFySelect.addEventListener('change', loadBinder);
-
-    if (formRetentionClass) {
-      formRetentionClass.addEventListener('change', () => {
-        const fixedTerm = formRetentionClass.value === 'fixed_term';
-        formRetentionYears.hidden = !fixedTerm;
-        formRetentionYearsLabel.hidden = !fixedTerm;
-      });
-    }
 
     if (listEl) {
       listEl.addEventListener('click', (e) => {

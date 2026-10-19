@@ -13,6 +13,7 @@ const { htmlToPdfBuffer } = require('../lib/OrganizationalHtmlPdf');
 const { scheduleReportHtml } = require('../lib/scheduleReportHtml');
 const { logAudit } = require('../lib/auditLog');
 const { receivableItems, payableItems } = require('../lib/receivablesPayables');
+const { addFileInfo } = require('../lib/recordFiles');
 
 const fs = require('fs');
 const path = require('path');
@@ -105,6 +106,9 @@ function registerReceivablesPayablesRoutes(app, pool) {
   async function buildSchedule(orgId, kind, asOf) {
     const cfg = KINDS[kind];
     const items = await cfg.items(pool, orgId);
+    for (const [kind, type] of [['invoice', 'invoice'], ['bill', 'bill'], ['claim', 'expense_claim']]) {
+      await addFileInfo(pool, orgId, items.filter((it) => it.kind === kind), type);
+    }
     const ledger = await ledgerBalance(orgId, asOf, cfg.filter, cfg.sign);
     return summarize(items, asOf, ledger);
   }

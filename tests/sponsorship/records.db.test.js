@@ -122,6 +122,7 @@ test('reports calendar: quarterly rows are added once; an overdue report holds t
     const { ws, project, r, as } = await setup(pool, asApp);
     await client.query('RESET ROLE');
     await pool.query(`UPDATE org_sponsored_projects SET start_date = (CURRENT_DATE - 200) WHERE id = $1`, [project.id]);
+    await pool.query(`UPDATE org_sponsor_settings SET created_at = now() - interval '300 days' WHERE org_id = $1`, [ws.orgId]);
     await asApp(ws.orgId);
     const first = await h.one(pool, 'SELECT org_generate_sponsor_quarterly_reports() AS n');
     assert.ok(Number(first.n) >= 2);
@@ -149,6 +150,19 @@ test('reports calendar: quarterly rows are added once; an overdue report holds t
     assert.ok(after.last_report_received_at);
     res = await r.call('POST', P + '/sponsor-reports/:reportId/received', { ...as(1, { reportId: String(late[0].id) }), body: {} });
     assert.match(res.body.error, /Attach the report/);
+  });
+});
+
+test('quarterly reports start from when sponsorship was set up, not from an old project start date', opts, async () => {
+  await h.withDb(async ({ pool, asApp, client }) => {
+    const { ws, project } = await setup(pool, asApp);
+    await client.query('RESET ROLE');
+    await pool.query(`UPDATE org_sponsored_projects SET start_date = '2020-01-01' WHERE id = $1`, [project.id]);
+    await asApp(ws.orgId);
+    await pool.query('SELECT org_generate_sponsor_quarterly_reports()');
+    const r = await h.one(pool, `SELECT min(period_end)::text AS first, count(*)::int AS n FROM org_sponsor_reports WHERE sponsored_project_id = $1`, [project.id]);
+    assert.ok(r.n <= 2, 'only the current quarter or so');
+    assert.ok(r.first >= new Date(Date.now() - 100 * 86400000).toISOString().slice(0, 10));
   });
 });
 

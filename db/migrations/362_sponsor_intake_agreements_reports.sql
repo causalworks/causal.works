@@ -189,16 +189,18 @@ CREATE TABLE IF NOT EXISTS org_sponsor_approvals (
 );
 DO $$ BEGIN PERFORM org_sponsor_enable_rls('org_sponsor_approvals', true); END $$;
 
--- Quarterly report rows for every running project, due a set number of days after each fiscal quarter ends. Safe to rerun.
+-- Quarterly report rows for every running project, due a set number of days after each fiscal quarter ends, starting from the
+-- later of the project start and the date the workspace's sponsorship settings were created. Safe to rerun.
 CREATE OR REPLACE FUNCTION org_generate_sponsor_quarterly_reports(p_due_days integer DEFAULT 30)
   RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
   n integer;
 BEGIN
   WITH proj AS (
-    SELECT p.id, p.sponsor_org_id, COALESCE(p.start_date, p.created_at::date) AS start_on,
+    SELECT p.id, p.sponsor_org_id, GREATEST(COALESCE(p.start_date, p.created_at::date), COALESCE(ss.created_at::date, CURRENT_DATE)) AS start_on,
            ((COALESCE(s.fiscal_year_end_month, 12) % 12) + 1) AS fy_start
       FROM org_sponsored_projects p JOIN org_settings s ON s.org_id = p.sponsor_org_id
+      LEFT JOIN org_sponsor_settings ss ON ss.org_id = p.sponsor_org_id
      WHERE s.fiscal_sponsorship_mode AND p.status IN ('active', 'on_hold', 'winding_down')
   ), bounds AS (
     SELECT id, sponsor_org_id,

@@ -45,7 +45,7 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 - S2: apply `db/migrations/361_sponsor_requests_holds.sql`; restart (the daily hold job starts with the server and runs once at boot). Optionally set recall accounts in Sponsorship settings. No snapshot rerun needed.
 
-- S3: apply `db/migrations/362_sponsor_intake_agreements_reports.sql`; restart. On the first daily run (also at boot) quarterly report rows are created back to each project's start date, so older projects may show overdue reports and be put on hold 30 days after their due dates. Before deploying, mark old reports received or set project start dates, or lift holds with a reason. Email reminders need the live email key. No snapshot rerun needed.
+- S3: apply `db/migrations/362_sponsor_intake_agreements_reports.sql`; restart. Quarterly report rows start from the later of each project's start date and the date its workspace's sponsorship settings were created (the 360 migration date for existing sponsors), so existing projects are not held for old reports. Set `next_report_due` on a project if an earlier report is still owed. Email reminders need the live email key. No snapshot rerun needed.
 
 ## Testing
 - Pure rules: `node --test tests/`.

@@ -23,20 +23,24 @@
     methods_notes:               'Methods & Notes'
   };
 
+  var LINK = 'color:var(--organizational-accent);text-decoration:underline;';
+
+  function itemTable(items, apiBase) {
+    return '<section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>' +
+      items.map(function (item) {
+        var title = item.id && apiBase
+          ? '<a href="#" data-library-item="' + apiBase + '/' + item.id + '" style="' + LINK + '">' + escapeHtml(item.title || '') + '</a>'
+          : escapeHtml(item.title || '');
+        return '<tr><td style="width:34%;font-weight:500;">' + title + '</td>' +
+          '<td style="color:var(--text-secondary);">' + escapeHtml(item.description || '') + '</td></tr>';
+      }).join('') + '</tbody></table></section>';
+  }
+
   function renderCategorizedHtml(grouped, categories) {
     return Object.entries(grouped || {}).map(function ([key, items]) {
       if (!Array.isArray(items) || items.length === 0) return '';
-      var catLabel = categories[key] || key;
-      var itemRows = items.map(function (item) {
-        return '<div class="organizational-card" style="padding: 12px; margin-bottom: 8px;">' +
-          '<div style="font-weight: 500; margin-bottom: 4px;">' + escapeHtml(item.title || '') + '</div>' +
-          '<div style="font-size: 0.875rem; color: var(--text-secondary);">' + escapeHtml(item.description || '') + '</div>' +
-          '</div>';
-      }).join('');
-      return '<details class="organizational-card" style="margin-bottom: 12px;">' +
-        '<summary style="font-size: 1rem; font-weight: 600; cursor: pointer;">' + escapeHtml(catLabel) + '</summary>' +
-        '<div style="margin-top: 12px;">' + itemRows + '</div>' +
-        '</details>';
+      return '<h2 class="organizational-subheading">' + escapeHtml(categories[key] || key) + '</h2>' +
+        itemTable(items, '/api/organizational/cooperative/library');
     }).filter(Boolean).join('');
   }
 
@@ -45,17 +49,32 @@
     return groups.map(function (group) {
       if (!Array.isArray(group.items) || group.items.length === 0) return '';
       var heading = group.workshop_id
-        ? '<h3 style="margin-bottom: 8px;"><a href="#" class="organizational-nav-link" data-organizational-workshop-link="' + group.workshop_id + '">' + escapeHtml(group.workshop_name || 'Workshop') + '</a></h3>'
-        : '<h3 style="margin-bottom: 8px;">Other cooperative work</h3>';
-      var itemRows = group.items.map(function (item) {
-        return '<div class="organizational-card" style="padding: 12px; margin-bottom: 8px;">' +
-          '<div style="font-weight: 500; margin-bottom: 4px;">' + escapeHtml(item.title || '') + '</div>' +
-          '<div style="font-size: 0.875rem; color: var(--text-secondary);">' + escapeHtml(item.description || '') + '</div>' +
-          '</div>';
-      }).join('');
-      return '<div style="margin-bottom: 20px;">' + heading + itemRows + '</div>';
+        ? '<h2 class="organizational-subheading"><a href="#" data-organizational-workshop-link="' + group.workshop_id + '" style="' + LINK + '">' + escapeHtml(group.workshop_name || 'Workshop') + '</a></h2>'
+        : '<h2 class="organizational-subheading">Other cooperative work</h2>';
+      return heading + itemTable(group.items, '/api/organizational/cooperative/work-library');
     }).filter(Boolean).join('');
   }
+
+  document.addEventListener('click', async function (e) {
+    var a = e.target.closest && e.target.closest('[data-library-item]');
+    if (!a) return;
+    e.preventDefault();
+    var row = a.closest('tr');
+    var open = row.nextElementSibling;
+    if (open && open.hasAttribute('data-library-body')) { open.remove(); return; }
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-library-body', '');
+    tr.innerHTML = '<td colspan="2" style="color:var(--text-secondary);">Loading…</td>';
+    row.parentNode.insertBefore(tr, row.nextSibling);
+    try {
+      var res = await fetch(a.getAttribute('data-library-item'), { credentials: 'include' });
+      var data = res.ok ? await res.json() : {};
+      var body = data.item && (data.item.body_markdown || data.item.body || data.item.description);
+      tr.firstChild.innerHTML = '<div style="white-space:pre-wrap;">' + escapeHtml(body || 'No content.') + '</div>';
+    } catch (err) {
+      tr.firstChild.textContent = 'Could not load this item.';
+    }
+  });
 
   async function loadLibraryInto(targetEl) {
     if (!targetEl) return;
@@ -135,21 +154,18 @@
     if (!Array.isArray(submissions) || submissions.length === 0) {
       return '<p class="organizational-empty">No pending submissions.</p>';
     }
-    return submissions.map(function (s) {
-      var actions = isAdmin
-        ? '<div style="margin-top: 10px; display: flex; gap: 8px;">' +
-          '<button type="button" class="organizational-btn organizational-btn-outline" data-organizational-submission-decide="' + s.id + '" data-decision="approve">Approve</button>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline" data-organizational-submission-decide="' + s.id + '" data-decision="decline">Decline</button>' +
-          '</div>'
-        : '';
-      var kind = s.target_item_id ? 'Edit to existing item' : 'New item';
-      return '<div class="organizational-card" style="padding: 12px; margin-bottom: 8px;">' +
-        '<div style="font-weight: 500; margin-bottom: 4px;">' + escapeHtml(s.title || '') + '</div>' +
-        '<div style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 4px;">' + escapeHtml(kind) + ' · proposed by ' + escapeHtml(s.proposed_by_email || 'unknown') + (s.source_org_name ? ' (' + escapeHtml(s.source_org_name) + ')' : '') + '</div>' +
-        '<div style="font-size: 0.875rem; color: var(--text-secondary);">' + escapeHtml(s.description || '') + '</div>' +
-        actions +
-        '</div>';
-    }).join('');
+    return '<section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>' +
+      submissions.map(function (s) {
+        var kind = s.target_item_id ? 'Edit to existing item' : 'New item';
+        var actions = isAdmin
+          ? '<a href="#" data-organizational-submission-decide="' + s.id + '" data-decision="approve" style="' + LINK + '">Approve</a> · ' +
+            '<a href="#" data-organizational-submission-decide="' + s.id + '" data-decision="decline" style="' + LINK + '">Decline</a>'
+          : '';
+        return '<tr><td style="width:34%;font-weight:500;">' + escapeHtml(s.title || '') + '</td>' +
+          '<td style="color:var(--text-secondary);">' + escapeHtml(s.description || '') + '<div style="font-size:0.8125rem;color:var(--text-muted);">' +
+          escapeHtml(kind) + ' · proposed by ' + escapeHtml(s.proposed_by_email || 'unknown') + (s.source_org_name ? ' (' + escapeHtml(s.source_org_name) + ')' : '') + '</div></td>' +
+          '<td style="width:150px;text-align:right;white-space:nowrap;font-size:0.8125rem;">' + actions + '</td></tr>';
+      }).join('') + '</tbody></table></section>';
   }
 
   async function loadPendingSubmissionsInto(targetEl, isAdmin) {

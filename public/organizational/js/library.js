@@ -117,6 +117,7 @@
       submissionsList.addEventListener('click', async function (e) {
         const btn = e.target.closest('[data-organizational-submission-decide]');
         if (!btn || !window.OrganizationalLibrary) return;
+        e.preventDefault();
         const id = btn.getAttribute('data-organizational-submission-decide');
         const decision = btn.getAttribute('data-decision');
         try {

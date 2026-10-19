@@ -423,29 +423,29 @@
 
   // ─── Obligations ────────────────────────────────────────────────────────────
 
-  function renderObligationCard(obligation, showCompleteCheckbox = false) {
-    const sourceColor = obligation.source === 'base_template' ? '#3b82f6' : '#8b5cf6';
-    const sourceBadge = `<span class="organizational-badge organizational-badge--tag" style="font-size: 0.8125rem;"><span class="organizational-badge-dot" style="background:${sourceColor};"></span>${escapeHtml(getSourceLabel(obligation.source))}</span>`;
+  const OBL_LINK = 'color:var(--organizational-accent);text-decoration:underline;';
+
+  function renderObligationRow(obligation) {
     const statusColor = getStatusColor(obligation.status);
     const statusBadge = `<span class="organizational-badge organizational-badge--tag" style="font-size: 0.8125rem;"><span class="organizational-badge-dot" style="background:${statusColor};"></span>${escapeHtml(getStatusLabel(obligation.status))}</span>`;
     const docCount = Number(obligation.document_count) || 0;
-    const docBadge = docCount > 0 ? `<span class="organizational-badge">${docCount} document${docCount === 1 ? '' : 's'}</span>` : '';
+    const due = obligation.next_due_date ? `Due ${formatDate(obligation.next_due_date)} (${escapeHtml(obligation.relative_due_date || '')})` : 'No due date';
+    const links = [
+      `<a href="#" class="organizational-compliance-view-btn" data-obligation-id="${obligation.id}" style="${OBL_LINK}">Details</a>`,
+      `<a href="#" class="organizational-compliance-complete-btn" data-obligation-id="${obligation.id}" style="${OBL_LINK}">Mark complete</a>`,
+    ];
+    if (obligation.source === 'org_extension') links.push(`<a href="#" class="organizational-compliance-delete-btn" data-obligation-id="${obligation.id}" style="${OBL_LINK}">Delete</a>`);
+    return `<tr>
+      <td style="width:34%;font-weight:500;"><a href="#" class="organizational-compliance-view-btn" data-obligation-id="${obligation.id}" style="${OBL_LINK}">${escapeHtml(obligation.title)}</a>
+        <div style="font-size:0.8125rem;font-weight:400;color:var(--text-muted);">${escapeHtml(getSourceLabel(obligation.source))}</div></td>
+      <td style="color:var(--text-secondary);">${escapeHtml(obligation.description || '')}<div style="font-size:0.8125rem;color:var(--text-muted);">${due}${docCount > 0 ? ` · ${docCount} document${docCount === 1 ? '' : 's'}` : ''}</div></td>
+      <td style="width:130px;white-space:nowrap;">${statusBadge}</td>
+      <td style="width:190px;text-align:right;white-space:nowrap;font-size:0.8125rem;">${links.slice(1).join(' · ')}</td>
+    </tr>`;
+  }
 
-    return `<div class="organizational-card" style="padding: 16px; margin-bottom: 12px;">
-      <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-        <div style="font-weight: 600; font-size: 1.0625rem;">${escapeHtml(obligation.title)}</div>
-        <div style="display: flex; gap: 8px;">${sourceBadge}${statusBadge}${docBadge}</div>
-      </div>
-      <div style="font-size: 0.9375rem; margin-bottom: 8px;">${escapeHtml(obligation.description || '')}</div>
-      <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">
-        ${obligation.next_due_date ? `Due: ${formatDate(obligation.next_due_date)} (${escapeHtml(obligation.relative_due_date || '')})` : 'No due date'}
-      </div>
-      <div style="margin-top: 12px;">
-        <button type="button" class="organizational-btn organizational-btn-outline organizational-compliance-view-btn" data-obligation-id="${obligation.id}" style="padding: 4px 12px; font-size: 0.8125rem; margin-right: 8px;">View details</button>
-        ${showCompleteCheckbox ? `<button type="button" class="organizational-btn organizational-compliance-complete-btn" data-obligation-id="${obligation.id}" style="padding: 4px 12px; font-size: 0.8125rem;">Mark complete</button>` : ''}
-        ${obligation.source === 'org_extension' ? `<button type="button" class="organizational-btn organizational-btn-outline organizational-compliance-delete-btn" data-obligation-id="${obligation.id}" style="padding: 4px 12px; font-size: 0.8125rem; margin-left: 8px;">Delete</button>` : ''}
-      </div>
-    </div>`;
+  function renderObligationTable(list) {
+    return `<section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>${list.map(renderObligationRow).join('')}</tbody></table></section>`;
   }
 
   async function loadDashboard() {
@@ -469,14 +469,14 @@
       if (comingUpEl) {
         comingUpEl.innerHTML = comingUp.length === 0
           ? '<p class="organizational-empty">No upcoming obligations in the next 90 days.</p>'
-          : comingUp.map(o => renderObligationCard(o, true)).join('');
+          : renderObligationTable(comingUp);
       }
 
       const overdue = data.overdue || [];
       if (overdueEl) {
         overdueEl.innerHTML = overdue.length === 0
           ? '<p class="organizational-empty">No overdue obligations.</p>'
-          : overdue.map(o => renderObligationCard(o, true)).join('');
+          : renderObligationTable(overdue);
       }
 
       renderAllObligations(allObligationsData);
@@ -504,7 +504,7 @@
     if (allObligationsEl) {
       allObligationsEl.innerHTML = filtered.length === 0
         ? '<p class="organizational-empty">No obligations match the current filters.</p>'
-        : filtered.map(o => renderObligationCard(o, true)).join('');
+        : renderObligationTable(filtered);
     }
 
     wireViewButtons();
@@ -514,7 +514,8 @@
 
   function wireViewButtons() {
     document.querySelectorAll('.organizational-compliance-view-btn').forEach(btn => {
-      btn.addEventListener('click', function () {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
         viewObligationDetail(this.getAttribute('data-obligation-id'));
       });
     });
@@ -522,7 +523,8 @@
 
   function wireCompleteButtons() {
     document.querySelectorAll('.organizational-compliance-complete-btn').forEach(btn => {
-      btn.addEventListener('click', async function () {
+      btn.addEventListener('click', async function (e) {
+        e.preventDefault();
         await markComplete(this.getAttribute('data-obligation-id'));
       });
     });
@@ -530,7 +532,8 @@
 
   function wireDeleteButtons() {
     document.querySelectorAll('.organizational-compliance-delete-btn').forEach(btn => {
-      btn.addEventListener('click', async function () {
+      btn.addEventListener('click', async function (e) {
+        e.preventDefault();
         if (confirm('Delete this obligation?')) {
           await deleteObligation(this.getAttribute('data-obligation-id'));
         }
@@ -1176,30 +1179,19 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // ─── Exclusive accordion for the four 990-tab cards ─────────────────────────
+  // ─── One 990 part or schedule open at a time ────────────────────────────────
   function toggle990Accordion(cardKey) {
-    document.querySelectorAll('.organizational-compliance-accordion-item').forEach(function (item) {
-      const isTarget = item.getAttribute('data-accordion-card') === cardKey;
-      const body = item.querySelector('.organizational-compliance-accordion-body');
-      const header = item.querySelector('.organizational-compliance-accordion-header');
-      if (!body || !header) return;
-      if (isTarget) {
-        const wasOpen = !body.hidden;
-        body.hidden = wasOpen;
-        header.classList.toggle('organizational-compliance-accordion-open', !wasOpen);
-      } else {
-        body.hidden = true;
-        header.classList.remove('organizational-compliance-accordion-open');
-      }
+    document.querySelectorAll('[data-accordion-panel]').forEach(function (panel) {
+      const isTarget = panel.getAttribute('data-accordion-panel') === cardKey;
+      panel.hidden = isTarget ? !panel.hidden : true;
     });
   }
 
   function wire990AccordionOnce() {
-    document.querySelectorAll('.organizational-compliance-accordion-header').forEach(function (header) {
-      header.addEventListener('click', function () {
-        const item = header.closest('.organizational-compliance-accordion-item');
-        const key = item && item.getAttribute('data-accordion-card');
-        if (key) toggle990Accordion(key);
+    document.querySelectorAll('a[data-accordion-card]').forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        toggle990Accordion(link.getAttribute('data-accordion-card'));
       });
     });
   }

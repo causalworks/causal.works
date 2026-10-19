@@ -51,68 +51,54 @@
               </div>
             </div>
 
-            <div class="organizational-compliance-accordion" style="margin-bottom: 24px;">
-
-              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="part-ix">
-                <button type="button" class="organizational-compliance-accordion-header">
-                  <span class="organizational-compliance-accordion-header-text">
-                    <h3 style="margin: 0 0 4px;">Part IX: Statement of Functional Expenses</h3>
-                    <p class="organizational-hint" style="margin: 0;">How expenses are allocated across Program Services, Management &amp; General, and Fundraising.</p>
-                    <div id="organizational-990-part-ix-meter"></div>
-                  </span>
-                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
-                </button>
-                <div class="organizational-compliance-accordion-body" hidden>
+            <h2 class="organizational-subheading">Form 990 parts and schedules</h2>
+            <section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>
+                <tr><td style="width:34%;font-weight:500;"><a href="#" data-accordion-card="part-ix" style="color:var(--organizational-accent);text-decoration:underline;">Part IX: Statement of Functional Expenses</a></td>
+                  <td style="color:var(--text-secondary);">How expenses are allocated across Program Services, Management &amp; General, and Fundraising.<div id="organizational-990-part-ix-meter"></div></td></tr>
+                <tr><td style="width:34%;font-weight:500;"><a href="#" data-accordion-card="schedule-d" style="color:var(--organizational-accent);text-decoration:underline;">Schedule D, Part VI: Land, Buildings &amp; Equipment</a></td>
+                  <td style="color:var(--text-secondary);">Fixed asset cost basis, accumulated depreciation, and book value as of the fiscal year-end balance sheet date.<div id="organizational-990-schedule-d-meter"></div></td></tr>
+                <tr><td style="width:34%;font-weight:500;"><a href="#" data-accordion-card="schedule-j" style="color:var(--organizational-accent);text-decoration:underline;">Schedule J: Compensation of Officers &amp; Key Employees</a></td>
+                  <td style="color:var(--text-secondary);">Officers, directors, trustees, and key employees with total compensation listed by fiscal year.<div id="organizational-990-schedule-j-meter"></div></td></tr>
+                <tr><td style="width:34%;font-weight:500;"><a href="#" data-accordion-card="classify" style="color:var(--organizational-accent);text-decoration:underline;">Functional Expense Classification</a></td>
+                  <td style="color:var(--text-secondary);">Split each expense account across Program Services, Management &amp; General, and Fundraising. Values must sum to 100%. Feeds the Part IX card above.</td></tr>
+                <tr><td style="width:34%;font-weight:500;color:var(--text-muted);">Schedule B: Schedule of Contributors</td><td style="color:var(--text-muted);">Major donors contributing $5,000 or more. Coming soon.</td></tr>
+                <tr><td style="width:34%;font-weight:500;color:var(--text-muted);">Schedule G: Special Events &amp; Activities</td><td style="color:var(--text-muted);">Gross receipts and expenses from fundraising events. Coming soon.</td></tr>
+                <tr><td style="width:34%;font-weight:500;color:var(--text-muted);">Schedule I: Grants to Other Organizations</td><td style="color:var(--text-muted);">Grants and assistance made to other organizations. Coming soon.</td></tr>
+                <tr><td style="width:34%;font-weight:500;color:var(--text-muted);">Schedule O: Supplemental Information</td><td style="color:var(--text-muted);">Additional explanations required by the 990. Coming soon.</td></tr>
+            </tbody></table></section>
+            <div data-accordion-panel="part-ix" hidden>
+              <h2 class="organizational-subheading">Part IX: Statement of Functional Expenses</h2>
+              <section class="organizational-card">
                   <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
                     <a id="organizational-990-part-ix-csv" href="#" class="organizational-btn organizational-btn-outline" style="font-size: 0.8125rem; padding: 6px 12px; text-decoration: none;" onclick="event.stopPropagation()">Export CSV</a>
                   </div>
                   <div id="organizational-990-part-ix">
                     <p class="organizational-empty">Select a fiscal year to load.</p>
                   </div>
-                </div>
+                
               </section>
-
-              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="schedule-d">
-                <button type="button" class="organizational-compliance-accordion-header">
-                  <span class="organizational-compliance-accordion-header-text">
-                    <h3 style="margin: 0 0 4px;">Schedule D, Part VI: Land, Buildings &amp; Equipment</h3>
-                    <p class="organizational-hint" style="margin: 0;">Fixed asset cost basis, accumulated depreciation, and book value as of the fiscal year-end balance sheet date.</p>
-                    <div id="organizational-990-schedule-d-meter"></div>
-                  </span>
-                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
-                </button>
-                <div class="organizational-compliance-accordion-body" hidden>
+            </div>
+            <div data-accordion-panel="schedule-d" hidden>
+              <h2 class="organizational-subheading">Schedule D, Part VI: Land, Buildings &amp; Equipment</h2>
+              <section class="organizational-card">
                   <div id="organizational-990-schedule-d">
                     <p class="organizational-empty">Select a fiscal year to load.</p>
                   </div>
-                </div>
+                
               </section>
-
-              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="schedule-j">
-                <button type="button" class="organizational-compliance-accordion-header">
-                  <span class="organizational-compliance-accordion-header-text">
-                    <h3 style="margin: 0 0 4px;">Schedule J: Compensation of Officers &amp; Key Employees</h3>
-                    <p class="organizational-hint" style="margin: 0;">Officers, directors, trustees, and key employees with total compensation listed by fiscal year.</p>
-                    <div id="organizational-990-schedule-j-meter"></div>
-                  </span>
-                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
-                </button>
-                <div class="organizational-compliance-accordion-body" hidden>
+            </div>
+            <div data-accordion-panel="schedule-j" hidden>
+              <h2 class="organizational-subheading">Schedule J: Compensation of Officers &amp; Key Employees</h2>
+              <section class="organizational-card">
                   <div id="organizational-990-schedule-j">
                     <p class="organizational-empty">Select a fiscal year to load.</p>
                   </div>
-                </div>
+                
               </section>
-
-              <section class="organizational-card organizational-compliance-accordion-item" data-accordion-card="classify">
-                <button type="button" class="organizational-compliance-accordion-header">
-                  <span class="organizational-compliance-accordion-header-text">
-                    <h3 style="margin: 0 0 4px;">Functional Expense Classification</h3>
-                    <p class="organizational-hint" style="margin: 0;">Split each expense account across Program Services, Management &amp; General, and Fundraising. Values must sum to 100%. Feeds the Part IX card above.</p>
-                  </span>
-                  <span class="organizational-compliance-accordion-chevron">&#9656;</span>
-                </button>
-                <div class="organizational-compliance-accordion-body" hidden>
+            </div>
+            <div data-accordion-panel="classify" hidden>
+              <h2 class="organizational-subheading">Functional Expense Classification</h2>
+              <section class="organizational-card">
                   <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
                     <label class="organizational-hint" for="organizational-990-classify-fy">Fiscal year</label>
                     <input type="number" id="organizational-990-classify-fy" class="organizational-input" min="2000" max="2200" step="1" style="width:100px;" aria-label="Fiscal year for functional expense classification" onclick="event.stopPropagation()">
@@ -140,30 +126,7 @@
                     <button type="button" class="organizational-btn" id="organizational-990-save" onclick="event.stopPropagation(); save990Classifications()" disabled>Save classifications</button>
                     <span class="organizational-hint" id="organizational-990-status"></span>
                   </div>
-                </div>
-              </section>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px;">
-              <section class="organizational-card" style="opacity: 0.7;">
-                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule B: Schedule of Contributors</h3>
-                <p class="organizational-hint" style="margin: 0 0 8px;">Major donors contributing $5,000 or more.</p>
-                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
-              </section>
-              <section class="organizational-card" style="opacity: 0.7;">
-                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule G: Special Events &amp; Activities</h3>
-                <p class="organizational-hint" style="margin: 0 0 8px;">Gross receipts and expenses from fundraising events.</p>
-                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
-              </section>
-              <section class="organizational-card" style="opacity: 0.7;">
-                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule I: Grants to Other Organizations</h3>
-                <p class="organizational-hint" style="margin: 0 0 8px;">Grants and assistance made to other organizations.</p>
-                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
-              </section>
-              <section class="organizational-card" style="opacity: 0.7;">
-                <h3 style="margin: 0 0 6px; font-size: 0.9375rem;">Schedule O: Supplemental Information</h3>
-                <p class="organizational-hint" style="margin: 0 0 8px;">Additional explanations required by the 990.</p>
-                <span style="font-size: 0.8125rem; color: var(--text-secondary); font-style: italic;">Coming soon</span>
+                
               </section>
             </div>
           </div>
@@ -178,24 +141,19 @@
               <button type="button" class="organizational-btn" id="organizational-compliance-add-obligation">Add custom obligation</button>
             </div>
 
-            <section class="organizational-card" style="margin-bottom: 24px;">
-              <h3 style="margin: 0 0 16px 0;">Coming up</h3>
-              <div id="organizational-compliance-coming-up">
-                <p class="organizational-empty">Loading…</p>
-              </div>
-            </section>
+            <h2 class="organizational-subheading">Coming up</h2>
+            <div id="organizational-compliance-coming-up">
+              <p class="organizational-empty">Loading…</p>
+            </div>
 
-            <section class="organizational-card" style="margin-bottom: 24px; border-left: 4px solid #ef4444;">
-              <h3 style="margin: 0 0 16px 0; color: #ef4444;">Overdue</h3>
-              <div id="organizational-compliance-overdue">
-                <p class="organizational-empty">Loading…</p>
-              </div>
-            </section>
+            <h2 class="organizational-subheading">Overdue</h2>
+            <div id="organizational-compliance-overdue">
+              <p class="organizational-empty">Loading…</p>
+            </div>
 
-            <section class="organizational-card">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 style="margin: 0;">All obligations</h3>
-                <div style="display: flex; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap;">
+              <h2 class="organizational-subheading">All obligations</h2>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                   <select id="organizational-compliance-filter-category" style="padding: 6px 10px; border: 0.5px solid var(--border-subtle); border-radius: 6px;">
                     <option value="">All categories</option>
                     <option value="tax_filing">Tax filing</option>
@@ -219,12 +177,11 @@
                     <option value="completed_this_cycle">Completed this cycle</option>
                     <option value="not_applicable">Not applicable</option>
                   </select>
-                </div>
               </div>
-              <div id="organizational-compliance-all">
-                <p class="organizational-empty">Loading…</p>
-              </div>
-            </section>
+            </div>
+            <div id="organizational-compliance-all">
+              <p class="organizational-empty">Loading…</p>
+            </div>
           </div>
         </div>
       </main>

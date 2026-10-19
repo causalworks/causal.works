@@ -9,10 +9,11 @@ const { requireOrgMembership, requireOrgRole } = require('../middleware/requireO
 const { requireWriteAccess, requireReadAccess } = require('../middleware/requireWriteAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
-const { addContactRoles } = require('../lib/contactRoles');
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 const S = require('../lib/membershipStatus');
 const M = require('../lib/membership');
+
+const { cents, day, text } = M;
 
 const METHODS = ['card', 'check', 'transfer', 'cash', 'other'];
 const TIER_FIELDS = ['name', 'description', 'applies_to', 'pay_what_you_can', 'min_price_cents', 'suggested_price_cents',
@@ -26,31 +27,6 @@ function userIdOf(req) { return req.user && (req.user.user_id ?? req.user.id); }
 function intId(v) {
   const n = Number.parseInt(String(v), 10);
   return Number.isInteger(n) && n > 0 && String(n) === String(v).trim() ? n : null;
-}
-
-function cents(body, key) {
-  const c = body[key + '_cents'];
-  if (c !== undefined && c !== null && c !== '') {
-    const n = Number(c);
-    return Number.isInteger(n) && n >= 0 ? { value: n } : { error: key.replace(/_/g, ' ') + ' must be a whole number of cents, zero or more.' };
-  }
-  const d = body[key];
-  if (d !== undefined && d !== null && String(d).trim() !== '') {
-    const x = Number(String(d).replace(/[$,\s]/g, ''));
-    return Number.isFinite(x) && x >= 0 ? { value: Math.round(x * 100) } : { error: key.replace(/_/g, ' ') + ' must be an amount of zero or more.' };
-  }
-  return { value: null };
-}
-
-function day(v) {
-  const d = S.toDay(v);
-  return d && !Number.isNaN(Date.parse(d + 'T00:00:00Z')) ? d : null;
-}
-
-function text(v) {
-  if (v === undefined || v === null) return null;
-  const t = String(v).trim();
-  return t || null;
 }
 
 function csvCell(v) {
@@ -132,7 +108,7 @@ function registerMembershipRoutes(app, pool) {
       pick('proration_mode', (v) => ['none', 'monthly'].includes(v), 'Proration must be none or monthly.');
       pick('grace_days', intIn(0, 366), 'Grace days must be 0 to 366.');
       pick('recognition_mode', (v) => ['spread', 'at_receipt'].includes(v), 'Recognition must be spread over the term or at receipt.');
-      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default', 'challenge_required']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
+      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
       for (const k of ['deferred_dues_account_id', 'contribution_account_id', 'dues_revenue_account_id', 'default_program_id']) {
         pick(k, (v) => v === null || intId(v) != null, k.replace(/_id$/, '').replace(/_/g, ' ') + ' is not valid.');
       }
@@ -401,51 +377,6 @@ function registerMembershipRoutes(app, pool) {
     }
   });
 
-  // Price, contribution and dates for a new term on a tier.
-  async function termTerms(req, tier, contactKind, b, baseTerm) {
-    if (tier.archived_at) return { error: 'That tier is archived. Pick a current tier.' };
-    if (tier.applies_to === 'individual' && contactKind === 'organization') return { error: 'That tier is for individuals. Pick a tier for organizations.' };
-    if (tier.applies_to === 'organization' && contactKind === 'individual') return { error: 'That tier is for organizations. Pick a tier for individuals.' };
-    if (tier.eligibility_required && b.eligibility_confirmed !== true) return { error: 'Tick the eligibility statement to confirm it applies.' };
-    const settings = await M.getSettings(pool, req.orgId);
-    const asOf = day(b.on) || M.today();
-    let dates;
-    const startGiven = day(b.starts_on);
-    if (baseTerm) dates = S.renewalTermDates(S.toDay(baseTerm.ends_on), asOf, settings);
-    else dates = S.joinTermDates(startGiven || asOf, settings);
-    if (startGiven && baseTerm) dates = { ...dates, starts_on: startGiven, ends_on: day(b.ends_on) || S.addDays(S.addMonths(startGiven, 12), -1), year_start: startGiven };
-    if (day(b.ends_on)) dates.ends_on = day(b.ends_on);
-    if (dates.ends_on < dates.starts_on) return { error: 'The end date must be on or after the start date.' };
-    const listPrice = await M.tierPriceOn(pool, tier.id, dates.starts_on);
-    if (listPrice == null) return { error: 'That tier has no price yet. Set a price on the tier first.' };
-    const followsOn = baseTerm && dates.starts_on === S.addDays(S.toDay(baseTerm.ends_on), 1);
-    let price = followsOn ? listPrice : S.proratedPriceCents(listPrice, dates.starts_on, dates.year_start, settings);
-    const chosen = cents(b, 'price');
-    if (chosen.error) return { error: chosen.error };
-    if (tier.pay_what_you_can) {
-      if (chosen.value == null) return { error: 'Enter the amount for this pay-what-you-can tier.' };
-      if (tier.min_price_cents != null && chosen.value < Number(tier.min_price_cents)) {
-        return { error: 'The lowest amount for this tier is ' + (Number(tier.min_price_cents) / 100).toFixed(2) + '.' };
-      }
-      price = chosen.value;
-    } else if (chosen.value != null && chosen.value !== price) {
-      return { error: 'This tier has a set price. Record a discount on the payment, or waive part of it, instead of changing the price.' };
-    }
-    const benefit = tier.benefit_value_cents != null ? Number(tier.benefit_value_cents) : (tier.pay_what_you_can ? Number(tier.suggested_price_cents ?? tier.min_price_cents ?? price) : price);
-    return { dates, price, contribution: Math.max(0, price - benefit), settings };
-  }
-
-  async function insertTerm(client, req, contactId, tier, t, source, renewsTermId, b) {
-    const r = await client.query(
-      `INSERT INTO org_membership_terms (org_id, constituent_id, tier_id, starts_on, ends_on, price_cents, contribution_cents, source,
-                                         auto_renew, renews_term_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [req.orgId, contactId, tier.id, t.dates.starts_on, t.dates.ends_on, t.price, t.contribution, source,
-       b.auto_renew !== undefined ? !!b.auto_renew : !!t.settings.auto_renew_default, renewsTermId, userIdOf(req)]);
-    await addContactRoles(client, req.orgId, contactId, ['dues_member']);
-    return r.rows[0];
-  }
-
   app.post(`${B}/dues-members`, ...write, async (req, res) => {
     const b = req.body || {};
     const tierId = intId(b.tier_id);
@@ -480,7 +411,7 @@ function registerMembershipRoutes(app, pool) {
         }
         newContact = { kind, display_name: name, first_name: kind === 'individual' ? first : null, last_name: kind === 'individual' ? last : null, email, phone: text(c.phone), mailing_address: text(c.mailing_address) };
       }
-      const t = await termTerms(req, tier, kind, b, null);
+      const t = await M.planTerm(pool, req.orgId, tier, kind, b, null);
       if (t.error) return fail(res, 400, t.error);
       const term = await inTransaction(async (client) => {
         if (newContact) {
@@ -490,7 +421,7 @@ function registerMembershipRoutes(app, pool) {
             [req.orgId, newContact.display_name, newContact.first_name, newContact.last_name, newContact.email, newContact.phone, newContact.mailing_address, newContact.kind]);
           contactId = ins.rows[0].id;
         }
-        return insertTerm(client, req, contactId, tier, t, b.source === 'import' ? 'import' : 'staff', null, b);
+        return M.insertTerm(client, { orgId: req.orgId, userId: userIdOf(req), contactId, tier, plan: t, source: b.source === 'import' ? 'import' : 'staff', autoRenew: b.auto_renew });
       });
       if (newContact) await audit(req, 'create', 'org_constituents', contactId, { metadata: { via: 'membership', kind: newContact.kind } });
       await audit(req, 'create', 'org_membership_terms', term.id, { metadata: { tier: tier.name, starts_on: t.dates.starts_on, ends_on: t.dates.ends_on, price_cents: t.price } });
@@ -520,11 +451,11 @@ function registerMembershipRoutes(app, pool) {
           return fail(res, 400, 'Renewals open ' + settings.renewal_window_days + ' days before the next term starts (' + S.addDays(prev.ends_on, 1) + ').');
         }
       }
-      const t = await termTerms(req, tier, c.rows[0].kind, b, prev);
+      const t = await M.planTerm(pool, req.orgId, tier, c.rows[0].kind, b, prev);
       if (t.error) return fail(res, 400, t.error);
       const overlap = terms.find((x) => x.status_override !== 'ended' && x.starts_on <= t.dates.ends_on && x.ends_on >= t.dates.starts_on);
       if (overlap) return fail(res, 409, 'These dates overlap the term from ' + overlap.starts_on + ' to ' + overlap.ends_on + '. Change the dates or extend that term.');
-      const term = await inTransaction((client) => insertTerm(client, req, contactId, tier, t, prev ? 'renewal' : 'staff', prev ? prev.id : null, b));
+      const term = await inTransaction((client) => M.insertTerm(client, { orgId: req.orgId, userId: userIdOf(req), contactId, tier, plan: t, source: prev ? 'renewal' : 'staff', renewsTermId: prev ? prev.id : null, autoRenew: b.auto_renew }));
       await audit(req, 'create', 'org_membership_terms', term.id, { metadata: { tier: tier.name, starts_on: t.dates.starts_on, ends_on: t.dates.ends_on, price_cents: t.price, renews: prev ? prev.id : null } });
       return res.status(201).json({ term_id: term.id });
     } catch (e) {

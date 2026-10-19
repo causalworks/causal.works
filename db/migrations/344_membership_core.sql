@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS org_membership_settings (
   form_fields                jsonb NOT NULL DEFAULT '[]'::jsonb,
   extra_gift_enabled         boolean NOT NULL DEFAULT false,
   auto_renew_default         boolean NOT NULL DEFAULT false,
-  challenge_required         boolean NOT NULL DEFAULT false,
   updated_by                 integer REFERENCES users(id) ON DELETE SET NULL,
   created_at                 timestamptz NOT NULL DEFAULT now(),
   updated_at                 timestamptz NOT NULL DEFAULT now()

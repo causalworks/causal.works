@@ -10,7 +10,7 @@ const RESTRICTED_CLASS = 'temporarily_restricted';
 
 function sum(rows, pick) { return rows.reduce((s, r) => s + Number(pick(r) || 0), 0); }
 
-// facts: { receipts, feePeriods, feePostings, disbursements, requests, otherSpendingCents, ledgerNetCents, openPledgeCents }
+// facts: { receipts, feePeriods, feePostings, disbursements, requests, recalls, otherSpendingCents, ledgerNetCents, openPledgeCents }
 function computeBalance(facts) {
   const receipts = facts.receipts || [];
   const disbursements = facts.disbursements || [];
@@ -25,11 +25,14 @@ function computeBalance(facts) {
   const disbursedPosted = sum(disbursements.filter((d) => d.status === 'approved' && d.posted), (d) => d.amount_cents);
   const disbursementsPending = sum(disbursements.filter((d) => d.status === 'pending_approval' || (d.status === 'approved' && !d.posted)), (d) => d.amount_cents);
   const requestsPending = sum(requests.filter((r) => ['submitted', 'in_review', 'needs_info', 'approved'].includes(r.status) && !r.disbursement_id), (r) => r.amount_cents);
-  const pending = disbursementsPending + requestsPending;
+  const recalls = facts.recalls || [];
+  const recalledPosted = sum(recalls.filter((r) => r.status === 'posted'), (r) => r.amount_cents);
+  const recallsPending = sum(recalls.filter((r) => r.status === 'pending'), (r) => r.amount_cents);
+  const pending = disbursementsPending + requestsPending + recallsPending;
   const otherSpending = Number(facts.otherSpendingCents || 0);
-  const available = receivedPosted - feesCharged - disbursedPosted - otherSpending - pending;
+  const available = receivedPosted - feesCharged - disbursedPosted - recalledPosted - otherSpending - pending;
 
-  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted - otherSpending;
+  const expectedLedgerNet = receivedPosted - feesPosted - disbursedPosted - recalledPosted - otherSpending;
   const ledgerNet = facts.ledgerNetCents == null ? null : Number(facts.ledgerNetCents);
   const openPledge = Number(facts.openPledgeCents || 0);
   const difference = ledgerNet == null ? null : ledgerNet - expectedLedgerNet;
@@ -42,10 +45,12 @@ function computeBalance(facts) {
     fees_posted_cents: feesPosted,
     fees_unposted_cents: Math.max(0, feesAccrued - feesPosted),
     disbursed_posted_cents: disbursedPosted,
+    recalled_posted_cents: recalledPosted,
     other_spending_cents: otherSpending,
     pending_cents: pending,
     pending_disbursements_cents: disbursementsPending,
     pending_requests_cents: requestsPending,
+    pending_recalls_cents: recallsPending,
     available_cents: available,
     negative: available < 0,
     tie_out: {
@@ -130,8 +135,6 @@ async function loadDisbursements(pool, orgId, projectIds) {
 }
 
 async function loadRequests(pool, orgId, projectIds) {
-  const t = await pool.query(`SELECT to_regclass('org_sponsor_payment_requests') AS t`);
-  if (!t.rows[0].t) return [];
   const r = await pool.query(
     `SELECT id, sponsored_project_id, status, amount_cents, disbursement_id
        FROM org_sponsor_payment_requests WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[])`, [orgId, projectIds]);
@@ -158,10 +161,17 @@ async function loadOtherSpending(pool, orgId, programIds) {
        JOIN org_ledger_transactions t ON t.id = l.transaction_id
        JOIN org_accounts a ON a.id = l.account_id
       WHERE t.org_id = $1 AND t.status = 'posted' AND l.program_id = ANY($2::int[]) AND a.type = 'expense'
-        AND t.source <> 'sponsor_fee'
+        AND t.source NOT IN ('sponsor_fee', 'sponsor_recall')
         AND NOT EXISTS (SELECT 1 FROM org_sponsored_project_disbursements d WHERE d.org_id = t.org_id AND d.ledger_transaction_id = t.id)
       GROUP BY l.program_id`, [orgId, programIds]);
   return new Map(r.rows.map((x) => [Number(x.program_id), Number(x.spent)]));
+}
+
+async function loadRecalls(pool, orgId, projectIds) {
+  const r = await pool.query(
+    `SELECT id, sponsored_project_id, status, amount_cents FROM org_sponsor_recalls
+      WHERE org_id = $1 AND sponsored_project_id = ANY($2::int[]) AND status <> 'void'`, [orgId, projectIds]);
+  return r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) }));
 }
 
 async function loadOpenPledges(pool, orgId, projectIds) {
@@ -186,9 +196,9 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
   const projR = await pool.query(
     `SELECT p.*, s.default_admin_rate FROM org_sponsored_projects p LEFT JOIN org_settings s ON s.org_id = p.sponsor_org_id
       WHERE p.sponsor_org_id = $1 AND p.id = ANY($2::int[])`, [orgId, ids]);
-  const [settings, fyEndMonth, receipts, rules, postings, disb, requests, openPledges] = await Promise.all([
+  const [settings, fyEndMonth, receipts, rules, postings, disb, requests, openPledges, recalls] = await Promise.all([
     loadSponsorSettings(pool, orgId), getFiscalYearEndMonth(pool, orgId), loadReceipts(pool, orgId, ids), loadFeeRules(pool, orgId, ids),
-    loadFeePostings(pool, orgId, ids), loadDisbursements(pool, orgId, ids), loadRequests(pool, orgId, ids), loadOpenPledges(pool, orgId, ids),
+    loadFeePostings(pool, orgId, ids), loadDisbursements(pool, orgId, ids), loadRequests(pool, orgId, ids), loadOpenPledges(pool, orgId, ids), loadRecalls(pool, orgId, ids),
   ]);
   const programIds = [...new Set(projR.rows.map((p) => p.program_id).filter((x) => x != null).map(Number))];
   const [ledgerNet, otherSpending] = await Promise.all([loadLedgerNet(pool, orgId, programIds), loadOtherSpending(pool, orgId, programIds)]);
@@ -212,6 +222,7 @@ async function loadProjectBalances(pool, orgId, projectIds, opts) {
       receipts: pr, feePeriods, feePostings: fp,
       disbursements: disb.filter((d) => Number(d.sponsored_project_id) === pid),
       requests: requests.filter((r) => Number(r.sponsored_project_id) === pid),
+      recalls: recalls.filter((r) => Number(r.sponsored_project_id) === pid),
       otherSpendingCents: p.program_id != null ? (otherSpending.get(Number(p.program_id)) || 0) : 0,
       ledgerNetCents: p.program_id != null ? (ledgerNet.get(Number(p.program_id)) || 0) : null,
       openPledgeCents: openPledges.get(pid) || 0,

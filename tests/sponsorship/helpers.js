@@ -11,7 +11,10 @@ const SKIP = DB_URL ? false : 'Set TEST_DATABASE_URL to a throwaway database bui
 
 let pg = null;
 function pgModule() {
-  if (!pg) pg = require('pg');
+  if (!pg) {
+    pg = require('pg');
+    pg.types.setTypeParser(1082, (v) => v);
+  }
   return pg;
 }
 

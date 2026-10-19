@@ -7,6 +7,7 @@ const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireWriteAccess, requireReadAccess, leadMayTouch, canWrite, boardApproverAllowed } = require('../middleware/requireWriteAccess');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 const { loadProjectBalance } = require('../lib/sponsorBalance');
+const { createDisbursement, approveDisbursement } = require('../lib/sponsorMoneyOut');
 
 function requireFiscalSponsorship(pool) {
   return async function (req, res, next) {
@@ -22,6 +23,7 @@ function requireFiscalSponsorship(pool) {
 }
 
 const VALID_SPONSORSHIP_MODELS = ['model_a', 'model_c', 'other'];
+const EDITABLE_STATUSES = ['applicant', 'accepted', 'active', 'winding_down', 'ended', 'lapsed', 'paused', 'completed'];
 
 function withEffectiveFields(project, orgDefaults) {
   return {
@@ -73,6 +75,9 @@ function registerSponsoredProjectsRoutes(app, pool) {
                   created_at,
                   updated_at,
                   agreement_signed_at,
+                  hold_reason,
+                  hold_kind,
+                  hold_set_at,
                   (SELECT r.rate FROM org_sponsor_fee_rules r WHERE r.sponsored_project_id = org_sponsored_projects.id AND r.kind = 'percent'
                      AND r.effective_from <= CURRENT_DATE ORDER BY r.effective_from DESC LIMIT 1) AS current_fee_rate,
                   (SELECT r.kind FROM org_sponsor_fee_rules r WHERE r.sponsored_project_id = org_sponsored_projects.id
@@ -114,7 +119,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
       return res.status(400).json({ error: 'name is required' });
     }
 
-    const validStatuses = ['active', 'paused', 'completed', 'winding_down'];
+    const validStatuses = EDITABLE_STATUSES;
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
@@ -181,7 +186,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
     }
 
     try {
-      const curProj = await pool.query('SELECT program_id, admin_rate FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1', [id, req.orgId]);
+      const curProj = await pool.query('SELECT program_id, admin_rate, status FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1', [id, req.orgId]);
       if (!curProj.rows.length) return res.status(404).json({ error: 'Sponsored project not found' });
       if (!leadMayTouch(req, [curProj.rows[0].program_id])) {
         return res.status(403).json({ code: 'program_scope', error: 'Program leads can change only sponsored projects under their own programs.' });
@@ -189,6 +194,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
       const updates = [];
       const values = [];
       let paramIndex = 2;
+      let statusChange = null;
 
       if (body.name !== undefined) {
         if (!String(body.name).trim()) {
@@ -247,14 +253,17 @@ function registerSponsoredProjectsRoutes(app, pool) {
         paramIndex++;
       }
 
-      if (body.status !== undefined) {
-        const validStatuses = ['active', 'paused', 'completed', 'winding_down'];
-        if (!validStatuses.includes(body.status)) {
-          return res.status(400).json({ error: 'Invalid status' });
+      if (body.status !== undefined && body.status !== curProj.rows[0].status) {
+        if (curProj.rows[0].status === 'on_hold') {
+          return res.status(409).json({ code: 'project_on_hold', error: 'This project is on hold. Lift the hold first, then change its status.' });
+        }
+        if (!EDITABLE_STATUSES.includes(body.status)) {
+          return res.status(400).json({ error: 'Choose a status from the list. To put a project on hold, use Put on hold.' });
         }
         updates.push(`status = $${paramIndex}`);
         values.push(body.status);
         paramIndex++;
+        statusChange = { fieldName: 'status', oldValue: curProj.rows[0].status, newValue: body.status };
       }
 
       if (body.notes_markdown !== undefined) {
@@ -347,6 +356,9 @@ function registerSponsoredProjectsRoutes(app, pool) {
       if (r.rows.length === 0) {
         return res.status(404).json({ error: 'Sponsored project not found' });
       }
+      if (statusChange) {
+        await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_sponsored_projects', recordId: id, fields: [statusChange], metadata: reqMeta(req) });
+      }
 
       const orgDefaults = await loadOrgDefaults(pool, req.orgId);
       return res.json({ sponsored_project: withEffectiveFields(r.rows[0], orgDefaults) });
@@ -435,48 +447,17 @@ function registerSponsoredProjectsRoutes(app, pool) {
       return res.status(400).json({ error: 'Invalid sponsored project ID' });
     }
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const disbursementDate = body.disbursement_date ? String(body.disbursement_date) : null;
-    const amountCents = Number.parseInt(String(body.amount_cents), 10);
-    const adminFeeCents = body.admin_fee_cents !== undefined && body.admin_fee_cents !== null
-      ? Number.parseInt(String(body.admin_fee_cents), 10) : null;
-    const notes = body.notes ? String(body.notes).trim() : null;
-
-    if (!disbursementDate || Number.isNaN(new Date(disbursementDate).getTime())) {
-      return res.status(400).json({ error: 'disbursement_date is required and must be a valid date' });
-    }
-    if (!Number.isInteger(amountCents) || amountCents <= 0) {
-      return res.status(400).json({ error: 'amount_cents must be a positive integer' });
-    }
-    if (adminFeeCents !== null && (!Number.isInteger(adminFeeCents) || adminFeeCents < 0)) {
-      return res.status(400).json({ error: 'admin_fee_cents must be a non-negative integer' });
-    }
-
     try {
-      const projR = await pool.query(
-        'SELECT id, program_id FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1',
-        [id, req.orgId]
-      );
+      const projR = await pool.query('SELECT id, program_id FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 LIMIT 1', [id, req.orgId]);
       if (!projR.rows.length) return res.status(404).json({ error: 'Sponsored project not found' });
       if (!leadMayTouch(req, [projR.rows[0].program_id])) {
         return res.status(403).json({ code: 'program_scope', error: 'Program leads can request a disbursement only for a sponsored project under their own programs.' });
       }
-
-      const userId = req.user.user_id ?? req.user.id;
-      const r = await pool.query(
-        `INSERT INTO org_sponsored_project_disbursements
-           (org_id, sponsored_project_id, disbursement_date, amount_cents, admin_fee_cents, notes, created_by, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_approval')
-         RETURNING id, disbursement_date, amount_cents, admin_fee_cents, notes, status, created_at`,
-        [req.orgId, id, disbursementDate, amountCents, adminFeeCents, notes, userId]
-      );
-
-      logAudit(pool, {
-        orgId: req.orgId, userId, action: 'create',
-        tableName: 'org_sponsored_project_disbursements', recordId: r.rows[0].id,
-        metadata: { ...reqMeta(req), sponsored_project_id: id, amount_cents: amountCents, admin_fee_cents: adminFeeCents },
-      }).catch(() => {});
-
-      return res.status(201).json({ disbursement: r.rows[0] });
+      const out = await createDisbursement(pool, {
+        orgId: req.orgId, userId: req.user.user_id ?? req.user.id, role: req.coopOrgRole, projectId: id, input: body,
+        override: body.override ? { requested: true, reason: body.override_reason } : null,
+      });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST .../sponsored-projects/:id/disbursements:', e.message);
       return res.status(500).json({ error: 'Could not record disbursement' });
@@ -495,37 +476,13 @@ function registerSponsoredProjectsRoutes(app, pool) {
     if (!Number.isInteger(id) || id < 1 || !Number.isInteger(disbId) || disbId < 1) {
       return res.status(400).json({ error: 'Invalid id' });
     }
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
     try {
-      const disbR = await pool.query(
-        'SELECT * FROM org_sponsored_project_disbursements WHERE id = $1 AND sponsored_project_id = $2 AND org_id = $3 LIMIT 1',
-        [disbId, id, req.orgId]
-      );
-      if (!disbR.rows.length) return res.status(404).json({ error: 'Disbursement not found' });
-      const disb = disbR.rows[0];
-      if (disb.status !== 'pending_approval') {
-        return res.status(409).json({ error: `Disbursement is not awaiting approval (status: ${disb.status})`, code: 'not_pending_approval' });
-      }
-
-      const userId = req.user.user_id ?? req.user.id;
-      if (disb.created_by != null && Number(disb.created_by) === Number(userId)) {
-        return res.status(403).json({ code: 'self_approval', error: 'A different person must approve a disbursement you requested.' });
-      }
-      const r = await pool.query(
-        `UPDATE org_sponsored_project_disbursements
-         SET status = 'approved', approved_by = $1, approved_at = NOW()
-         WHERE id = $2 AND org_id = $3
-         RETURNING id, status, approved_by, approved_at`,
-        [userId, disbId, req.orgId]
-      );
-
-      logAudit(pool, {
-        orgId: req.orgId, userId, action: 'update',
-        tableName: 'org_sponsored_project_disbursements', recordId: disbId,
-        fields: [{ fieldName: 'status', oldValue: 'pending_approval', newValue: 'approved' }],
-        metadata: reqMeta(req),
-      }).catch(() => {});
-
-      return res.json({ disbursement: r.rows[0] });
+      const out = await approveDisbursement(pool, {
+        orgId: req.orgId, userId: req.user.user_id ?? req.user.id, role: req.coopOrgRole, projectId: id, disbursementId: disbId,
+        override: body.override ? { requested: true, reason: body.override_reason } : null,
+      });
+      return res.status(out.httpStatus).json(out.httpStatus < 400 ? { disbursement: out.body, ...out.body } : out.body);
     } catch (e) {
       console.error('POST .../disbursements/:disbId/approve:', e.message);
       return res.status(500).json({ error: 'Could not approve disbursement' });

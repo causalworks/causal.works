@@ -24,7 +24,6 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - The project list stays readable to every workspace user (Funding uses it to tag gifts). Balances, fee rules and tracking need sponsorship read access.
 
 ## Hooks left for later
-- `loadRequests` in `lib/sponsorBalance.js` reads `org_sponsor_payment_requests` once S2 creates it.
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
 ## After merge (owner actions per pull request)

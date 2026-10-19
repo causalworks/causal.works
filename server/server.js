@@ -10,6 +10,7 @@ const { scheduleAccountingEntryReminders } = require('./jobs/accounting-entry-re
 const { scheduleProcessAcrOutbox } = require('./jobs/process-acr-outbox');
 const { schedulePurgeSyncedDocuments } = require('./jobs/purge-synced-documents');
 const { scheduleRecurringScheduleJob } = require('./jobs/recurring-schedule-job');
+const { scheduleSponsorReportHoldJob } = require('./jobs/sponsor-report-hold-job');
 const {
   registerUser,
   createMagicToken,
@@ -3534,4 +3535,5 @@ app.listen(3000, '127.0.0.1', () => {
   scheduleProcessAcrOutbox(pool);
   schedulePurgeSyncedDocuments(pool);
   scheduleRecurringScheduleJob(pool);
+  scheduleSponsorReportHoldJob(pool);
 });

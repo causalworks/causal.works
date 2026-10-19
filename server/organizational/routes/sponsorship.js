@@ -11,6 +11,8 @@ const { logAudit, reqMeta } = require('../lib/auditLog');
 const { validateRule, isoDate } = require('../lib/sponsorFees');
 const { loadProjectBalance, loadSponsorSettings } = require('../lib/sponsorBalance');
 const { previewFees, runFees, voidFeePosting } = require('../lib/sponsorFeePosting');
+const { createRequest, reviewRequest, placeHold, liftHold, createRecall, postRecall, voidRecall } = require('../lib/sponsorMoneyOut');
+const { leadMayTouch } = require('../middleware/requireWriteAccess');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,6 +54,8 @@ const SETTINGS_FIELDS = {
   fee_income_account_id: 'account',
   fee_expense_account_id: 'account',
   fee_income_program_id: 'program',
+  recall_expense_account_id: 'account',
+  recall_income_account_id: 'account',
   information_return_thresholds: 'years',
 };
 
@@ -67,6 +71,8 @@ function settingsOut(s, orgId) {
     fee_income_account_id: d.fee_income_account_id || null,
     fee_expense_account_id: d.fee_expense_account_id || null,
     fee_income_program_id: d.fee_income_program_id || null,
+    recall_expense_account_id: d.recall_expense_account_id || null,
+    recall_income_account_id: d.recall_income_account_id || null,
   };
 }
 
@@ -91,7 +97,18 @@ function registerSponsorshipRoutes(app, pool) {
       const project = await projectOr404(req, res);
       if (!project) return;
       const b = await loadProjectBalance(pool, req.orgId, project.id);
+      const ov = await pool.query(
+        `SELECT 'disbursement' AS kind, d.id, d.amount_cents, d.override_reason AS reason, d.override_at AS at, u.email AS by_email
+           FROM org_sponsored_project_disbursements d LEFT JOIN users u ON u.id = d.override_by
+          WHERE d.org_id = $1 AND d.sponsored_project_id = $2 AND d.override_reason IS NOT NULL
+         UNION ALL
+         SELECT 'request', r.id, r.amount_cents, r.override_reason, r.override_at, u.email
+           FROM org_sponsor_payment_requests r LEFT JOIN users u ON u.id = r.override_by
+          WHERE r.org_id = $1 AND r.sponsored_project_id = $2 AND r.override_reason IS NOT NULL AND r.disbursement_id IS NULL
+          ORDER BY at DESC`, [req.orgId, project.id]);
       return res.json({
+        project: { id: project.id, status: project.status, hold_reason: project.hold_reason, hold_kind: project.hold_kind, hold_set_at: project.hold_set_at },
+        overrides: ov.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })),
         balance: b.balance,
         fee_periods: b.feePeriods,
         fee_postings: b.feePostings.map((p) => ({ id: p.id, period_start: p.period_start, period_end: p.period_end, amount_cents: p.amount_cents, live: p.live, voided_at: p.voided_at, void_reason: p.void_reason, ledger_transaction_id: p.ledger_transaction_id })),
@@ -234,10 +251,10 @@ function registerSponsorshipRoutes(app, pool) {
           const id = posInt(v);
           if (!id) return res.status(400).json({ error: 'Choose an account or program from the list.' });
           if (type === 'account') {
-            const want = key === 'fee_income_account_id' ? 'income' : 'expense';
+            const want = /income/.test(key) ? 'income' : 'expense';
             const a = await pool.query('SELECT type::text AS type, is_posting FROM org_accounts WHERE id = $1 AND org_id = $2', [id, req.orgId]);
             if (!a.rows.length || !a.rows[0].is_posting || a.rows[0].type !== want) {
-              return res.status(400).json({ error: key === 'fee_income_account_id' ? 'Choose an income account for fee income.' : 'Choose an expense account for the fee charged to projects.' });
+              return res.status(400).json({ error: want === 'income' ? 'Choose an income account here.' : 'Choose an expense account here.' });
             }
           } else {
             const p = await pool.query('SELECT 1 FROM org_programs WHERE id = $1 AND org_id = $2', [id, req.orgId]);
@@ -257,16 +274,19 @@ function registerSponsorshipRoutes(app, pool) {
       }
       await pool.query(
         `INSERT INTO org_sponsor_settings (org_id, default_fee_minimum_cents, second_approval_threshold_cents, overdue_report_hold_days,
-            donor_letter_threshold_cents, information_return_thresholds, statement_day_of_month, fee_income_account_id, fee_expense_account_id, fee_income_program_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            donor_letter_threshold_cents, information_return_thresholds, statement_day_of_month, fee_income_account_id, fee_expense_account_id, fee_income_program_id,
+            recall_expense_account_id, recall_income_account_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (org_id) DO UPDATE SET
            default_fee_minimum_cents = EXCLUDED.default_fee_minimum_cents, second_approval_threshold_cents = EXCLUDED.second_approval_threshold_cents,
            overdue_report_hold_days = EXCLUDED.overdue_report_hold_days, donor_letter_threshold_cents = EXCLUDED.donor_letter_threshold_cents,
            information_return_thresholds = EXCLUDED.information_return_thresholds, statement_day_of_month = EXCLUDED.statement_day_of_month,
            fee_income_account_id = EXCLUDED.fee_income_account_id, fee_expense_account_id = EXCLUDED.fee_expense_account_id,
-           fee_income_program_id = EXCLUDED.fee_income_program_id, updated_at = now()`,
+           fee_income_program_id = EXCLUDED.fee_income_program_id, recall_expense_account_id = EXCLUDED.recall_expense_account_id,
+           recall_income_account_id = EXCLUDED.recall_income_account_id, updated_at = now()`,
         [req.orgId, next.default_fee_minimum_cents, next.second_approval_threshold_cents, next.overdue_report_hold_days, next.donor_letter_threshold_cents,
-         JSON.stringify(next.information_return_thresholds), next.statement_day_of_month, next.fee_income_account_id, next.fee_expense_account_id, next.fee_income_program_id]);
+         JSON.stringify(next.information_return_thresholds), next.statement_day_of_month, next.fee_income_account_id, next.fee_expense_account_id, next.fee_income_program_id,
+         next.recall_expense_account_id, next.recall_income_account_id]);
       const fields = Object.keys(SETTINGS_FIELDS)
         .filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]))
         .map((k) => ({ fieldName: k, oldValue: typeof current[k] === 'object' ? JSON.stringify(current[k]) : current[k], newValue: typeof next[k] === 'object' ? JSON.stringify(next[k]) : next[k] }));
@@ -278,9 +298,139 @@ function registerSponsorshipRoutes(app, pool) {
     }
   });
 
+  // Payment requests (staff entry)
+  app.get(P + '/sponsored-projects/:id/payment-requests', ...read, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const r = await pool.query(
+        `SELECT r.id, r.payee_constituent_id, c.display_name AS payee_name, r.amount_cents, r.purpose, r.method, r.document_id, r.budget_line, r.needed_by,
+                r.status, r.created_at, r.reviewed_at, r.decision_reason, r.override_reason, r.disbursement_id, r.requester_link_ref IS NOT NULL AS from_lead_link,
+                cu.email AS created_by_email, ru.email AS reviewer_email
+           FROM org_sponsor_payment_requests r
+           LEFT JOIN org_constituents c ON c.id = r.payee_constituent_id
+           LEFT JOIN users cu ON cu.id = r.created_by
+           LEFT JOIN users ru ON ru.id = r.reviewer_id
+          WHERE r.org_id = $1 AND r.sponsored_project_id = $2 ORDER BY r.created_at DESC, r.id DESC`, [req.orgId, project.id]);
+      return res.json({ requests: r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })) });
+    } catch (e) {
+      console.error('GET .../payment-requests:', e.message);
+      return res.status(500).json({ error: 'Could not load payment requests' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/payment-requests', ...base, requireWriteAccess('sponsorship'), async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      if (!leadMayTouch(req, [project.program_id])) {
+        return res.status(403).json({ code: 'program_scope', error: 'Program leads can enter a request only for a project under their own programs.' });
+      }
+      const out = await createRequest(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, input: req.body || {} });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../payment-requests:', e.message);
+      return res.status(500).json({ error: 'Could not save the payment request' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/payment-requests/:requestId/review', ...moneyWrite, async (req, res) => {
+    const requestId = posInt(req.params.requestId);
+    if (!requestId) return res.status(400).json({ error: 'Invalid request ID' });
+    const body = req.body || {};
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await reviewRequest(pool, {
+        orgId: req.orgId, userId: uid(req), role: req.coopOrgRole, projectId: project.id, requestId,
+        action: String(body.action || ''), reason: body.reason, override: body.override ? { requested: true, reason: body.override_reason } : null,
+      });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../payment-requests/:id/review:', e.message);
+      return res.status(500).json({ error: 'Could not save the decision' });
+    }
+  });
+
+  // Holds
+  app.post(P + '/sponsored-projects/:id/hold', ...moneyWrite, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await placeHold(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, reason: req.body && req.body.reason });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../hold:', e.message);
+      return res.status(500).json({ error: 'Could not put the project on hold' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/lift-hold', ...moneyWrite, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await liftHold(pool, { orgId: req.orgId, userId: uid(req), role: req.coopOrgRole, projectId: project.id, reason: req.body && req.body.reason });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../lift-hold:', e.message);
+      return res.status(500).json({ error: 'Could not lift the hold' });
+    }
+  });
+
+  // Recalls
+  app.get(P + '/sponsored-projects/:id/recalls', ...read, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const r = await pool.query(
+        `SELECT id, amount_cents, recall_date::text AS recall_date, reason, status, ledger_transaction_id, void_reason, created_at
+           FROM org_sponsor_recalls WHERE org_id = $1 AND sponsored_project_id = $2 ORDER BY recall_date DESC, id DESC`, [req.orgId, project.id]);
+      return res.json({ recalls: r.rows.map((x) => ({ ...x, amount_cents: Number(x.amount_cents) })) });
+    } catch (e) {
+      console.error('GET .../recalls:', e.message);
+      return res.status(500).json({ error: 'Could not load recalls' });
+    }
+  });
+
+  app.post(P + '/sponsored-projects/:id/recalls', ...moneyWrite, async (req, res) => {
+    try {
+      const project = await projectOr404(req, res);
+      if (!project) return;
+      const out = await createRecall(pool, { orgId: req.orgId, userId: uid(req), projectId: project.id, input: req.body || {} });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST .../recalls:', e.message);
+      return res.status(500).json({ error: 'Could not record the recall' });
+    }
+  });
+
   // Accounting: fee run
   const acctRead = [...base, requireAccountingAccess(pool, 'accounting_read')];
   const acctWrite = [...base, requireWriteAccess('finance'), requireAccountingWriter(pool)];
+
+  app.post(P + '/sponsor-recalls/:recallId/post', ...acctWrite, async (req, res) => {
+    const recallId = posInt(req.params.recallId);
+    if (!recallId) return res.status(400).json({ error: 'Invalid recall ID' });
+    try {
+      const out = await postRecall(pool, { orgId: req.orgId, userId: uid(req), recallId, postingDate: req.body && req.body.posting_date ? String(req.body.posting_date) : null });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST /sponsor-recalls/:id/post:', e.message);
+      return res.status(500).json({ error: 'Could not post the recall' });
+    }
+  });
+
+  app.post(P + '/sponsor-recalls/:recallId/void', ...acctWrite, async (req, res) => {
+    const recallId = posInt(req.params.recallId);
+    if (!recallId) return res.status(400).json({ error: 'Invalid recall ID' });
+    try {
+      const out = await voidRecall(pool, { orgId: req.orgId, userId: uid(req), recallId, reason: req.body && req.body.reason });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST /sponsor-recalls/:id/void:', e.message);
+      return res.status(500).json({ error: 'Could not cancel the recall' });
+    }
+  });
 
   app.get(P + '/sponsor-fees/preview', ...acctRead, async (req, res) => {
     const through = req.query.through_date != null ? String(req.query.through_date) : '';

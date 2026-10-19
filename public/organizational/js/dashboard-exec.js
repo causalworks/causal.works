@@ -228,6 +228,7 @@
     const days = r.urgency_days != null ? Number(r.urgency_days) : null;
     const mod = days == null ? 'neutral' : days <= 14 ? 'danger' : days <= 60 ? 'amber' : 'neutral';
     const context = ATTENTION_TYPE_LABELS[r.type] || 'Reminder';
+    if (r.flag === 'danger') return { mod: 'danger', context, aside: 'Needs action' };
     let aside = r.due_date || '';
     if (days != null) {
       aside = days < 0 ? `Overdue by ${Math.abs(days)}d` : days === 0 ? 'Today' : `In ${days}d`;

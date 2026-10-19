@@ -1,6 +1,7 @@
 'use strict';
 
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('./fiscalYear');
+const { loadProjectBalances } = require('./sponsorBalance');
 
 function dayDiff(isoDate) {
   if (!isoDate) return null;
@@ -68,6 +69,24 @@ async function fetchAttentionFeed(pool, orgId, slug) {
        WHERE sponsor_org_id = $1 AND status = 'active' AND next_report_due IS NOT NULL`,
       [orgId]
     );
+    const flagR = await pool.query(
+      `SELECT id, name, status, hold_reason FROM org_sponsored_projects
+        WHERE sponsor_org_id = $1 AND status NOT IN ('applicant', 'ended')`, [orgId]);
+    const balances = await loadProjectBalances(pool, orgId, flagR.rows.map((p) => p.id));
+    for (const sp of flagR.rows) {
+      const b = balances.get(Number(sp.id));
+      const negative = b && b.balance.negative;
+      if (sp.status !== 'on_hold' && !negative) continue;
+      items.push({
+        type: 'sponsored_project',
+        flag: 'danger',
+        urgency_days: 0,
+        title: (sp.name || 'Sponsored project') + (negative ? ' is negative (' + (b.balance.available_cents / 100).toFixed(2) + ')' : '')
+          + (negative && sp.status === 'on_hold' ? ' and' : '') + (sp.status === 'on_hold' ? ' is on hold: ' + (sp.hold_reason || 'no reason given') : ''),
+        due_date: null,
+        href: `${base}/sponsored-projects?focus=${sp.id}`,
+      });
+    }
     for (const sp of spR.rows) {
       const dueIn = dayDiff(sp.next_report_due);
       if (dueIn != null && dueIn >= 0 && dueIn <= 60) {

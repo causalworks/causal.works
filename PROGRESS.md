@@ -11,11 +11,16 @@ Test database: `createdb test_db`, load `build-specs/schema.sql`, then every fil
 
 - U2: settings grouped (fee accounts, approval thresholds, holds and reports, statements, tax thresholds, public pages) with a red "Not set" call for missing fee accounts; lists in the money-out and records components are now tables with right-aligned money, status chips and truncated long text; one date format ("Oct 19, 2026") through `OrganizationalSponsorFund.day`; collapsible blocks replaced by links (fee history, standing terms); one text size; table cells stay on one line and tables scroll inside their box on phones. Pull request from `build/sponsorship-ui-u2` (contains U1; merge U1 first).
 
+- U3: `scripts/seed-sponsorship-demo.js` (dry run by default, `--apply`, `--remove`, `--email`, `--user`). It works through the library functions and, where a step has no library function (gifts, deposits, grants, project edits, fee rules, lead links, approvals), through the route handlers the screens call, run in-process as a finance user (admin if there is none) with every guard except sign-in. Marker `seed:sponsorship-demo` in notes or description fields and on deposit reference numbers; settings it changes are restored on removal from its own audit entry. Test `tests/sponsorship/seed.db.test.js` (apply as the app role, apply again, balance, fee preview, overview, dashboard, remove as owner). Tour `docs/public/sponsorship-wiring-tour.md`. Pull request from `build/sponsorship-ui-u3` (contains U1 and U2; merge in order).
+- Grid flags use short labels ("Hold", "Report late", "Standing"), with the full wording on hover.
+
 ## Next
-- U3: `scripts/seed-sponsorship-demo.js` (dry run, `--apply`, `--remove`, marker on every row, made through the library functions) with tests, and `docs/public/sponsorship-wiring-tour.md`.
+- Nothing planned. Review feedback on the pull requests.
 
 ## Blocked or needs the owner
-- Nothing yet.
+- The overdue-report hold on Sample project 2 uses the project's report due date, because a new sponsorship setup has no earlier quarterly report rows (they start from the date the workspace's sponsorship settings were created). When the daily job adds this quarter's row, the hold lifts the next morning. Showing a lasting automatic hold would need older settings or a change to the report rules (out of scope).
+- `--remove` deletes rows the app role cannot delete (sponsorship tables have no delete grant), so run it with the database owner account, as for migrations. `--apply` works as the app role.
+- The seed makes agreement and statement PDFs, so the server needs Chrome (as for invoices); set `CHROME_PATH` if it is not at the default place.
 
 ## Decisions to review
 - The four numbers sit above the tabs, as the spec says (Budget puts its strip under the tabs). They are hidden on the project page, which has its own four.
@@ -29,6 +34,7 @@ Test database: `createdb test_db`, load `build-specs/schema.sql`, then every fil
 ## After merge (owner actions per pull request)
 - U1: no migration. Restart the app.
 - U2: no migration. Restart the app (or just reload pages; only front-end files changed).
+- U3: no migration. To load the sample data into a workspace: `node scripts/seed-sponsorship-demo.js --org <workspace id>` (dry run), then add `--apply` (optionally `--email <test address>`). Keep the lead links it prints. To remove it: `DB_USER=<owner> node scripts/seed-sponsorship-demo.js --org <workspace id> --remove`. Then follow `docs/public/sponsorship-wiring-tour.md`.
 
 ## Earlier: Sponsorship build (S1 to S6, merged)
 

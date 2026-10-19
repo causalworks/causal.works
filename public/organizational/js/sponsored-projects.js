@@ -227,16 +227,16 @@
     };
   }
 
-  function flagChips(row, skipHold) {
+  function flagChips(row, skipHold, short) {
     if (!row) return '';
     const f = row.flags;
     const chips = [];
-    if (f.hold && !skipHold) chips.push(['danger', 'On hold']);
-    if (f.negative) chips.push(['danger', 'Negative']);
-    if (f.report_overdue) chips.push(['danger', 'Report overdue']);
-    if (f.agreement_missing) chips.push(['warn', 'No agreement']);
-    if (f.good_standing === false) chips.push(['warn', 'Not in good standing']);
-    return chips.map((c) => '<span class="organizational-sp-chip organizational-sp-chip-' + c[0] + '">' + esc(c[1]) + '</span>').join('');
+    if (f.hold && !skipHold) chips.push(['danger', 'On hold', 'Hold']);
+    if (f.negative) chips.push(['danger', 'Negative', 'Negative']);
+    if (f.report_overdue) chips.push(['danger', 'Report overdue', 'Report late']);
+    if (f.agreement_missing) chips.push(['warn', 'No agreement', 'No agreement']);
+    if (f.good_standing === false) chips.push(['warn', 'Not in good standing', 'Standing']);
+    return chips.map((c) => '<span class="organizational-sp-chip organizational-sp-chip-' + c[0] + '" title="' + esc(c[1]) + '">' + esc(short ? c[2] : c[1]) + '</span>').join('');
   }
 
   function renderGrid() {
@@ -276,7 +276,7 @@
           '<td class="organizational-sp-num' + (r && r.available_cents < 0 ? ' organizational-sp-fund-negative' : '') + '">' + (r ? money(r.available_cents) : '') + '</td>' +
           '<td class="organizational-sp-num">' + (r ? esc(feeLabel(r.fee)) : '') + '</td>' : '') +
         '<td>' + esc(fmtDate(r ? r.next_report_due : p.next_report_due)) + '</td>' +
-        (showMoney ? '<td class="organizational-sp-flags">' + flagChips(r) + '</td>' : '') + '</tr>';
+        (showMoney ? '<td class="organizational-sp-flags">' + flagChips(r, false, true) + '</td>' : '') + '</tr>';
     }).join('');
     listEl.innerHTML = '<section class="organizational-card organizational-card-flush"><div class="organizational-table-wrap"><table class="organizational-table organizational-sp-grid" aria-label="Sponsored projects"><thead>' + head + '</thead><tbody>' +
       (body || '<tr class="organizational-table-empty"><td colspan="9">No projects match the filters.</td></tr>') + '</tbody></table></div></section>';

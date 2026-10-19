@@ -42,6 +42,7 @@
     'board-designations': document.getElementById('organizational-accounting-tab-board-designations'),
     'find-recode': document.getElementById('organizational-accounting-tab-find-recode'),
     'gift-postings': document.getElementById('organizational-accounting-tab-gift-postings'),
+    'dues-postings': document.getElementById('organizational-accounting-tab-dues-postings'),
     settings: document.getElementById('organizational-accounting-tab-settings'),
   };
 
@@ -63,12 +64,13 @@
     'board-designations': 'board-designations',
     'find-recode': 'find-recode',
     'gift-postings': 'gift-postings',
+    'dues-postings': 'dues-postings',
     settings: 'accounting-settings',
   };
   const TAB_TITLES = {
     dashboard: 'Dashboard', transactions: 'Transactions', banking: 'Banking', 'approval-policy': 'Flagged Review',
     purchases: 'Purchases', sales: 'Sales', 'fixed-assets': 'Fixed Assets', 'expense-claims': 'Expense Claims',
-    'board-designations': 'Board Designations', 'find-recode': 'Recode', 'gift-postings': 'Gift Postings', settings: 'Settings',
+    'board-designations': 'Board Designations', 'find-recode': 'Recode', 'gift-postings': 'Gift Postings', 'dues-postings': 'Dues Postings', settings: 'Settings',
   };
 
   function parseSlugAndTab() {
@@ -99,6 +101,8 @@
     if (m) return { slug: decodeURIComponent(m[1]), tab: 'settings' };
     m = path.match(/^\/organizational\/o\/([^/]+)\/gift-postings\/?$/);
     if (m) return { slug: decodeURIComponent(m[1]), tab: 'gift-postings' };
+    m = path.match(/^\/organizational\/o\/([^/]+)\/dues-postings\/?$/);
+    if (m) return { slug: decodeURIComponent(m[1]), tab: 'dues-postings' };
     return { slug: '', tab: 'dashboard' };
   }
 
@@ -305,10 +309,14 @@
     const initGiftPostings = window.OrganizationalAccounting.giftPostings
       && typeof window.OrganizationalAccounting.giftPostings.init === 'function'
       ? window.OrganizationalAccounting.giftPostings.init(slug) : Promise.resolve();
+    const duesTab = document.getElementById('organizational-accounting-dues-tab');
+    if (duesTab) duesTab.hidden = !(currentOrg && currentOrg.membership_enabled);
+    const initDuesPostings = window.OrganizationalAccounting.duesPostings && currentOrg && currentOrg.membership_enabled
+      ? window.OrganizationalAccounting.duesPostings.init(slug) : Promise.resolve();
     const initSettings = window.OrganizationalAccounting.settings
       && typeof window.OrganizationalAccounting.settings.init === 'function'
       ? window.OrganizationalAccounting.settings.init(slug) : Promise.resolve();
-    await Promise.all([initDashboard, initTransactions, initBankRecon, initApprovalPolicy, initPurchases, initSales, initFixedAssets, initExpenseClaims, initBoardDesignations, initFindRecode, initGiftPostings, initSettings]);
+    await Promise.all([initDashboard, initTransactions, initBankRecon, initApprovalPolicy, initPurchases, initSales, initFixedAssets, initExpenseClaims, initBoardDesignations, initFindRecode, initGiftPostings, initDuesPostings, initSettings]);
   }
 
   load().catch(function (e) {

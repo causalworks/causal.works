@@ -53,6 +53,7 @@
     if (name === 'tiers') loadTiers();
     if (name === 'settings') loadSettings();
     if (name === 'emails') loadEmails();
+    if (name === 'reports') loadReport();
   }
 
   // --- Dues members ---
@@ -535,6 +536,77 @@
     });
   }
 
+  // --- Reports ---
+
+  const REPORT_LABELS = { month: 'Month', joins: 'Joins', renewals: 'Renewals', terms_ending: 'Terms ending', renewed: 'Renewed', retention_rate: 'Retention %',
+    tier: 'Tier', received_cents: 'Received', waived_cents: 'Waived', contribution_cents: 'Contribution', dues_revenue_cents: 'Dues revenue',
+    bucket: 'Age', terms: 'Terms', owed_cents: 'Owed', active: 'Active', grace: 'Grace', pending: 'Pending', reason: 'Reason', count: 'Count' };
+  const BUCKETS = { not_started: 'Not started yet', '0_30': '0 to 30 days', '31_60': '31 to 60 days', '61_90': '61 to 90 days', over_90: 'Over 90 days' };
+
+  function reportQuery() {
+    const q = new URLSearchParams();
+    if ($('membership-report-from').value) q.set('from', $('membership-report-from').value);
+    if ($('membership-report-to').value) q.set('to', $('membership-report-to').value);
+    return q;
+  }
+
+  async function loadReport() {
+    const name = $('membership-report-name').value;
+    ['membership-report-from', 'membership-report-to'].forEach((id) => { $(id).parentElement.hidden = name === 'aging'; });
+    const q = reportQuery();
+    const csvQ = new URLSearchParams(q);
+    csvQ.set('format', 'csv');
+    $('membership-report-csv').href = '/api/organizational/orgs/' + encodeURIComponent(slug) + '/membership/reports/' + name + '?' + csvQ.toString();
+    const out = await api('/reports/' + name + '?' + q.toString());
+    if (!out || !out.res.ok) { $('membership-report-body').innerHTML = '<tr class="organizational-table-empty"><td>' + esc(errorOf(out, 'Could not run the report.')) + '</td></tr>'; return; }
+    const r = out.data;
+    if (r.from && !$('membership-report-from').value) { $('membership-report-from').value = r.from; $('membership-report-to').value = r.to; }
+    $('membership-report-head').innerHTML = '<tr>' + r.columns.map((c) => '<th>' + esc(REPORT_LABELS[c] || c) + '</th>').join('') + '</tr>';
+    const cell = (c, v) => (c.endsWith('_cents') ? money(v) : c === 'bucket' ? esc(BUCKETS[v] || v) : esc(v == null ? '—' : String(v)));
+    $('membership-report-body').innerHTML = r.rows.length ? r.rows.map((row) => '<tr>' + r.columns.map((c) => '<td>' + cell(c, row[c]) + '</td>').join('') + '</tr>').join('')
+      : '<tr class="organizational-table-empty"><td colspan="' + r.columns.length + '">Nothing in this period.</td></tr>';
+    $('membership-report-detail').innerHTML = r.detail && r.detail.length
+      ? '<h2 class="organizational-membership-section">Who owes</h2><div class="organizational-table-wrap"><table class="organizational-table"><tbody>'
+        + r.detail.map((d) => '<tr><td>' + esc(d.display_name) + '</td><td>' + esc(d.starts_on) + '</td><td>' + d.days + ' days</td><td>' + money(d.owed_cents) + '</td></tr>').join('') + '</tbody></table></div>'
+      : '';
+  }
+
+  // --- Import ---
+
+  let importCsv = '';
+  function importList(title, rows, extra) {
+    if (!rows.length) return '';
+    return '<div class="organizational-membership-section">' + esc(title) + '</div><div class="organizational-hint">'
+      + rows.slice(0, 50).map((r) => 'Line ' + r.line + ': ' + esc(r.name || '') + (r.email ? ' (' + esc(r.email) + ')' : '') + (extra ? ' · ' + esc(extra(r)) : '')).join('<br>') + (rows.length > 50 ? '<br>…' : '') + '</div>';
+  }
+  function showImport(p) {
+    const c = p.counts;
+    $('membership-import-msg').textContent = c.new + ' new, ' + c.changed + ' changed, ' + c.unchanged + ' unchanged, ' + c.duplicates + ' duplicates in the file, ' + c.errors + ' with errors.';
+    $('membership-import-preview').innerHTML = importList('Rows with errors (fix these and choose the file again)', p.errors, (r) => r.error)
+      + importList('New', p.new) + importList('Changed', p.changed, (r) => (r.changes || []).map((x) => (x === 'term' ? 'adds a term' : 'fills ' + x.replace('_', ' '))).join(', '))
+      + importList('Duplicates (skipped)', p.duplicates, (r) => 'same email as line ' + r.first_line);
+    $('membership-import-confirm').hidden = !!c.errors || !(c.new + c.changed);
+  }
+  function wireImport() {
+    $('membership-import-file').addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      importCsv = await f.text();
+      $('membership-import-msg').textContent = 'Checking…';
+      const out = await api('/import/preview', 'POST', { csv: importCsv });
+      if (!out || !out.res.ok) { $('membership-import-msg').textContent = errorOf(out, 'Could not read the file.'); $('membership-import-preview').innerHTML = ''; $('membership-import-confirm').hidden = true; return; }
+      showImport(out.data);
+    });
+    $('membership-import-confirm').addEventListener('click', async () => {
+      const out = await api('/import', 'POST', { csv: importCsv });
+      if (!out || !out.res.ok) { $('membership-import-msg').textContent = errorOf(out, 'Could not import. Nothing was saved.'); return; }
+      const d = out.data;
+      $('membership-import-msg').textContent = 'Imported: ' + d.contacts_created + ' new contacts, ' + d.contacts_updated + ' updated, ' + d.terms_created + ' terms, ' + d.payments_created + ' payments.';
+      $('membership-import-preview').innerHTML = '';
+      $('membership-import-confirm').hidden = true;
+    });
+  }
+
   // --- Settings ---
 
   let settingsWired = false;
@@ -632,6 +704,9 @@
     document.querySelector('[data-membership-tab="settings"]').hidden = !access.canAdmin;
     document.querySelector('[data-membership-tab="emails"]').hidden = !access.canRead;
     wireBulk();
+    document.querySelector('[data-membership-tab="import"]').hidden = !access.canAdmin;
+    wireImport();
+    ['membership-report-name', 'membership-report-from', 'membership-report-to'].forEach((id) => $(id).addEventListener('change', loadReport));
     $('membership-add').hidden = !access.canWrite;
     $('membership-export').hidden = !access.canAdmin;
     $('membership-tier-add').hidden = !access.canAdmin;

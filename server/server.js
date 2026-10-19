@@ -624,6 +624,9 @@ app.get('/organizational/o/:slug/find-recode', requireAuthPage(pool), requireOrg
 app.get('/organizational/o/:slug/gift-postings', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
   res.sendFile(organizationalAccountingHtml);
 });
+app.get('/organizational/o/:slug/dues-postings', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
+  res.sendFile(organizationalAccountingHtml);
+});
 app.get('/organizational/o/:slug/purchases', requireAuthPage(pool), requireOrganizationalAccessPage, (req, res) => {
   res.sendFile(organizationalAccountingHtml);
 });

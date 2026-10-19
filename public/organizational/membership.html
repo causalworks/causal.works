@@ -39,6 +39,8 @@
             <button type="button" class="organizational-tab" data-membership-tab="summary">Summary</button>
             <button type="button" class="organizational-tab" data-membership-tab="tiers">Tiers</button>
             <button type="button" class="organizational-tab" data-membership-tab="emails" hidden>Emails</button>
+            <button type="button" class="organizational-tab" data-membership-tab="reports">Reports</button>
+            <button type="button" class="organizational-tab" data-membership-tab="import" hidden>Import</button>
             <button type="button" class="organizational-tab" data-membership-tab="settings" hidden>Settings</button>
           </div>
 
@@ -157,6 +159,36 @@
                 </table>
               </div>
             </section>
+          </section>
+
+          <section id="membership-tab-reports" class="organizational-tab-content">
+            <div class="organizational-grants-head organizational-membership-toolbar" style="margin-top:12px;gap:8px;flex-wrap:wrap;">
+              <select id="membership-report-name" class="organizational-input" style="width:220px;">
+                <option value="joins">Joins and renewals by month</option>
+                <option value="retention">Retention</option>
+                <option value="revenue">Revenue by tier</option>
+                <option value="aging">Unpaid dues by age</option>
+                <option value="growth">Growth by month</option>
+                <option value="lapses">Why memberships ended</option>
+              </select>
+              <label class="organizational-hint">From <input type="date" id="membership-report-from" class="organizational-input" style="width:160px;"></label>
+              <label class="organizational-hint">To <input type="date" id="membership-report-to" class="organizational-input" style="width:160px;"></label>
+              <a href="#" id="membership-report-csv" class="organizational-btn organizational-btn-secondary">CSV</a>
+            </div>
+            <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
+              <div class="organizational-table-wrap"><table class="organizational-table" aria-label="Report"><thead id="membership-report-head"></thead><tbody id="membership-report-body"></tbody></table></div>
+            </section>
+            <div id="membership-report-detail"></div>
+          </section>
+
+          <section id="membership-tab-import" class="organizational-tab-content">
+            <form id="membership-import" class="organizational-card" style="margin-top:12px;max-width:820px;">
+              <p class="organizational-hint">CSV columns: name (or first_name and last_name), email, phone, mailing_address, kind (person or organization), tier, start_date, end_date (optional), amount_paid (optional). Rows match existing contacts by email. Nothing is saved until you confirm.</p>
+              <input type="file" id="membership-import-file" accept=".csv,text/csv">
+              <p class="organizational-hint" id="membership-import-msg"></p>
+              <div id="membership-import-preview"></div>
+              <button type="button" class="organizational-btn organizational-btn-primary" id="membership-import-confirm" hidden>Import</button>
+            </form>
           </section>
 
           <section id="membership-tab-settings" class="organizational-tab-content">

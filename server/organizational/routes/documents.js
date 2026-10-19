@@ -192,7 +192,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
       const conditions = ['org_id = $1'];
       const params = [orgId];
       if (!isAdmin(role)) {
-        conditions.push(`visibility = 'org_all'`);
+        conditions.push(`visibility <> 'admins_only'`);
       }
       if (ownerRecordClause(req)) conditions.push('source_ref_type IS NULL');
       if (req.query.scope === 'org') {
@@ -247,7 +247,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = (isAdmin(role) ? '' : `AND visibility = 'org_all'`) + ownerRecordClause(req);
+      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req);
 
       const r = await pool.query(
         `SELECT * FROM org_documents WHERE org_id = $1 AND archived_at IS NULL ${visClause} ORDER BY expiration_date NULLS LAST, retention_until NULLS LAST`,
@@ -273,7 +273,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = (isAdmin(role) ? '' : `AND visibility = 'org_all'`) + ownerRecordClause(req);
+      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req);
 
       const expectations = await pool.query(
         `SELECT * FROM org_document_expectations WHERE org_id IS NULL OR org_id = $1 ORDER BY display_order`,

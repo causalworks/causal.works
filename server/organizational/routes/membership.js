@@ -18,6 +18,7 @@ const { addContactRoles } = require('../lib/contactRoles');
 const Msg = require('../lib/membershipMessages');
 const Rep = require('../lib/membershipReports');
 const Imp = require('../lib/membershipImport');
+const Dir = require('../lib/membershipDirectory');
 
 const { cents, day, text } = M;
 
@@ -115,11 +116,11 @@ function registerMembershipRoutes(app, pool) {
       pick('grace_days', intIn(0, 366), 'Grace days must be 0 to 366.');
       pick('recognition_mode', (v) => ['spread', 'at_receipt'].includes(v), 'Recognition must be spread over the term or at receipt.');
       pick('payment_mode', (v) => ['test', 'live'].includes(v), 'Payment mode must be test or live.');
-      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default', 'card_payments_enabled', 'monthly_instalments_enabled']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
+      for (const k of ['join_requires_approval', 'join_form_enabled', 'extra_gift_enabled', 'auto_renew_default', 'card_payments_enabled', 'monthly_instalments_enabled', 'directory_enabled']) pick(k, bool, k.replace(/_/g, ' ') + ' must be true or false.');
       for (const k of ['deferred_dues_account_id', 'contribution_account_id', 'dues_revenue_account_id', 'default_program_id']) {
         pick(k, (v) => v === null || intId(v) != null, k.replace(/_id$/, '').replace(/_/g, ' ') + ' is not valid.');
       }
-      pick('directory_fields', (v) => Array.isArray(v) && v.every((x) => typeof x === 'string'), 'Directory fields must be a list.');
+      pick('directory_fields', (v) => Array.isArray(v) && v.every((x) => Dir.DIRECTORY_FIELDS.includes(x)), 'Directory fields must come from the list.');
       pick('form_fields', (v) => Array.isArray(v), 'Form fields must be a list.');
       if (errors.length) return fail(res, 400, errors.join(' '));
       for (const k of ['fixed_start_month', 'fixed_start_day', 'renewal_window_days', 'grace_days']) next[k] = Number(next[k]);
@@ -381,6 +382,7 @@ function registerMembershipRoutes(app, pool) {
         terms: st.terms.map((t) => ({ ...t, payments: undefined })),
         payments: pays.rows.map((p) => ({ ...p, payment_date: S.toDay(p.payment_date) })),
         seats: seats.rows,
+        directory: await Dir.optinFor(pool, req.orgId, id),
         history: hist.rows.map((h) => ({ ...h, metadata: h.metadata ? { reason: h.metadata.reason || null, kind: h.metadata.kind || null } : null })),
         settings: { grace_days: settings.grace_days, year_mode: settings.year_mode },
       });
@@ -890,6 +892,81 @@ function registerMembershipRoutes(app, pool) {
     } catch (e) {
       console.error('POST membership/bulk-email:', e.message);
       return fail(res, 500, 'Could not send the email.');
+    }
+  });
+
+  // --- Seats on organization terms ---
+
+  app.post(`${B}/terms/:id/seats`, ...write, async (req, res) => {
+    const b = req.body || {};
+    try {
+      const term = await loadTerm(req, intId(req.params.id));
+      if (!term) return fail(res, 404, 'That term was not found.');
+      if (term.status_override === 'ended') return fail(res, 409, 'This term has ended.');
+      const tier = term.tier_id ? await loadTier(req.orgId, term.tier_id) : null;
+      const included = tier ? Number(tier.seats_included) : 0;
+      if (!included) return fail(res, 400, 'This tier has no seats. Set the seats included on the tier first.');
+      const open = await Dir.openSeats(pool, term.id);
+      if (open.length >= included) return fail(res, 409, 'All ' + included + ' seats are in use. End a seat before adding another.');
+      let personId = b.constituent_id != null && b.constituent_id !== '' ? intId(b.constituent_id) : null;
+      let created = false;
+      if (personId) {
+        const c = await pool.query(`SELECT kind FROM org_constituents WHERE id = $1 AND org_id = $2`, [personId, req.orgId]);
+        if (!c.rows.length) return fail(res, 400, 'That person was not found.');
+        if (c.rows[0].kind !== 'individual') return fail(res, 400, 'A seat is for a person, not an organization.');
+      } else {
+        const name = text(b.contact && b.contact.display_name);
+        const email = text(b.contact && b.contact.email);
+        if (!name) return fail(res, 400, 'Enter the name of the person taking the seat.');
+        if (email && !/^[^\s@]+@[^\s@]+$/.test(email)) return fail(res, 400, 'That email address does not look right.');
+        const found = email ? await J.contactForEmail(pool, req.orgId, email) : null;
+        if (found && found.kind !== 'individual') return fail(res, 400, 'That email belongs to an organization. A seat is for a person.');
+        if (found) personId = found.id;
+        else {
+          personId = (await pool.query(`INSERT INTO org_constituents (org_id, display_name, email, kind) VALUES ($1, $2, $3, 'individual') RETURNING id`, [req.orgId, name, email])).rows[0].id;
+          created = true;
+        }
+      }
+      if (open.some((x) => Number(x.constituent_id) === Number(personId))) return fail(res, 409, 'This person already holds a seat on this membership.');
+      const r = await pool.query(
+        `INSERT INTO org_membership_seats (org_id, term_id, constituent_id, label, starts_on, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [req.orgId, term.id, personId, text(b.label), day(b.starts_on) || M.today(), userIdOf(req)]);
+      if (created) await audit(req, 'create', 'org_constituents', personId, { metadata: { via: 'membership seat' } });
+      await audit(req, 'create', 'org_membership_seats', r.rows[0].id, { metadata: { term: term.id, person: personId } });
+      return res.status(201).json({ seat_id: r.rows[0].id, constituent_id: personId });
+    } catch (e) {
+      console.error('POST membership/terms/:id/seats:', e.message);
+      return fail(res, 500, 'Could not add the seat.');
+    }
+  });
+
+  app.post(`${B}/seats/:id/end`, ...write, async (req, res) => {
+    try {
+      const endsOn = day((req.body || {}).ends_on) || M.today();
+      const r = await pool.query(
+        `UPDATE org_membership_seats SET ends_on = $1 WHERE id = $2 AND org_id = $3 AND ends_on IS NULL AND starts_on <= $1 RETURNING id`,
+        [endsOn, intId(req.params.id), req.orgId]);
+      if (!r.rows.length) return fail(res, 404, 'That seat was not found or has already ended.');
+      await audit(req, 'update', 'org_membership_seats', r.rows[0].id, { fields: [{ fieldName: 'ends_on', oldValue: null, newValue: endsOn }] });
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('POST membership/seats/:id/end:', e.message);
+      return fail(res, 500, 'Could not end the seat.');
+    }
+  });
+
+  app.put(`${B}/dues-members/:id/directory`, ...write, async (req, res) => {
+    const id = intId(req.params.id);
+    try {
+      const c = await pool.query('SELECT 1 FROM org_constituents WHERE id = $1 AND org_id = $2', [id, req.orgId]);
+      if (!c.rows.length) return fail(res, 404, 'That dues member was not found.');
+      const before = await Dir.optinFor(pool, req.orgId, id);
+      const after = await Dir.saveOptin(pool, req.orgId, id, req.body || {});
+      await audit(req, 'update', 'org_membership_directory_optin', id, { fields: [{ fieldName: 'directory', oldValue: before.listed ? before.visibility + ':' + before.fields.join(',') : 'not listed', newValue: after.listed ? after.visibility + ':' + after.fields.join(',') : 'not listed' }], metadata: { via: 'staff, on request' } });
+      return res.json({ directory: after });
+    } catch (e) {
+      console.error('PUT membership/dues-members/:id/directory:', e.message);
+      return fail(res, 500, 'Could not save the directory listing.');
     }
   });
 

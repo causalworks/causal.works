@@ -16,6 +16,7 @@ const M = require('../lib/membership');
 const S = require('../lib/membershipStatus');
 const J = require('../lib/membershipJoin');
 const Pay = require('../lib/membershipPayments');
+const Dir = require('../lib/membershipDirectory');
 
 const PAGES = path.join(__dirname, '..', '..', '..', 'public', 'p');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -92,6 +93,7 @@ function registerPublicMembershipRoutes(app, pool, opts) {
   app.get('/p/:slug/join', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'join.html')));
   app.get('/p/:slug/account', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'account.html')));
   app.get('/p/:slug/unsubscribe', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'unsubscribe.html')));
+  app.get('/p/:slug/directory', readLimit, (req, res) => res.sendFile(path.join(PAGES, 'directory.html')));
 
   // --- Join ---
 
@@ -200,7 +202,8 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       const email = clip((req.body || {}).email, 200);
       if (!email || !EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter your email address.' });
       const c = await J.contactForEmail(pool, ws.id, email);
-      const isDues = c && (await pool.query('SELECT 1 FROM org_membership_terms WHERE org_id = $1 AND constituent_id = $2 LIMIT 1', [ws.id, c.id])).rows.length > 0;
+      const isDues = c && ((await pool.query('SELECT 1 FROM org_membership_terms WHERE org_id = $1 AND constituent_id = $2 LIMIT 1', [ws.id, c.id])).rows.length > 0
+        || !!(await Dir.seatMembership(pool, ws.id, c.id)));
       if (isDues) {
         const link = await createSignInLink(pool, { orgId: ws.id, purpose: J.SIGN_IN, constituentId: c.id });
         const url = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/account#t=' + link.token;
@@ -244,7 +247,10 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       const view = await J.accountView(pool, ws.id, req.link.constituent_id);
       if (!view) return unavailable(res);
       await recordUse(pool, req, req.link, 'view');
-      const tiers = (await M.listTiers(pool, ws.id)).filter((t) => t.applies_to === 'either' || t.applies_to === view.contact.kind);
+      const allTiers = await M.listTiers(pool, ws.id, { includeArchived: true });
+      const tierBenefits = new Map(allTiers.map((t) => [t.id, t.benefits || []]));
+      const tiers = allTiers.filter((t) => !t.archived_at && (t.applies_to === 'either' || t.applies_to === view.contact.kind));
+      const eff = await Dir.effectiveActive(pool, ws.id, req.link.constituent_id);
       const settings = req.membershipSettings;
       const base = view.current_term && !view.renewal ? view.current_term.ends_on : null;
       return res.json({
@@ -253,6 +259,10 @@ function registerPublicMembershipRoutes(app, pool, opts) {
         renewal_opens_on: base ? S.addDays(base, 1 - settings.renewal_window_days) : null,
         tiers: tiers.map(J.publicTier),
         payment_note: J.paymentNote(ws.display_name),
+        seat: eff.seat,
+        benefits: eff.seat ? eff.seat.benefits : (view.current_term && tierBenefits.get(view.current_term.tier_id)) || [],
+        documents: eff.active ? (await Dir.gatedDocuments(pool, ws.id)).map((d) => ({ id: d.id, title: d.title, description: d.description })) : [],
+        directory: settings.directory_enabled ? { allowed: ['name', ...(settings.directory_fields || [])], mine: await Dir.optinFor(pool, ws.id, req.link.constituent_id), open: eff.active } : null,
         card_payments: !!(await Pay.activeAccount(pool, ws.id, settings)),
         monthly_offered: !!settings.monthly_instalments_enabled,
         can_update_card: view.terms_customer_ref,
@@ -332,6 +342,55 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       await recordUse(pool, req, req.link, 'card_update');
       return res.json({ url: out.url });
     } catch (e) { return oops(res, 'POST public membership me card', e); }
+  });
+
+  // --- Directory and gated documents ---
+
+  app.get(`${P}/directory`, readLimit, workspace, async (req, res) => {
+    try {
+      const list = await Dir.listDirectory(pool, req.workspace.id, { includePrivate: false });
+      if (!list) return unavailable(res);
+      return res.json({ workspace_name: req.workspace.display_name, entries: list });
+    } catch (e) { return oops(res, 'GET public membership directory', e); }
+  });
+
+  app.get(`${P}/me/directory`, readLimit, workspace, withLink(J.SESSION), async (req, res) => {
+    try {
+      const eff = await Dir.effectiveActive(pool, req.workspace.id, req.link.constituent_id);
+      if (!eff.active) return res.status(403).json({ error: 'The directory is for dues members whose membership is active.' });
+      const list = await Dir.listDirectory(pool, req.workspace.id, { includePrivate: true });
+      if (!list) return unavailable(res);
+      await recordUse(pool, req, req.link, 'directory');
+      return res.json({ workspace_name: req.workspace.display_name, entries: list });
+    } catch (e) { return oops(res, 'GET public membership me directory', e); }
+  });
+
+  app.post(`${P}/me/directory`, writeLimit, workspace, withLink(J.SESSION), formGuard, async (req, res) => {
+    try {
+      if (!req.membershipSettings.directory_enabled) return unavailable(res);
+      const b = req.body || {};
+      const before = await Dir.optinFor(pool, req.workspace.id, req.link.constituent_id);
+      const after = await Dir.saveOptin(pool, req.workspace.id, req.link.constituent_id, { listed: b.listed === true || b.listed === 'true', fields: b.fields, visibility: b.visibility });
+      await logAudit(pool, { orgId: req.workspace.id, userId: null, action: 'update', tableName: 'org_membership_directory_optin', recordId: req.link.constituent_id,
+        fields: [{ fieldName: 'directory', oldValue: before.listed ? before.visibility + ':' + before.fields.join(',') : 'not listed', newValue: after.listed ? after.visibility + ':' + after.fields.join(',') : 'not listed' }],
+        metadata: { via: 'dues member account page' } });
+      await recordUse(pool, req, req.link, 'directory_optin');
+      return res.json({ directory: after });
+    } catch (e) { return oops(res, 'POST public membership me directory', e); }
+  });
+
+  app.get(`${P}/me/documents/:id`, readLimit, workspace, withLink(J.SESSION), async (req, res) => {
+    try {
+      const eff = await Dir.effectiveActive(pool, req.workspace.id, req.link.constituent_id);
+      if (!eff.active) return res.status(403).json({ error: 'These documents are for dues members whose membership is active.' });
+      const out = await Dir.gatedDocumentFile(pool, req.workspace.id, Number.parseInt(String(req.params.id), 10) || 0);
+      if (out.error) return res.status(out.status).json({ error: out.error });
+      await recordUse(pool, req, req.link, 'document');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Type', out.doc.mime_type);
+      res.setHeader('Content-Disposition', 'attachment; filename="' + String(out.doc.original_filename || 'document').replace(/[^\w .()-]/g, '_') + '"');
+      return res.sendFile(out.file);
+    } catch (e) { return oops(res, 'GET public membership me document', e); }
   });
 
   app.post(`${P}/me/renew`, writeLimit, workspace, withLink(J.SESSION), formGuard, async (req, res) => {

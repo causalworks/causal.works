@@ -11,6 +11,7 @@ const SETTINGS_FIELDS = [
   'join_requires_approval', 'recognition_mode', 'deferred_dues_account_id', 'contribution_account_id',
   'dues_revenue_account_id', 'default_program_id', 'directory_fields', 'join_form_enabled', 'form_fields',
   'extra_gift_enabled', 'auto_renew_default', 'payment_mode', 'card_payments_enabled', 'monthly_instalments_enabled',
+  'directory_enabled',
 ];
 
 const SETTINGS_DEFAULTS = {
@@ -19,6 +20,7 @@ const SETTINGS_DEFAULTS = {
   contribution_account_id: null, dues_revenue_account_id: null, default_program_id: null,
   directory_fields: [], join_form_enabled: false, form_fields: [], extra_gift_enabled: false,
   auto_renew_default: false, payment_mode: 'test', card_payments_enabled: false, monthly_instalments_enabled: false,
+  directory_enabled: false,
 };
 
 function today() {

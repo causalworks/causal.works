@@ -6051,3 +6051,5 @@ body.organizational-pub { background: var(--organizational-surface, var(--surfac
 .organizational-pub-msg { margin: 0; font-size: 0.8125rem; }
 .organizational-pub-hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 .organizational-pub-inline { display: inline-flex; gap: 6px; align-items: center; }
+body.organizational-pub [hidden] { display: none !important; }
+.organizational-pub-form label.organizational-pub-inline { flex-direction: row; display: flex; }

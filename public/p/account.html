@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Your membership</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title" id="pub-title">Your membership</h1>
+    <p class="organizational-error" id="pub-error" hidden></p>
+
+    <form id="pub-signin" class="organizational-pub-card organizational-pub-form" hidden>
+      <h2>Sign in</h2>
+      <label>Your email <input class="organizational-input" type="email" name="email" required maxlength="200" autocomplete="email"></label>
+      <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <button type="submit" class="organizational-btn">Send me a sign-in link</button>
+      <p class="organizational-pub-msg" data-msg></p>
+    </form>
+
+    <div id="pub-body" hidden>
+      <section class="organizational-pub-card">
+        <h2>Membership</h2>
+        <p id="pub-status"></p>
+        <p class="organizational-hint" id="pub-renewal-note"></p>
+      </section>
+      <form id="pub-renew" class="organizational-pub-card organizational-pub-form" hidden>
+        <h2>Renew</h2>
+        <div id="pub-tiers" class="organizational-pub-form"></div>
+        <label id="pub-price-wrap" hidden>Amount you choose * <input class="organizational-input" name="price" inputmode="decimal"></label>
+        <label id="pub-elig-wrap" class="organizational-pub-inline" hidden><input type="checkbox" name="eligibility_confirmed" value="true"> <span id="pub-elig-text"></span></label>
+        <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <p class="organizational-hint" id="pub-pay-note"></p>
+        <button type="submit" class="organizational-btn">Renew</button>
+        <p class="organizational-pub-msg" data-msg></p>
+      </form>
+      <form id="pub-details" class="organizational-pub-card organizational-pub-form">
+        <h2>Your details</h2>
+        <div data-for="individual" class="organizational-pub-form">
+          <label>First name <input class="organizational-input" name="first_name" maxlength="100" autocomplete="given-name"></label>
+          <label>Last name <input class="organizational-input" name="last_name" maxlength="100" autocomplete="family-name"></label>
+        </div>
+        <label data-for="organization" hidden>Organization name <input class="organizational-input" name="display_name" maxlength="200"></label>
+        <label>Email <input class="organizational-input" name="email_shown" disabled></label>
+        <label>Phone <input class="organizational-input" type="tel" name="phone" maxlength="50" autocomplete="tel"></label>
+        <label>Mailing address <textarea class="organizational-input" name="mailing_address" rows="2" maxlength="500" autocomplete="street-address"></textarea></label>
+        <p class="organizational-hint">To change your email address, reply to any email from us.</p>
+        <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+        <button type="submit" class="organizational-btn">Save</button>
+        <p class="organizational-pub-msg" data-msg></p>
+      </form>
+      <section class="organizational-pub-card">
+        <h2>Receipts</h2>
+        <ul class="organizational-sp-fund-list" id="pub-receipts"></ul>
+      </section>
+      <p class="organizational-hint">You stay signed in on this tab for an hour.</p>
+    </div>
+  </main>
+  <script src="/p/membership-pub.js"></script>
+  <script src="/p/account.js"></script>
+</body>
+</html>

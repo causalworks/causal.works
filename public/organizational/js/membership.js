@@ -56,7 +56,33 @@
 
   // --- Dues members ---
 
+  async function loadJoinRequests() {
+    const box = $('membership-join-requests');
+    const out = await api('/join-requests');
+    const rows = (out && out.res.ok && out.data.join_requests) || [];
+    box.hidden = !rows.length;
+    $('membership-join-tbody').innerHTML = rows.map((r) => '<tr><td>' + esc(r.display_name || '') + (r.kind === 'organization' ? ' <span class="organizational-badge">Organization</span>' : '') + '<div class="organizational-hint">' + esc(r.email || '') + '</div></td>'
+      + '<td>' + esc(r.tier_name || '') + ' · ' + money(r.price_cents) + (r.extra_gift_cents ? '<div class="organizational-hint">plus a gift of ' + money(r.extra_gift_cents) + '</div>' : '') + '</td>'
+      + '<td class="organizational-hint">' + esc(String(r.confirmed_at || '').slice(0, 10)) + '</td><td style="white-space:nowrap;">'
+      + (access.canWrite ? '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-join-approve="' + r.id + '">Approve</button> '
+        + '<button type="button" class="organizational-btn organizational-btn-sm organizational-btn-outline" data-join-decline="' + r.id + '">Decline</button>' : '') + '</td></tr>').join('');
+    box.querySelectorAll('[data-join-approve]').forEach((b) => b.addEventListener('click', async () => {
+      const r = await api('/join-requests/' + b.dataset.joinApprove + '/approve', 'POST', {});
+      if (!r || !r.res.ok) { showError(errorOf(r, 'Could not approve.')); return; }
+      showError('');
+      loadMembers();
+    }));
+    box.querySelectorAll('[data-join-decline]').forEach((b) => b.addEventListener('click', async () => {
+      const reason = window.prompt('Reason for declining (required):');
+      if (!reason || !reason.trim()) return;
+      const r = await api('/join-requests/' + b.dataset.joinDecline + '/decline', 'POST', { reason });
+      if (!r || !r.res.ok) { showError(errorOf(r, 'Could not decline.')); return; }
+      loadMembers();
+    }));
+  }
+
   async function loadMembers() {
+    loadJoinRequests();
     const tbody = $('membership-members-tbody');
     const q = new URLSearchParams();
     if ($('membership-search').value.trim()) q.set('q', $('membership-search').value.trim());
@@ -411,6 +437,9 @@
       if (el.type === 'checkbox') el.checked = !!st[el.name];
       else el.value = st[el.name] == null ? '' : String(st[el.name]);
     });
+    f.querySelectorAll('[data-form-field]').forEach((cb) => { cb.checked = (st.form_fields || []).includes(cb.dataset.formField); });
+    const pubBase = location.origin + '/p/' + encodeURIComponent(slug);
+    $('membership-public-links').innerHTML = 'Join form: <a href="' + esc(pubBase + '/join') + '" target="_blank" rel="noopener">' + esc(pubBase + '/join') + '</a><br>Dues members sign in at: <a href="' + esc(pubBase + '/account') + '" target="_blank" rel="noopener">' + esc(pubBase + '/account') + '</a>';
     const syncFixed = () => f.querySelectorAll('[data-fixed]').forEach((x) => { x.style.display = f.elements.year_mode.value === 'fixed' ? '' : 'none'; });
     syncFixed();
     Array.from(f.elements).forEach((el) => { el.disabled = !access.canAdmin; });
@@ -420,6 +449,7 @@
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const b = {};
+      b.form_fields = Array.from(f.querySelectorAll('[data-form-field]')).filter((cb) => cb.checked).map((cb) => cb.dataset.formField);
       Array.from(f.elements).forEach((el) => {
         if (!el.name) return;
         if (el.type === 'checkbox') b[el.name] = el.checked;

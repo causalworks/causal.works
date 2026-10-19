@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>Join</title>
+  <link rel="stylesheet" href="/shared/css/tokens.css">
+  <link rel="stylesheet" href="/organizational/css/organizational.css">
+</head>
+<body class="organizational-pub">
+  <main class="organizational-pub-main">
+    <p class="organizational-pub-org" id="pub-org"></p>
+    <h1 class="organizational-pub-title" id="pub-title">Loading…</h1>
+    <p class="organizational-error" id="pub-error" hidden></p>
+    <section class="organizational-pub-card" id="pub-done" hidden><p id="pub-done-text"></p><p class="organizational-hint" id="pub-done-note"></p></section>
+    <form id="pub-join" class="organizational-pub-form" hidden>
+      <section class="organizational-pub-card">
+        <h2>Membership level</h2>
+        <div id="pub-tiers" class="organizational-pub-form"></div>
+        <label id="pub-price-wrap" hidden>Amount you choose * <input class="organizational-input" name="price" inputmode="decimal"></label>
+        <label id="pub-elig-wrap" class="organizational-pub-inline" hidden><input type="checkbox" name="eligibility_confirmed" value="true"> <span id="pub-elig-text"></span></label>
+      </section>
+      <section class="organizational-pub-card">
+        <h2>About you</h2>
+        <label>Joining as <select class="organizational-select" name="kind"><option value="individual">a person</option><option value="organization">an organization</option></select></label>
+        <div data-for="individual" class="organizational-pub-form">
+          <label>First name * <input class="organizational-input" name="first_name" maxlength="100" autocomplete="given-name"></label>
+          <label>Last name <input class="organizational-input" name="last_name" maxlength="100" autocomplete="family-name"></label>
+        </div>
+        <div data-for="organization" class="organizational-pub-form" hidden>
+          <label>Organization name * <input class="organizational-input" name="organization_name" maxlength="200" autocomplete="organization"></label>
+          <label data-field="annual_budget" hidden>Annual budget <input class="organizational-input" name="annual_budget" inputmode="decimal"><span class="organizational-hint" id="pub-budget-hint"></span></label>
+        </div>
+        <label>Email * <input class="organizational-input" type="email" name="email" maxlength="200" required autocomplete="email"></label>
+        <label data-field="phone" hidden>Phone <input class="organizational-input" type="tel" name="phone" maxlength="50" autocomplete="tel"></label>
+        <label data-field="mailing_address" hidden>Mailing address <textarea class="organizational-input" name="mailing_address" rows="2" maxlength="500" autocomplete="street-address"></textarea></label>
+        <label id="pub-gift-wrap" hidden>Add a gift (optional) <input class="organizational-input" name="extra_gift" inputmode="decimal"></label>
+      </section>
+      <div class="organizational-pub-hp" aria-hidden="true"><label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <p class="organizational-hint" id="pub-pay-note"></p>
+      <button type="submit" class="organizational-btn">Join</button>
+      <p class="organizational-pub-msg" data-msg></p>
+    </form>
+    <p class="organizational-hint"><a id="pub-account-link" href="#">Already a dues member? Sign in</a></p>
+  </main>
+  <script src="/p/membership-pub.js"></script>
+  <script src="/p/join.js"></script>
+</body>
+</html>

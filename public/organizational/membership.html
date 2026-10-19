@@ -65,6 +65,10 @@
                 <button type="button" class="organizational-btn organizational-btn-primary" id="membership-add" hidden>+ Add dues member</button>
               </div>
             </div>
+            <section class="organizational-card" id="membership-join-requests" style="margin-top:12px;" hidden>
+              <h2 class="organizational-membership-section" style="margin-top:0;">Join requests waiting for approval</h2>
+              <div class="organizational-table-wrap"><table class="organizational-table" aria-label="Join requests"><tbody id="membership-join-tbody"></tbody></table></div>
+            </section>
             <section class="organizational-card organizational-card-flush" style="margin-top:12px;">
               <div class="organizational-table-wrap">
                 <table class="organizational-table" aria-label="Dues members">
@@ -139,6 +143,16 @@
                 <label class="organizational-label">Contribution part of dues<select name="contribution_account_id" class="organizational-select" data-accounts="income"></select></label>
                 <label class="organizational-label">Default program<select name="default_program_id" class="organizational-select" data-programs></select></label>
                 <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="auto_renew_default"> New terms renew automatically</label>
+                <div class="organizational-panel-field-full organizational-membership-section">Public join form</div>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="join_form_enabled"> Accept joins from the public form</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="join_requires_approval"> Staff approve each join before the membership starts</label>
+                <label class="organizational-panel-field-full" style="display:flex;gap:6px;align-items:center;font-size:0.875rem;"><input type="checkbox" name="extra_gift_enabled"> Offer an extra gift on the form</label>
+                <div class="organizational-panel-field-full" style="font-size:0.875rem;">Also ask for:
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="phone"> Phone</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="mailing_address"> Mailing address</label>
+                  <label style="margin-left:8px;"><input type="checkbox" data-form-field="annual_budget"> Annual budget (organizations)</label>
+                </div>
+                <p class="organizational-hint organizational-panel-field-full" id="membership-public-links"></p>
               </div>
               <p id="membership-settings-msg" class="organizational-hint" hidden></p>
               <button type="submit" class="organizational-btn organizational-btn-primary">Save settings</button>

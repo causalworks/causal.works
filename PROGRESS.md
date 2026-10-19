@@ -70,6 +70,7 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 - `tests/index.js` lets `node --test tests/` run on Node 22 as well as Node 20.
 
 ## After merge (owner actions per pull request)
+- M2: apply `db/migrations/345_membership_join_requests.sql`; restart. Set `BASE_URL` so emailed links carry the full address. To open the join form, tick "Accept joins from the public form" in Membership settings; the page is `/p/<workspace>/join` and dues members sign in at `/p/<workspace>/account`. Emails need the live email key.
 - S1: apply `db/migrations/360_sponsor_funds_and_fees.sql`; restart. In each fiscal-sponsor workspace set the fee income account, fee expense account and fee income program in sponsorship settings before the first fee run. No new NOT NULL column lacks a default, so the demo snapshot needs no rerun.
 
 - S2: apply `db/migrations/361_sponsor_requests_holds.sql`; restart (the daily hold job starts with the server and runs once at boot). Optionally set recall accounts in Sponsorship settings. No snapshot rerun needed.
@@ -100,8 +101,10 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M1 screens: `public/organizational/membership.html` and `js/membership.js` rewritten (dues members list with filters and CSV export, record panel with terms, payments, seats and history and the actions, renewals, summary, tiers with dated prices and archive, settings). Board members see Summary and Tiers only. Checked in a browser at desktop and phone width. New badge and form classes in `organizational.css`.
 - M1 pull request #10 from `build/membership-m1`.
 
+- M2: migration 345 (`org_membership_join_requests`), `lib/membershipJoin.js`, public routes in `server/organizational/public/membership.js` (reusing `lib/publicLinks.js` and `lib/rateLimit.js`; all in the allowlist), staff join-request queue (approve, decline with reason), join form settings, pages `public/p/join.html`, `public/p/account.html` with `join.js`, `account.js`, `membership-pub.js`. Tests in `tests/membership/public.db.test.js`. Checked in a browser at phone and desktop width. Pull request from `build/membership-m2`.
+
 ## Next
-- M2: join, renew and update pages on the shared public module (`lib/publicLinks.js`, `lib/rateLimit.js`, `server/organizational/public/`).
+- M3: payments behind a provider interface (fake provider for tests, Stripe implementation), webhook, staff invoice through the existing invoice code.
 
 ## Blocked or needs the owner
 
@@ -114,9 +117,15 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - The dues-member CSV export is limited to admins and finance, as the Donors export is.
 - A refund is entered against one payment, up to what is left of it, and waits unposted for Accounting (M5).
 - Matching a dues payment to a bank line in Banking still posts it, as before; the Dues postings tab (M5) replaces that.
+- M2: a join is held in `org_membership_join_requests` until the email is confirmed, so an unconfirmed form never creates a contact. The submitted details are cleared once the contact and term exist (or the request is declined). Unconfirmed requests older than the two-day link are left for the M4 daily job to clear.
+- M2: a confirmed email that matches a contact (main or additional email) joins that contact; only blank phone and address are filled in. If that contact already has a current term, the request is declined and the person is told to sign in.
+- M2: the extra gift becomes a gift to confirm in Funding (`review_status = 'to_confirm'`, not posted, noted as not received yet). There is no gift intake function for a form, so it uses the same row shape as Funding's own queue.
+- M2: sign-in answers the same for any email. The emailed link is single use for 30 minutes and is exchanged for a one-hour link scoped to that dues member; every use is logged. A dues member cannot change their email address on the page.
+- M2: the optional challenge check is the shared one in public settings (`PUT .../public-settings`); like the lead page, the join and sign-in pages do not yet load a challenge widget.
 
 ## Testing
 - `TEST_DATABASE_URL=... node --test tests/` runs everything; add `TEST_SCHEMA_SQL=<path to build-specs/schema.sql>` to run the migration copy test.
 
 ## After merge (owner actions per pull request)
+- M2: apply `db/migrations/345_membership_join_requests.sql`; restart. Set `BASE_URL` so emailed links carry the full address. To open the join form, tick "Accept joins from the public form" in Membership settings; the page is `/p/<workspace>/join` and dues members sign in at `/p/<workspace>/account`. Emails need the live email key.
 - M1: apply `db/migrations/344_membership_core.sql`; restart. Rerun the demo snapshot: the demo restore inserts snapshot rows as they are, and the payments table now has an org column and new required fields. Each workspace that uses membership should check Membership settings (year mode, grace days) and give each tier a revenue account and program.

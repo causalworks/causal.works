@@ -24,7 +24,7 @@ const { registerSponsorshipRecordRoutes } = require('./routes/sponsorshipRecords
 const { registerPublicRoutes } = require('./public');
 const { registerPublicSettingsRoutes } = require('./routes/publicSettings');
 const { registerComplianceRoutes } = require('./routes/compliance');
-const registerMembershipRoutes = require('./routes/membership');
+const { registerMembershipRoutes } = require('./routes/membership');
 const { registerOrgInviteAcceptRoutes } = require('./routes/inviteAccept');
 const { registerOrganizationalPersonnelRoutes } = require('./routes/personnel');
 const { registerOrganizationalScheduleItemRoutes } = require('./routes/schedule-items');
@@ -91,7 +91,7 @@ function mountOrganizationalRoutes(app, rawPool) {
   registerPublicRoutes(app, pool);
   registerPublicSettingsRoutes(app, pool);
   registerComplianceRoutes(app, pool);
-  app.use('/api/organizational/:slug/membership', registerMembershipRoutes(app, pool));
+  registerMembershipRoutes(app, pool);
   registerOrgInviteAcceptRoutes(app, pool);
   registerOrganizationalPersonnelRoutes(app, pool);
   registerOrganizationalScheduleItemRoutes(app, pool);

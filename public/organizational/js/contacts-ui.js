@@ -78,7 +78,7 @@
   function showPanelError(msg) { if (panelErrEl) { panelErrEl.textContent = msg || ''; panelErrEl.hidden = !msg; } }
 
   const ORG_TYPE_LABELS = { foundation: 'Foundation', corporate: 'Corporate', government: 'Government', nonprofit: 'Nonprofit', member_organization: 'Member organization' };
-  const ROLE_LABELS = { donor: 'Donor', vendor: 'Vendor', customer: 'Customer', board_member: 'Board member' };
+  const ROLE_LABELS = { donor: 'Donor', vendor: 'Vendor', customer: 'Customer', board_member: 'Board member', dues_member: 'Dues member' };
   function kindBadge(c) {
     const label = c.kind === 'organization'
       ? 'Organization' + (c.org_type ? ' · ' + (ORG_TYPE_LABELS[c.org_type] || c.org_type) : '')
@@ -148,7 +148,7 @@
       + '<div class="organizational-panel-field-full"><label class="organizational-label">Website<input type="url" id="contact-website" class="organizational-input" value="' + esc(c.website || '') + '"></label></div>'
       + '<div class="organizational-panel-field-full">'
       + '<label class="organizational-label">Roles</label>'
-      + roleBox('donor') + roleBox('vendor', 'can be billed via Purchases') + roleBox('customer', 'can be invoiced via Sales') + roleBox('board_member')
+      + roleBox('donor') + roleBox('vendor', 'can be billed via Purchases') + roleBox('customer', 'can be invoiced via Sales') + roleBox('board_member') + roleBox('dues_member', 'terms are kept in Membership')
       + '</div>'
       + donorLink
       + '</div>'

@@ -90,24 +90,30 @@ Branch `build/sponsorship` (cut from `main`). One pull request per milestone, ea
 
 # PROGRESS: Membership build
 
-Branch `build/membership`, cut from `main`. Spec: `build-specs/membership.md` on branch `cloud-specs`.
+Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponsorship merge). Spec: `build-specs/membership.md` on branch `cloud-specs`.
 
 ## Done
-- M1: status helper `server/organizational/lib/membershipStatus.js` (status, term dates in both year modes, renewal window, proration) with table-driven tests in `tests/membership/status.test.js`.
-- Tests run with `node --test tests/` (`tests/index.js` from the Sponsorship build loads every test file).
+- M1 status rules: `server/organizational/lib/membershipStatus.js` (status, term dates in both year modes, renewal window, proration), table-driven tests in `tests/membership/status.test.js`.
+- M1 migration `db/migrations/344_membership_core.sql` (in one transaction): settings, tier columns and `org_membership_tier_prices` (the tier's old single price moves there and the column is dropped), terms, seats, reshaped payments (kind, method, discount, approver, refund link, processor ref), templates, message log, `manage_membership` permission, copy of `org_members` to contacts (matched by email), the `dues_member` role, terms and payments; reminders move to the message log; old tables and types dropped. Tested by `tests/membership/migration.db.test.js`.
+- M1 server: `lib/membership.js` (settings, prices, terms with payments, status for every dues member, the dues-member list, renewals), new guarded routes in `routes/membership.js` (old Router removed), write area and read areas in `requireWriteAccess.js`, `manage_membership` in `accessPermissions.js` and its label in Settings, `dues_member` writable and shown on the Contacts page; `banking.js`, `membershipDuesPayment.js`, `donors.js` and the attention feed read terms instead of `org_members`. Tests in `tests/membership/routes.db.test.js`.
 
 ## Next
-- M1, not started yet: migration `db/migrations/344_membership_core.sql`, new routes, screens. Nothing of it is written.
-- Plan worked out while reading the code (use or change freely):
-  - Migration 344: `org_membership_settings` (one row per workspace, every column with a default); extend `org_membership_tiers` (applies_to, min/suggested price, budget bracket, benefit value, seats included, benefits list, eligibility statement and tick, archived_at) plus `org_membership_tier_prices`; `org_membership_terms`; `org_membership_seats`; reshape `org_membership_payments` (add org_id, term_id, constituent_id, kind, method, discount and reason, processor ref unique, approver, refund_of; replace the policy that joins `org_members` with an org_id policy); `org_membership_templates`, `org_membership_messages`; add `manage_membership` to the `org_access_permissions` permission check; copy `org_members` rows to contacts (match by email) with the `dues_member` role, terms and payments; then drop `org_membership_reminders`, `org_members`, their trigger functions and the unused types `membership_status` and `reminder_type`. RLS plus `GRANT ... TO causal_app` on each new table (pattern: migration 343).
-  - Status history and extensions go to `org_audit_log` through `logAudit` (no extra table).
-  - Waiver: created unapproved; a different person with membership write approves it; only approved waivers count (already how `coveredCents` works).
-  - Guards: write area `membership` in `requireWriteAccess.js` (admin, finance, staff, fundraising, manager `manage_membership`); read areas `membership` (those plus `donor_details` and `manage_donors` holders; needs a small `permissions` list on the read-area rule) and `membership_summary` (adds board). Tiers and settings: `requireOrgRole(['admin', ...FINANCE_ROLES])`. CSV export: same as Donors export (admin and finance).
-  - Files outside the module that read `org_members` and must move to terms when it is dropped: `routes/banking.js` (dues match candidates), `lib/membershipDuesPayment.js`, `routes/donors.js` (giving history), `lib/OrganizationalAttentionFeed.js` (renewals due).
-  - Front end: `public/organizational/js/apiJson` redirects on 403 unless the code is `no_access`; pass `skip403Redirect` for write refusals (`no_write_access`).
-  - Test database: run the schema as superuser; tests that check RLS must grant table rights to `causal_app` and `SET ROLE causal_app`, because `schema.sql` carries no grants.
+- M1 screens: rewrite `public/organizational/membership.html` and `js/membership.js` (dues members list, record page with terms, payments and status history, renewals, tiers, settings, summary). Then open the M1 pull request.
 
 ## Blocked or needs the owner
 
+## Decisions to review
+- A waiver is entered unapproved and counts only once a different person with membership write access approves it. Waivers create no ledger entry.
+- A partly paid term stays pending. An unpaid term whose end date has passed shows as lapsed.
+- A paid term that has not started yet (a new joiner paying ahead) shows as pending until it starts.
+- Monthly proration applies only in fixed-year mode and only to joins, not to renewals that follow on.
+- Status history and extensions are read from the audit log, not a separate table.
+- The dues-member CSV export is limited to admins and finance, as the Donors export is.
+- A refund is entered against one payment, up to what is left of it, and waits unposted for Accounting (M5).
+- Matching a dues payment to a bank line in Banking still posts it, as before; the Dues postings tab (M5) replaces that.
+
+## Testing
+- `TEST_DATABASE_URL=... node --test tests/` runs everything; add `TEST_SCHEMA_SQL=<path to build-specs/schema.sql>` to run the migration copy test.
+
 ## After merge (owner actions per pull request)
-- M1 (when built): apply migration 344; rerun the demo snapshot, because the demo restore inserts snapshot rows as-is and new columns on covered tables would be null.
+- M1: apply `db/migrations/344_membership_core.sql`; restart. Rerun the demo snapshot: the demo restore inserts snapshot rows as they are, and the payments table now has an org column and new required fields. Each workspace that uses membership should check Membership settings (year mode, grace days) and give each tier a revenue account and program.

@@ -3,7 +3,7 @@
 const CONTACT_KINDS = new Set(['individual', 'organization']);
 const ORG_TYPES = new Set(['foundation', 'corporate', 'government', 'nonprofit', 'member_organization']);
 const CONTACT_ROLES = new Set(['donor', 'vendor', 'customer', 'board_member', 'staff', 'dues_member']);
-const WRITABLE_ROLES = new Set(['donor', 'vendor', 'customer', 'board_member']);
+const WRITABLE_ROLES = new Set(['donor', 'vendor', 'customer', 'board_member', 'dues_member']);
 
 const CURRENT_ROLE_CONDITION = `r.starts_on <= CURRENT_DATE AND (r.ends_on IS NULL OR r.ends_on > CURRENT_DATE)`;
 

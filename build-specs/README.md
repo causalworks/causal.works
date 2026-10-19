@@ -34,7 +34,7 @@ The system is one application and one database. Modules are screens and routes o
 
 ## Public pages and links (new to the platform; build once, carefully)
 
-No route yet accepts anonymous writes into workspace tables. Both modules need a few. Build them as one small shared module, `server/organizational/public/` (routes) plus `server/organizational/lib/publicLinks.js` and `lib/rateLimit.js`, in the first milestone of whichever module reaches it first (Membership milestone M2). The other module reuses it; check `main` before writing your own.
+No route yet accepts anonymous writes into workspace tables. Both modules need a few. Build them as one small shared module, `server/organizational/public/` (routes) plus `server/organizational/lib/publicLinks.js` and `lib/rateLimit.js`, in the Sponsorship milestone that needs it (S6), or in the first Membership milestone that needs it if that comes first. The other module reuses it; check `main` before writing your own.
 
 - **Narrow routes.** Each public route resolves the workspace from the slug in the path, enters the organization context, and does exactly one job. It returns no internal ids beyond what the page needs and never lists records.
 - **Allowlist.** Every public route is written in `route-access-allowlist.json` with its reason and the audit must pass.

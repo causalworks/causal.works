@@ -1,6 +1,6 @@
 # Sponsorship: build spec
 
-Branch `build/sponsorship`. Migration range 360-379. Budget guide: about half of the available cloud credit; stop at the end of a milestone rather than start one you cannot finish. Read `README.md` first.
+Branch `build/sponsorship`. Migration range 360-379. Priority: this build comes first and is to be completed (S1 to S6) before any Membership work gets credit. Stop at the end of a milestone rather than start one you cannot finish. Read `README.md` first.
 
 ## Purpose
 
@@ -39,7 +39,7 @@ Routes in `server/organizational/routes/sponsored-projects.js` (list, create, ch
 - `org_sponsor_approvals` (project, kind: funder letter of inquiry, proposal, pledge, agreement, solicitation material, publicity; draft document, approved by, approved at, signed copy document).
 - `org_sponsor_closings` (project, destination kind, destination contact, amount, date, reason, document, ledger link).
 - `org_sponsor_statements` (project, month, generated document id, sent at; unique project plus month).
-- Reuse `org_public_links`, `org_payment_accounts` from the Membership build if present on `main`; if not, build the lead-link milestone last and check again.
+- `org_public_links` and the shared public module (README) are built by this build in S6 unless they are already on `main`; check `main` first. Create the table with the columns the README describes so Membership can reuse it. `org_payment_accounts` and `payment_provider_events` belong to Membership.
 
 All with row-level security; program-limited policies where a table has a project's program.
 
@@ -63,7 +63,7 @@ No spending before approval is reimbursed; no use of the sponsor's tax number or
 
 **S5. Pre-approved grant model.** Releasing money to the project's legal entity: entity contact, W-9 flag required before first release, release history, grant agreement attached to each release, year-end sheet with the information-return flag, noncash items. Closing a project with the recorded transfer (rule 12).
 
-**S6. Lead links and optional pages.** Scoped lead links using the shared public module (check `main`; if it is not merged, write against the interface in the README and note it): balance and activity view, payment request form, report form, document upload; an optional public project page with a donate button that opens the hosted payment page when the Membership build's payment provider code is present on `main` (otherwise leave the button out); recurring-gift hook note only.
+**S6. Lead links and optional pages.** Build the shared public module here if it is not already on `main` (README: narrow routes, allowlist, rate limiter, honeypot, hashed single-use and scoped revocable links), then scoped lead links using it: balance and activity view, payment request form, report form, document upload; an optional public project page with a donate button that opens the hosted payment page when the Membership build's payment provider code is present on `main` (otherwise leave the button out); recurring-gift hook note only.
 
 ## Out of scope for this build
 

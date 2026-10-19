@@ -140,31 +140,46 @@
     return '<span class="' + cls + '">' + esc(label) + '</span>';
   }
 
+  const CATEGORY_GROUPS = [
+    ['Governance', ['articles_of_incorporation', 'bylaws', 'board_minutes', 'board_resolution', 'conflict_of_interest_policy', 'coi_disclosure']],
+    ['Tax, registration and audit', ['irs_determination_letter', 'form_990', 'audited_financials', 'management_letter', 'payroll_tax_filing', 'state_registration']],
+    ['Policies', ['financial_policy', 'personnel_policy']],
+    ['Insurance and agreements', ['insurance_certificate', 'contract_lease', 'vendor_w9']],
+  ];
+  const LINK_STYLE = 'color:var(--organizational-accent);text-decoration:underline;';
+  let recordDocuments = [];
+
+  function recordOwner(doc) {
+    const base = '/organizational/o/' + encodeURIComponent(slug);
+    if (doc.source_ref_type === 'bill') return { group: 'Accounting', label: 'Bill', href: base + '/purchases?open_bill=' + doc.source_ref_id };
+    if (doc.source_ref_type === 'invoice') return { group: 'Accounting', label: 'Invoice', href: base + '/sales?open_invoice=' + doc.source_ref_id };
+    if (doc.source_ref_type === 'ledger_transaction') return { group: 'Accounting', label: 'Ledger entry', href: base + '/transactions?txn=' + doc.source_ref_id };
+    if (doc.source_ref_type === 'expense_claim') return { group: 'Accounting', label: 'Expense claim', href: base + '/expense-claims' };
+    if (doc.source_ref_type) return { group: 'Accounting', label: 'Saved report', href: base + '/reports' };
+    if (doc.grant_id) return { group: 'Funding', label: 'Grant', href: base + '/grants' };
+    if (doc.obligation_id) return { group: 'Compliance', label: 'Obligation', href: base + '/compliance' };
+    return { group: 'Sponsorship', label: 'Sponsored project', href: base + '/sponsored-projects' };
+  }
+
+  function docTitleLink(doc) {
+    return '<a href="/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents/' + doc.id + '/download" style="' + LINK_STYLE + '">' + esc(doc.title) + '</a>';
+  }
+  function docMeta(doc) {
+    return esc(CATEGORY_LABELS[doc.category] || doc.category) + (doc.fiscal_year ? ' · FY' + doc.fiscal_year : '') + (doc.version > 1 ? ' · v' + doc.version : '');
+  }
+  function groupTable(title, rowsHtml) {
+    return '<h2 class="organizational-subheading">' + esc(title) + '</h2><section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>' + rowsHtml + '</tbody></table></section>';
+  }
+
   function documentRowHtml(doc) {
-    const visBadge = doc.visibility === 'admins_only'
-      ? '<span class="organizational-badge">Admins only</span>' : '';
-    return (
-      '<div class="organizational-card organizational-documents-row" data-doc-id="' + doc.id + '">' +
-        '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">' +
-          '<div>' +
-            '<div class="organizational-org-name">' + esc(doc.title) + '</div>' +
-            '<div class="organizational-org-meta">' + esc(CATEGORY_LABELS[doc.category] || doc.category) +
-              (doc.fiscal_year ? ' · FY' + doc.fiscal_year : '') +
-              (doc.version > 1 ? ' · v' + doc.version : '') +
-            '</div>' +
-          '</div>' +
-          '<div style="text-align:right; white-space:nowrap;">' +
-            retentionBadge(doc) + visBadge +
-          '</div>' +
-        '</div>' +
-        '<div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">' +
-          '<a class="organizational-btn organizational-btn-outline" href="/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents/' + doc.id + '/download">Download</a>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline" data-doc-edit="' + doc.id + '">Edit</button>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline" data-doc-share="' + doc.id + '">Share</button>' +
-          '<button type="button" class="organizational-btn organizational-btn-outline" data-doc-archive="' + doc.id + '">Archive</button>' +
-        '</div>' +
-      '</div>'
-    );
+    const visBadge = doc.visibility === 'admins_only' ? ' <span class="organizational-badge">Admins only</span>' : '';
+    return '<tr data-doc-id="' + doc.id + '"><td style="width:34%;font-weight:500;">' + docTitleLink(doc) + '</td>'
+      + '<td style="color:var(--text-secondary);">' + docMeta(doc) + '</td>'
+      + '<td style="white-space:nowrap;">' + retentionBadge(doc) + visBadge + '</td>'
+      + '<td style="width:170px;text-align:right;white-space:nowrap;font-size:0.8125rem;">'
+      + '<a href="#" data-doc-edit="' + doc.id + '" style="' + LINK_STYLE + '">Edit</a> · '
+      + '<a href="#" data-doc-share="' + doc.id + '" style="' + LINK_STYLE + '">Share</a> · '
+      + '<a href="#" data-doc-archive="' + doc.id + '" style="' + LINK_STYLE + '">Archive</a></td></tr>';
   }
 
   function renderList() {
@@ -175,48 +190,60 @@
       listEl.innerHTML = '<p class="organizational-empty">No documents yet.</p>';
       return;
     }
-    listEl.innerHTML = filtered.map(documentRowHtml).join('');
+    const used = new Set();
+    let html = CATEGORY_GROUPS.map((g) => {
+      const rows = filtered.filter((d) => g[1].indexOf(d.category) >= 0);
+      rows.forEach((d) => used.add(d.id));
+      return rows.length ? groupTable(g[0], rows.map(documentRowHtml).join('')) : '';
+    }).join('');
+    const rest = filtered.filter((d) => !used.has(d.id));
+    if (rest.length) html += groupTable('Other', rest.map(documentRowHtml).join(''));
+    listEl.innerHTML = html;
+  }
+
+  function renderRecords() {
+    const el = document.getElementById('organizational-documents-records-list');
+    if (!el) return;
+    if (!recordDocuments.length) {
+      el.innerHTML = '<p class="organizational-empty">No files are attached to records.</p>';
+      return;
+    }
+    el.innerHTML = ['Accounting', 'Funding', 'Compliance', 'Sponsorship'].map((g) => {
+      const rows = recordDocuments.map((d) => ({ d, o: recordOwner(d) })).filter((x) => x.o.group === g);
+      return rows.length ? groupTable(g, rows.map((x) => '<tr><td style="width:34%;font-weight:500;">' + docTitleLink(x.d) + '</td>'
+        + '<td style="color:var(--text-secondary);">' + docMeta(x.d) + '</td>'
+        + '<td style="white-space:nowrap;">' + retentionBadge(x.d) + '</td>'
+        + '<td style="width:170px;text-align:right;white-space:nowrap;font-size:0.8125rem;"><a href="' + esc(x.o.href) + '" style="' + LINK_STYLE + '">Open ' + esc(x.o.label.toLowerCase()) + '</a></td></tr>').join('')) : '';
+    }).join('');
   }
 
   async function loadDocuments() {
+    const base = '/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents?scope=';
     try {
-      const res = await fetch('/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents', { credentials: 'include' });
-      const data = res.ok ? await res.json() : {};
-      documents = data.documents || [];
+      const [org, rec] = await Promise.all([
+        fetch(base + 'org', { credentials: 'include' }).then((r) => (r.ok ? r.json() : {})),
+        fetch(base + 'records', { credentials: 'include' }).then((r) => (r.ok ? r.json() : {})),
+      ]);
+      documents = org.documents || [];
+      recordDocuments = rec.documents || [];
       renderList();
+      renderRecords();
     } catch (e) {
       console.error('loadDocuments:', e);
       if (listEl) listEl.innerHTML = '<p class="organizational-empty">Could not load documents.</p>';
     }
   }
 
-  function populateBinderFyOptions() {
-    if (!binderFySelect) return;
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let y = currentYear + 1; y >= currentYear - 5; y--) years.push(y);
-    binderFySelect.innerHTML = years.map((y) => '<option value="' + y + '">' + y + '</option>').join('');
-    binderFySelect.value = String(currentYear);
-  }
-
   function binderRowHtml(item) {
+    const statusText = { present: 'Present', missing: 'Missing', expiring: 'Needs attention' }[item.status] || '';
     const statusBadge = {
-      present: '<span class="organizational-badge organizational-badge-doc-permanent">Present</span>',
-      missing: '<span class="organizational-badge organizational-badge-doc-expired">Missing</span>',
-      expiring: '<span class="organizational-badge organizational-badge-doc-expiring_soon">Needs attention</span>',
-    }[item.status] || '';
+      present: 'organizational-badge-doc-permanent', missing: 'organizational-badge-doc-expired', expiring: 'organizational-badge-doc-expiring_soon',
+    }[item.status];
     const docLinks = (item.documents || []).map((d) =>
-      '<a href="/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents/' + d.id + '/download">' + esc(d.title) + '</a>'
+      '<a href="/api/organizational/orgs/' + encodeURIComponent(slug) + '/documents/' + d.id + '/download" style="' + LINK_STYLE + '">' + esc(d.title) + '</a>'
     ).join(', ');
-    return (
-      '<div class="organizational-card" style="display:flex; justify-content:space-between; align-items:center; gap:12px;">' +
-        '<div>' +
-          '<div class="organizational-org-name">' + esc(item.label) + '</div>' +
-          (docLinks ? '<div class="organizational-org-meta">' + docLinks + '</div>' : '') +
-        '</div>' +
-        statusBadge +
-      '</div>'
-    );
+    return '<tr><td style="width:34%;font-weight:500;">' + esc(item.label) + '</td><td>' + (docLinks || '<span style="color:var(--text-muted);">None on file</span>') + '</td>'
+      + '<td style="width:140px;text-align:right;"><span class="organizational-badge ' + statusBadge + '">' + statusText + '</span></td></tr>';
   }
 
   async function loadBinder() {
@@ -231,12 +258,21 @@
       const data = res.ok ? await res.json() : {};
       const checklist = data.checklist || [];
       binderListEl.innerHTML = checklist.length
-        ? checklist.map(binderRowHtml).join('')
+        ? '<section class="organizational-card organizational-card-flush"><table class="organizational-table" style="margin:0;"><tbody>' + checklist.map(binderRowHtml).join('') + '</tbody></table></section>'
         : '<p class="organizational-empty">No expectations configured.</p>';
     } catch (e) {
       console.error('loadBinder:', e);
       binderListEl.innerHTML = '<p class="organizational-empty">Could not load audit binder.</p>';
     }
+  }
+
+  function populateBinderFyOptions() {
+    if (!binderFySelect) return;
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let y = currentYear + 1; y >= currentYear - 5; y--) years.push(y);
+    binderFySelect.innerHTML = years.map((y) => '<option value="' + y + '">' + y + '</option>').join('');
+    binderFySelect.value = String(currentYear);
   }
 
   function openUploadModal() {
@@ -517,6 +553,7 @@
         const editBtn = e.target.closest('[data-doc-edit]');
         const shareBtn = e.target.closest('[data-doc-share]');
         const archiveBtn = e.target.closest('[data-doc-archive]');
+        if (editBtn || shareBtn || archiveBtn) e.preventDefault();
         if (editBtn) {
           const doc = documents.find((d) => String(d.id) === editBtn.getAttribute('data-doc-edit'));
           if (doc) openEditModal(doc);

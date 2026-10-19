@@ -9,6 +9,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { logAudit } = require('../lib/auditLog');
 const { canWrite } = require('../middleware/requireWriteAccess');
+const { hasAccountingAccess } = require('../middleware/requireAccountingAccess');
 const { isFiscalYearLocked } = require('../lib/ledgerPosting');
 const { resourceUrlFor } = require('../lib/podClient');
 const { getAuthenticatedFetchForSyncService } = require('../lib/causalSyncService');
@@ -170,6 +171,11 @@ function rowToDocument(row) {
   };
 }
 
+const NO_OWNER_RECORD = ' AND source_ref_type IS NULL';
+function ownerRecordClause(req) {
+  return hasAccountingAccess(req, 'accounting_read') ? '' : NO_OWNER_RECORD;
+}
+
 function registerOrganizationalDocumentRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
@@ -186,6 +192,12 @@ function registerOrganizationalDocumentRoutes(app, pool) {
       const params = [orgId];
       if (!isAdmin(role)) {
         conditions.push(`visibility = 'org_all'`);
+      }
+      if (ownerRecordClause(req)) conditions.push('source_ref_type IS NULL');
+      if (req.query.scope === 'org') {
+        conditions.push('source_ref_type IS NULL AND grant_id IS NULL AND obligation_id IS NULL AND sponsored_project_id IS NULL');
+      } else if (req.query.scope === 'records') {
+        conditions.push('(source_ref_type IS NOT NULL OR grant_id IS NOT NULL OR obligation_id IS NOT NULL OR sponsored_project_id IS NOT NULL)');
       }
       if (!('include_archived' in req.query)) {
         conditions.push('archived_at IS NULL');
@@ -234,7 +246,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = isAdmin(role) ? '' : `AND visibility = 'org_all'`;
+      const visClause = (isAdmin(role) ? '' : `AND visibility = 'org_all'`) + ownerRecordClause(req);
 
       const r = await pool.query(
         `SELECT * FROM org_documents WHERE org_id = $1 AND archived_at IS NULL ${visClause} ORDER BY expiration_date NULLS LAST, retention_until NULLS LAST`,
@@ -260,7 +272,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = isAdmin(role) ? '' : `AND visibility = 'org_all'`;
+      const visClause = (isAdmin(role) ? '' : `AND visibility = 'org_all'`) + ownerRecordClause(req);
 
       const expectations = await pool.query(
         `SELECT * FROM org_document_expectations WHERE org_id IS NULL OR org_id = $1 ORDER BY display_order`,
@@ -434,6 +446,9 @@ function registerOrganizationalDocumentRoutes(app, pool) {
       const doc = r.rows[0];
       if (!doc) return res.status(404).json({ error: 'Document not found' });
       if (doc.visibility === 'admins_only' && !isAdmin(role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      if (doc.source_ref_type && ownerRecordClause(req)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 

@@ -32,10 +32,11 @@
 
         <div id="organizational-org-dashboard" hidden>
           <h1 class="organizational-org-dashboard-title" id="organizational-org-title">Documents</h1>
-          <p class="organizational-hint" style="margin-top: -8px;">Track filed and signed documents your organization is required to keep for audit, tax, and legal purposes — and see what's missing before an audit.</p>
+          <p class="organizational-hint" style="margin-top: -8px;">The organization's own records: governance, tax, insurance and policies, with retention dates and an audit binder. Files that back a bill, invoice, grant or other record stay with that record and are also listed under Attached to records.</p>
 
           <div class="organizational-tabs" id="organizational-documents-tabs" style="margin-top: 20px;">
-            <button type="button" class="organizational-tab-trigger active" data-tab="tab-doc-all" id="tab-btn-doc-all">All documents</button>
+            <button type="button" class="organizational-tab-trigger active" data-tab="tab-doc-all" id="tab-btn-doc-all">Organization records</button>
+            <button type="button" class="organizational-tab-trigger" data-tab="tab-doc-records" id="tab-btn-doc-records">Attached to records</button>
             <button type="button" class="organizational-tab-trigger" data-tab="tab-doc-binder" id="tab-btn-doc-binder">Audit binder</button>
           </div>
 
@@ -48,6 +49,13 @@
             </div>
             <div id="organizational-documents-list">
               <p class="organizational-empty">Loading documents…</p>
+            </div>
+          </div>
+
+          <div id="tab-doc-records" class="organizational-tab-panel" hidden>
+            <p class="organizational-hint" style="margin: 16px 0;">Files kept with a bill, invoice, expense claim, ledger entry, grant, obligation or sponsored project. Each stays with its record: add, replace or remove it there. Listed here so retention and audit lookups cover them.</p>
+            <div id="organizational-documents-records-list">
+              <p class="organizational-empty">Loading…</p>
             </div>
           </div>
 

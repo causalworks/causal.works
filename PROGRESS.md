@@ -98,7 +98,7 @@ Branch `build/membership`, cut from `main` (rebased onto `main` after the Sponso
 - M1 server: `lib/membership.js` (settings, prices, terms with payments, status for every dues member, the dues-member list, renewals), new guarded routes in `routes/membership.js` (old Router removed), write area and read areas in `requireWriteAccess.js`, `manage_membership` in `accessPermissions.js` and its label in Settings, `dues_member` writable and shown on the Contacts page; `banking.js`, `membershipDuesPayment.js`, `donors.js` and the attention feed read terms instead of `org_members`. Tests in `tests/membership/routes.db.test.js`.
 
 - M1 screens: `public/organizational/membership.html` and `js/membership.js` rewritten (dues members list with filters and CSV export, record panel with terms, payments, seats and history and the actions, renewals, summary, tiers with dated prices and archive, settings). Board members see Summary and Tiers only. Checked in a browser at desktop and phone width. New badge and form classes in `organizational.css`.
-- M1 pull request opened from `build/membership-m1`.
+- M1 pull request #10 from `build/membership-m1`.
 
 ## Next
 - M2: join, renew and update pages on the shared public module (`lib/publicLinks.js`, `lib/rateLimit.js`, `server/organizational/public/`).

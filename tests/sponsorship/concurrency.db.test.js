@@ -170,11 +170,12 @@ test('two refund events with different refund ids at once never refund more than
   const ws = await h.seedWorkspace(pool);
   const person = await h.one(pool, `INSERT INTO org_constituents (org_id, display_name, kind) VALUES ($1, 'Dues payer', 'individual') RETURNING id`, [ws.orgId]);
   const term = await h.one(pool, `INSERT INTO org_membership_terms (org_id, constituent_id, starts_on, ends_on) VALUES ($1, $2, '2026-01-01', '2026-12-31') RETURNING id`, [ws.orgId, person.id]);
+  const ref = 'pi_race_' + ws.orgId;
   await pool.query(
     `INSERT INTO org_membership_payments (org_id, term_id, constituent_id, kind, method, amount_cents, processor_ref, posting_status)
-     VALUES ($1, $2, $3, 'payment', 'card', 1000, 'pi_race', 'unposted')`, [ws.orgId, term.id, person.id]);
-  const send = (id) => payEvents().handleEvent(pool, ws.orgId, { kind: 'refunded', orgId: ws.orgId, paymentRef: 'pi_race', refunds: [{ id, amountCents: 700 }] });
-  await Promise.all([send('re_one'), send('re_two')]);
+     VALUES ($1, $2, $3, 'payment', 'card', 1000, $4, 'unposted')`, [ws.orgId, term.id, person.id, ref]);
+  const send = (id) => payEvents().handleEvent(pool, ws.orgId, { kind: 'refunded', orgId: ws.orgId, paymentRef: ref, refunds: [{ id: id + ws.orgId, amountCents: 700 }] });
+  await Promise.all([send('re_one_'), send('re_two_')]);
   const total = (await pool.query(`SELECT COALESCE(SUM(amount_cents), 0)::int AS s FROM org_membership_payments WHERE org_id = $1 AND kind = 'refund'`, [ws.orgId])).rows[0].s;
   assert.equal(total, 1000);
 });

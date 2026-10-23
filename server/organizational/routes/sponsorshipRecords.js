@@ -172,7 +172,8 @@ function registerSponsorshipRecordRoutes(app, pool) {
     if (!project) return null;
     const r = await pool.query(
       `SELECT id, title, sponsor_doc_type, category::text AS category, version, supersedes_id, is_current, document_date::text AS document_date, created_at, original_filename
-         FROM org_documents WHERE org_id = $1 AND sponsored_project_id = $2 AND archived_at IS NULL ORDER BY title, version DESC`, [req.orgId, project.id]);
+         FROM org_documents WHERE org_id = $1 AND sponsored_project_id = $2 AND archived_at IS NULL
+          AND ($3::boolean IS NOT TRUE OR sponsor_doc_type IS DISTINCT FROM 'tax_form') ORDER BY title, version DESC`, [req.orgId, project.id, req.coopOrgRole === 'program']);
     return { httpStatus: 200, body: { documents: r.rows, types: Object.entries(DOC_TYPES).map(([key, v]) => ({ key, label: v.label, category: v.category })) } };
   }));
 

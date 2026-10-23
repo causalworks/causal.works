@@ -190,7 +190,7 @@ function projectDocCondition(req, params, column) {
   if (sc.all) return '';
   if (sc.none) return `${column} IS NULL`;
   params.push(sc.programs);
-  return `(${column} IS NULL OR ${column} IN (SELECT id FROM org_sponsored_projects WHERE sponsor_org_id = $1 AND program_id = ANY($${params.length}::int[])))`;
+  return `(${column} IS NULL OR (${column} IN (SELECT id FROM org_sponsored_projects WHERE sponsor_org_id = $1 AND program_id = ANY($${params.length}::int[])) AND sponsor_doc_type IS DISTINCT FROM 'tax_form'))`;
 }
 
 async function mayOpenProjectDoc(pool, req, doc) {
@@ -198,6 +198,7 @@ async function mayOpenProjectDoc(pool, req, doc) {
   const sc = projectDocScope(req);
   if (sc.all) return true;
   if (sc.none) return false;
+  if (doc.sponsor_doc_type === 'tax_form') return false;
   const r = await pool.query('SELECT 1 FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 AND program_id = ANY($3::int[])', [doc.sponsored_project_id, req.orgId, sc.programs]);
   return r.rows.length > 0;
 }

@@ -32,21 +32,23 @@ test('project files in the general Documents screen follow the sponsorship read 
     const docA = await addDoc(pool, ws, 'W-9 A', a.id, 'tax_form');
     const docB = await addDoc(pool, ws, 'W-9 B', b.id, 'tax_form');
     const plain = await addDoc(pool, ws, 'Bylaws', null);
+    const agreementB = await addDoc(pool, ws, 'Agreement B', b.id, 'agreement');
     await asApp(ws.orgId);
     const r = h.loadRoutes('routes/documents.js', 'registerOrganizationalDocumentRoutes', pool);
     const ids = async (user, role, programIds) => (await r.call('GET', D, { user, role, orgId: ws.orgId, programIds, params: { slug: ws.slug } })).body.documents.map((d) => d.id).sort((x, y) => x - y);
-    const both = [docA, docB, plain].sort((x, y) => x - y);
+    const both = [docA, docB, plain, agreementB].sort((x, y) => x - y);
 
     assert.deepEqual(await ids(ws.users[0].id, 'admin'), both);
     assert.deepEqual(await ids(ws.users[1].id, 'finance'), both);
     assert.deepEqual(await ids(ws.users[2].id, 'board'), both);
-    assert.deepEqual(await ids(ws.users[3].id, 'program', [ws.programs.projectB]), [docB, plain].sort((x, y) => x - y));
+    assert.deepEqual(await ids(ws.users[3].id, 'program', [ws.programs.projectB]), [agreementB, plain].sort((x, y) => x - y));
     assert.deepEqual(await ids(fundraising, 'fundraising'), [plain]);
 
     const open = async (user, role, id, programIds) => (await r.call('GET', D + '/:id/download', { user, role, orgId: ws.orgId, programIds, params: { slug: ws.slug, id: String(id) } })).statusCode;
     assert.equal(await open(ws.users[3].id, 'program', docA, [ws.programs.projectB]), 403);
     assert.equal(await open(fundraising, 'fundraising', docA), 403);
-    assert.notEqual(await open(ws.users[3].id, 'program', docB, [ws.programs.projectB]), 403);
+    assert.equal(await open(ws.users[3].id, 'program', docB, [ws.programs.projectB]), 403);
+    assert.notEqual(await open(ws.users[3].id, 'program', agreementB, [ws.programs.projectB]), 403);
     assert.notEqual(await open(ws.users[1].id, 'finance', docA), 403);
 
     const retention = async (user, role, programIds) => {

@@ -10,6 +10,7 @@ const { postLedgerTransaction, buildReversingLines } = require('./ledgerPosting'
 const { logAudit } = require('./auditLog');
 const M = require('./membership');
 const S = require('./membershipStatus');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -87,7 +88,7 @@ async function loadPaymentForPosting(pool, orgId, paymentId) {
   return r.rows[0] || null;
 }
 
-async function postDuesPayment(pool, { orgId, userId, paymentId, postingDate, depositAccountId, reference }) {
+async function postDuesPaymentUnlocked(pool, { orgId, userId, paymentId, postingDate, depositAccountId, reference }) {
   const date = M.day(postingDate);
   if (!date) return { httpStatus: 400, body: { error: 'Enter the posting date.' } };
   const p = await loadPaymentForPosting(pool, orgId, paymentId);
@@ -136,7 +137,7 @@ async function postDuesPayment(pool, { orgId, userId, paymentId, postingDate, de
   return { httpStatus: 200, body: { id: p.id, posting_status: 'posted', ledger_transaction_id: result.body.id, split: parts } };
 }
 
-async function reverseDuesPosting(pool, { orgId, userId, paymentId, reason }) {
+async function reverseDuesPostingUnlocked(pool, { orgId, userId, paymentId, reason }) {
   const why = M.text(reason);
   if (!why) return { httpStatus: 400, body: { error: 'Give the reason for reversing this posting.' } };
   const p = (await pool.query('SELECT * FROM org_membership_payments WHERE id = $1 AND org_id = $2', [paymentId, orgId])).rows[0];
@@ -191,7 +192,7 @@ async function recognitionPreview(pool, orgId, month) {
   return { month, posting_date: end, rows, total_cents: rows.reduce((a, x) => a + x.amount_cents, 0), posted: posted.rows };
 }
 
-async function postRecognition(pool, { orgId, userId, month }) {
+async function postRecognitionUnlocked(pool, { orgId, userId, month }) {
   const pv = await recognitionPreview(pool, orgId, month);
   if (pv.error) return { httpStatus: 400, body: { error: pv.error } };
   if (!pv.rows.length) return { httpStatus: 409, body: { error: 'Nothing to recognise for ' + month + '.' } };
@@ -231,7 +232,7 @@ async function postRecognition(pool, { orgId, userId, month }) {
   return { httpStatus: 200, body: { month, ledger_transaction_id: txnId, terms: pv.rows.length, total_cents: pv.total_cents } };
 }
 
-async function reverseRecognition(pool, { orgId, userId, month, reason }) {
+async function reverseRecognitionUnlocked(pool, { orgId, userId, month, reason }) {
   const why = M.text(reason);
   if (!why) return { httpStatus: 400, body: { error: 'Give the reason for reversing this recognition run.' } };
   if (!MONTH_RE.test(String(month || ''))) return { httpStatus: 400, body: { error: 'Choose a month.' } };
@@ -255,6 +256,11 @@ async function reverseRecognition(pool, { orgId, userId, month, reason }) {
     fields: [{ fieldName: 'month_' + month, oldValue: 'posted', newValue: 'reversed' }], metadata: { reason: why } });
   return { httpStatus: 200, body: { month, reversed: true } };
 }
+
+const postDuesPayment = (pool, a) => withLock(pool, NS.duesPayment, a.paymentId, () => postDuesPaymentUnlocked(pool, a), BUSY);
+const reverseDuesPosting = (pool, a) => withLock(pool, NS.duesPayment, a.paymentId, () => reverseDuesPostingUnlocked(pool, a), BUSY);
+const postRecognition = (pool, a) => withLock(pool, NS.duesRecognition, a.orgId, () => postRecognitionUnlocked(pool, a), BUSY);
+const reverseRecognition = (pool, a) => withLock(pool, NS.duesRecognition, a.orgId, () => reverseRecognitionUnlocked(pool, a), BUSY);
 
 module.exports = {
   splitPayment, splitRefund, monthEnd, recognitionTarget, accountsFor,

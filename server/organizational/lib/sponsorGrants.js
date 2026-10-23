@@ -8,6 +8,7 @@ const { postLedgerTransaction, voidLedgerTransaction, DATE_RE } = require('./led
 const { projectDocumentId } = require('./sponsorMoneyOut');
 const { logAudit } = require('./auditLog');
 const { isoDate } = require('./sponsorFees');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 const DESTINATIONS = { project_charity: 'The project, now its own charity', new_sponsor: 'A new fiscal sponsor', sponsor_decides: 'As the sponsor decides under the agreement' };
 
@@ -73,7 +74,7 @@ function informationReturnCsv(sheet) {
 
 // Closing
 
-async function createClosing(pool, { orgId, userId, projectId, input }) {
+async function createClosingUnlocked(pool, { orgId, userId, projectId, input }) {
   const kind = String(input.destination_kind || '');
   const reason = String(input.reason || '').trim();
   const date = input.closing_date ? String(input.closing_date) : '';
@@ -120,7 +121,7 @@ async function finishProject(pool, { orgId, userId, projectId, closingId }) {
     fields: [{ fieldName: 'status', oldValue: p.rows[0] ? p.rows[0].status : null, newValue: 'ended' }], metadata: { closing_id: closingId } });
 }
 
-async function postClosing(pool, { orgId, userId, closingId, postingDate, bankAccountId, expenseAccountId }) {
+async function postClosingUnlocked(pool, { orgId, userId, closingId, postingDate, bankAccountId, expenseAccountId }) {
   const r = await pool.query(
     `SELECT c.*, p.name AS project_name, p.program_id, p.disbursement_expense_account_id, k.display_name AS destination_name
        FROM org_sponsor_closings c JOIN org_sponsored_projects p ON p.id = c.sponsored_project_id
@@ -155,7 +156,7 @@ async function postClosing(pool, { orgId, userId, closingId, postingDate, bankAc
   return { httpStatus: 200, body: { id: closingId, status: 'posted', ledger_transaction_id: ledgerId } };
 }
 
-async function voidClosing(pool, { orgId, userId, closingId, reason }) {
+async function voidClosingUnlocked(pool, { orgId, userId, closingId, reason }) {
   const why = String(reason || '').trim();
   if (!why) return { httpStatus: 400, body: { code: 'reason_required', error: 'Enter the reason for cancelling the closing.' } };
   const r = await pool.query('SELECT * FROM org_sponsor_closings WHERE id = $1 AND org_id = $2', [closingId, orgId]);
@@ -173,5 +174,9 @@ async function voidClosing(pool, { orgId, userId, closingId, reason }) {
   await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_sponsor_closings', recordId: closingId, fields: [{ fieldName: 'status', oldValue: c.status, newValue: 'void' }], metadata: { reason: why } });
   return { httpStatus: 200, body: { id: closingId, status: 'void' } };
 }
+
+const createClosing = (pool, a) => withLock(pool, NS.projectMoney, a.projectId, () => createClosingUnlocked(pool, a), BUSY);
+const postClosing = (pool, a) => withLock(pool, NS.closingPost, a.closingId, () => postClosingUnlocked(pool, a), BUSY);
+const voidClosing = (pool, a) => withLock(pool, NS.closingPost, a.closingId, () => voidClosingUnlocked(pool, a), BUSY);
 
 module.exports = { DESTINATIONS, releaseHistory, thresholdForYear, informationReturnSheet, informationReturnCsv, createClosing, postClosing, voidClosing };

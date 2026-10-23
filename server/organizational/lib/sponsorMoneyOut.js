@@ -8,6 +8,7 @@ const { postLedgerTransaction, voidLedgerTransaction, DATE_RE } = require('./led
 const { logAudit } = require('./auditLog');
 const { fiscalYearForDate, fyDateRange, getFiscalYearEndMonth } = require('./fiscalYear');
 const { isoDate } = require('./sponsorFees');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 const DEFAULT_SECOND_APPROVAL_CENTS = 500000;
 const REQUEST_METHODS = ['check', 'bank_transfer', 'wire', 'card', 'other'];
@@ -100,7 +101,7 @@ async function secondApprovalThreshold(pool, orgId) {
 
 // Payment requests
 
-async function createRequest(pool, { orgId, userId, projectId, input, linkRef }) {
+async function createRequestUnlocked(pool, { orgId, userId, projectId, input, linkRef }) {
   const project = await loadProjectRow(pool, orgId, projectId);
   if (!project) return refuse(404, 'not_found', 'Sponsored project not found');
   const closed = projectOpenRefusal(project);
@@ -138,7 +139,7 @@ async function createRequest(pool, { orgId, userId, projectId, input, linkRef })
   return { httpStatus: 201, body: { request: r.rows[0], budget_warning: warning } };
 }
 
-async function reviewRequest(pool, { orgId, userId, role, projectId, requestId, action, reason, override, grantAgreementDocumentId }) {
+async function reviewRequestUnlocked(pool, { orgId, userId, role, projectId, requestId, action, reason, override, grantAgreementDocumentId }) {
   const rq = await pool.query('SELECT * FROM org_sponsor_payment_requests WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3', [requestId, orgId, projectId]);
   const req = rq.rows[0];
   if (!req) return refuse(404, 'not_found', 'Payment request not found');
@@ -189,13 +190,13 @@ async function reviewRequest(pool, { orgId, userId, role, projectId, requestId, 
   await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_sponsor_payment_requests', recordId: requestId,
     fields: [{ fieldName: 'status', oldValue: req.status, newValue: 'approved' }],
     metadata: { disbursement_id: disbId, override_reason: bal.overridden ? bal.reason : null } });
-  const appr = await approveDisbursement(pool, { orgId, userId, role, projectId, disbursementId: disbId, skipBalance: true });
+  const appr = await approveDisbursementUnlocked(pool, { orgId, userId, role, projectId, disbursementId: disbId, skipBalance: true });
   return { httpStatus: 200, body: { id: requestId, status: 'approved', disbursement_id: disbId, disbursement: appr.body } };
 }
 
 // Disbursements
 
-async function createDisbursement(pool, { orgId, userId, role, projectId, input, override }) {
+async function createDisbursementUnlocked(pool, { orgId, userId, role, projectId, input, override }) {
   const project = await loadProjectRow(pool, orgId, projectId);
   if (!project) return refuse(404, 'not_found', 'Sponsored project not found');
   const closed = projectOpenRefusal(project);
@@ -232,7 +233,7 @@ async function createDisbursement(pool, { orgId, userId, role, projectId, input,
   return { httpStatus: 201, body: { disbursement: r.rows[0] } };
 }
 
-async function approveDisbursement(pool, { orgId, userId, role, projectId, disbursementId, override, skipBalance }) {
+async function approveDisbursementUnlocked(pool, { orgId, userId, role, projectId, disbursementId, override, skipBalance }) {
   const r = await pool.query('SELECT * FROM org_sponsored_project_disbursements WHERE id = $1 AND sponsored_project_id = $2 AND org_id = $3', [disbursementId, projectId, orgId]);
   const d = r.rows[0];
   if (!d) return refuse(404, 'not_found', 'Disbursement not found');
@@ -388,7 +389,7 @@ async function createRecall(pool, { orgId, userId, projectId, input }) {
   return { httpStatus: 201, body: { recall: r.rows[0] } };
 }
 
-async function postRecall(pool, { orgId, userId, recallId, postingDate }) {
+async function postRecallUnlocked(pool, { orgId, userId, recallId, postingDate }) {
   const r = await pool.query(
     `SELECT r.*, p.name AS project_name, p.program_id FROM org_sponsor_recalls r JOIN org_sponsored_projects p ON p.id = r.sponsored_project_id
       WHERE r.id = $1 AND r.org_id = $2`, [recallId, orgId]);
@@ -419,7 +420,7 @@ async function postRecall(pool, { orgId, userId, recallId, postingDate }) {
   return { httpStatus: 200, body: { id: recallId, status: 'posted', ledger_transaction_id: result.body.id } };
 }
 
-async function voidRecall(pool, { orgId, userId, recallId, reason }) {
+async function voidRecallUnlocked(pool, { orgId, userId, recallId, reason }) {
   const why = String(reason || '').trim();
   if (!why) return refuse(400, 'reason_required', 'Enter the reason for cancelling the recall.');
   const r = await pool.query('SELECT * FROM org_sponsor_recalls WHERE id = $1 AND org_id = $2', [recallId, orgId]);
@@ -435,6 +436,15 @@ async function voidRecall(pool, { orgId, userId, recallId, reason }) {
     fields: [{ fieldName: 'status', oldValue: rc.status, newValue: 'void' }], metadata: { reason: why } });
   return { httpStatus: 200, body: { id: recallId, status: 'void' } };
 }
+
+const byProject = (fn) => (pool, a) => withLock(pool, NS.projectMoney, a.projectId, () => fn(pool, a), BUSY);
+const byRecall = (fn) => (pool, a) => withLock(pool, NS.recallPost, a.recallId, () => fn(pool, a), BUSY);
+const createRequest = byProject(createRequestUnlocked);
+const reviewRequest = byProject(reviewRequestUnlocked);
+const createDisbursement = byProject(createDisbursementUnlocked);
+const approveDisbursement = byProject(approveDisbursementUnlocked);
+const postRecall = byRecall(postRecallUnlocked);
+const voidRecall = byRecall(voidRecallUnlocked);
 
 module.exports = {
   effectiveModel, grantModelRefusal, attachGrantAgreement, setGrantEntity, projectDocumentId,

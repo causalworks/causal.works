@@ -6,10 +6,10 @@
   const GIVING = 'giving';
   // key = panel on the Reports page; owner = module that shows it first; also = other modules that list it
   const REPORTS = [
-    { group: 'Financial statements', key: 'financial-position', name: 'Statement of Financial Position', desc: 'Assets, liabilities and net assets (without and with donor restrictions) at fiscal year-end', owner: 'accounting', need: FIN },
-    { group: 'Financial statements', key: 'statement-of-activities', name: 'Statement of Activities', desc: 'Revenue and expenses by net asset class, and change in net assets for the year', owner: 'accounting', need: FIN },
+    { group: 'Financial statements', key: 'financial-position', name: 'Statement of Financial Position', desc: 'Assets, liabilities and net assets (without and with donor restrictions) at fiscal year-end', owner: 'accounting', need: FIN, board: true },
+    { group: 'Financial statements', key: 'statement-of-activities', name: 'Statement of Activities', desc: 'Revenue and expenses by net asset class, and change in net assets for the year', owner: 'accounting', need: FIN, board: true },
     { group: 'Financial statements', key: 'stmt-functional-expenses', name: 'Statement of Functional Expenses', desc: 'Expenses by natural category and function, from your allocations', owner: 'accounting', need: FIN, board: true },
-    { group: 'Financial statements', key: 'cash-flows', name: 'Statement of Cash Flows', desc: 'Change in net assets to net change in cash: operating, investing and financing', owner: 'accounting', need: FIN },
+    { group: 'Financial statements', key: 'cash-flows', name: 'Statement of Cash Flows', desc: 'Change in net assets to net change in cash: operating, investing and financing', owner: 'accounting', need: FIN, board: true },
     { group: 'Financial statements', key: 'balance-sheet', name: 'Balance sheet', desc: 'Assets, liabilities and net assets from the latest snapshot', owner: 'accounting', need: FIN, hideForLedger: true },
 
     { group: 'Ledger and accounts', key: 'trial-balance', name: 'Trial Balance', desc: 'Every account balance as of a date; debits must equal credits', owner: 'accounting', need: FIN },

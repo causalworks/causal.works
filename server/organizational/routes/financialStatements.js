@@ -3,7 +3,7 @@
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireAccountingAccess, requireReportsOrBoard, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
+const { requireReportsOrBoard, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { netAssetsByClass, netAssetBuckets: netAssetBucketsOf, releasedFromRestrictions: releasedFromRestrictionsFor } = require('../lib/restrictedNetAssets');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
@@ -26,7 +26,7 @@ function registerFinancialStatementRoutes(app, pool) {
   }
 
   // ── Statement of Financial Position ───────────────────────────────────────
-  app.get('/api/organizational/orgs/:slug/reports/financial-position', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/financial-position', ...orgAuth, requireReportsOrBoard(pool), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy = req.query.fiscal_year ? Number.parseInt(String(req.query.fiscal_year), 10) : null;
     if (!fy || !Number.isInteger(fy) || fy < 1900 || fy > 2200) {
@@ -139,7 +139,7 @@ function registerFinancialStatementRoutes(app, pool) {
   });
 
   // ── Statement of Activities ────────────────────────────────────────────────
-  app.get('/api/organizational/orgs/:slug/reports/statement-of-activities', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/statement-of-activities', ...orgAuth, requireReportsOrBoard(pool), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy = req.query.fiscal_year ? Number.parseInt(String(req.query.fiscal_year), 10) : null;
     if (!fy || !Number.isInteger(fy) || fy < 1900 || fy > 2200) {
@@ -365,7 +365,7 @@ function registerFinancialStatementRoutes(app, pool) {
   });
 
   // ── Statement of Cash Flows (Indirect Method) ─────────────────────────────
-  app.get('/api/organizational/orgs/:slug/reports/cash-flows', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/cash-flows', ...orgAuth, requireReportsOrBoard(pool), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy = req.query.fiscal_year ? Number.parseInt(String(req.query.fiscal_year), 10) : null;
     if (!fy || !Number.isInteger(fy) || fy < 1900 || fy > 2200) {

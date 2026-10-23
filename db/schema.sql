@@ -6223,7 +6223,7 @@ CREATE TABLE public.org_import_history (
     updated integer DEFAULT 0 NOT NULL,
     skipped integer DEFAULT 0 NOT NULL,
     error_summary text,
-    CONSTRAINT org_import_history_import_kind_check CHECK ((import_kind = ANY (ARRAY['coa'::text, 'programs'::text, 'grants'::text, 'budget_lines'::text, 'actuals'::text, 'balance_sheet'::text, 'bank_statement'::text])))
+    CONSTRAINT org_import_history_import_kind_check CHECK ((import_kind = ANY (ARRAY['coa'::text, 'programs'::text, 'grants'::text, 'budget_lines'::text, 'actuals'::text, 'balance_sheet'::text, 'bank_statement'::text, 'personnel'::text, 'export_delete_actuals'::text, 'export_delete_budget_lines'::text, 'export_delete_grants'::text, 'export_delete_structure'::text])))
 );
 
 ALTER TABLE ONLY public.org_import_history FORCE ROW LEVEL SECURITY;

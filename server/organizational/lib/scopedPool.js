@@ -38,13 +38,11 @@ async function checkForSilentRlsFailure(pool, text, result) {
   if (!table || result.rowCount !== 0) return;
   const rlsTables = await getForceRlsTables(pool);
   if (!rlsTables.has(table)) return;
-  console.warn(
-    `[scopedPool] SUSPICIOUS: a write to FORCE-RLS table "${table}" affected 0 rows with NO org/user context set. ` +
-    `This is the exact silent-failure signature behind a real incident (DevPath rev 56, a lost pod credential). ` +
-    `If this call site always has an explicit, trusted org_id (not session-derived), route it through a ` +
-    `SECURITY DEFINER function instead of relying on RLS context, the way org_pod_credentials now does. ` +
-    `Query: ${text.slice(0, 200)}`
-  );
+  const message =
+    `A write to protected table "${table}" affected 0 rows with no org or user context set. ` +
+    `Route this call through an owner-rights function or set the context. Query: ${text.slice(0, 200)}`;
+  console.error(`[scopedPool] ${message}`);
+  throw new Error(message);
 }
 
 async function scopedQuery(pool, text, params) {
@@ -53,9 +51,7 @@ async function scopedQuery(pool, text, params) {
   const programScopeValue = programScopeGucValue(getCurrentProgramScope());
   if (orgId == null && userId == null) {
     const result = await pool.query(text, params);
-    checkForSilentRlsFailure(pool, text, result).catch((err) => {
-      console.error('[scopedPool] silent-RLS-failure check itself failed:', err.message);
-    });
+    await checkForSilentRlsFailure(pool, text, result);
     return result;
   }
   const client = await pool.connect();
@@ -137,4 +133,4 @@ function wrapPoolWithOrgScoping(pool) {
   };
 }
 
-module.exports = { wrapPoolWithOrgScoping };
+module.exports = { wrapPoolWithOrgScoping, checkForSilentRlsFailure };

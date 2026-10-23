@@ -7,6 +7,7 @@
 const { encryptCredential, decryptCredential } = require('./podCredentialCrypto');
 const { getProvider } = require('./payments');
 const { logAudit } = require('./auditLog');
+const { NS, withLock } = require('./advisoryLock');
 const M = require('./membership');
 const S = require('./membershipStatus');
 
@@ -202,6 +203,13 @@ async function subscriptionCancelled(pool, orgId, ev) {
 async function refunded(pool, orgId, ev) {
   const orig = (await pool.query(`SELECT * FROM org_membership_payments WHERE org_id = $1 AND processor_ref = $2 AND kind = 'payment'`, [orgId, ev.paymentRef])).rows[0];
   if (!orig) return 'not applied: payment not found';
+  return withLock(pool, NS.duesPayment, orig.id, () => recordRefunds(pool, orgId, ev, orig), null).then((out) => {
+    if (out === null) throw new Error('refund for payment ' + orig.id + ' is busy; try again');
+    return out;
+  });
+}
+
+async function recordRefunds(pool, orgId, ev, orig) {
   let n = 0;
   for (const rf of ev.refunds || []) {
     const left = Number(orig.amount_cents) - Number((await pool.query(`SELECT COALESCE(SUM(amount_cents), 0)::int AS s FROM org_membership_payments WHERE refund_of_id = $1 AND posting_status <> 'void'`, [orig.id])).rows[0].s);

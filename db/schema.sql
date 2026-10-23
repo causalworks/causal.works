@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict tEvUxAsPU4pcgG8xmf1wVpcNdJw7YYTSjbm2ox78dcoZTVu7q6cazR7gyPAvdAI
+\restrict WHjusZG8GekuLphExtFvRRdFZNToxQDersziacAurULLQzRXzfwrUtijKUGzqc6
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -134,19 +134,6 @@ CREATE TYPE public.gift_type AS ENUM (
 
 
 --
--- Name: membership_status; Type: TYPE; Schema: public; Owner: -
---
-
-CREATE TYPE public.membership_status AS ENUM (
-    'active',
-    'grace_period',
-    'lapsed',
-    'terminated',
-    'pending_first_payment'
-);
-
-
---
 -- Name: org_account_type; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -201,7 +188,9 @@ CREATE TYPE public.org_document_category AS ENUM (
     'customer_invoice',
     'procurement_quote',
     'sponsee_report',
-    'expense_receipt'
+    'expense_receipt',
+    'procurement_solicitation',
+    'saved_report'
 );
 
 
@@ -222,7 +211,30 @@ CREATE TYPE public.org_document_retention_class AS ENUM (
 
 CREATE TYPE public.org_document_visibility AS ENUM (
     'org_all',
-    'admins_only'
+    'admins_only',
+    'dues_members'
+);
+
+
+--
+-- Name: org_indirect_cost_base; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.org_indirect_cost_base AS ENUM (
+    'mtdc',
+    'total_direct_costs',
+    'salaries_wages'
+);
+
+
+--
+-- Name: org_indirect_cost_rate_type; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.org_indirect_cost_rate_type AS ENUM (
+    'none',
+    'de_minimis',
+    'negotiated'
 );
 
 
@@ -233,7 +245,10 @@ CREATE TYPE public.org_document_visibility AS ENUM (
 CREATE TYPE public.org_member_role AS ENUM (
     'admin',
     'staff',
-    'board'
+    'board',
+    'finance',
+    'program',
+    'fundraising'
 );
 
 
@@ -272,17 +287,6 @@ CREATE TYPE public.proposal_status AS ENUM (
     'promoted',
     'declined',
     'withdrawn'
-);
-
-
---
--- Name: reminder_type; Type: TYPE; Schema: public; Owner: -
---
-
-CREATE TYPE public.reminder_type AS ENUM (
-    'upcoming_renewal',
-    'lapsed',
-    'final_notice'
 );
 
 
@@ -344,6 +348,27 @@ CREATE TYPE public.workshop_space_type AS ENUM (
 
 
 --
+-- Name: accounting_entry_reminders_due(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.accounting_entry_reminders_due() RETURNS TABLE(org_user_id integer, org_id integer, org_slug text, org_name text, email text)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  WITH due AS (
+    UPDATE org_users ou SET accounting_entry_reminded_at = now()
+      FROM coop_members o, users u
+     WHERE o.id = ou.org_id AND u.id = ou.user_id AND o.deleted_at IS NULL
+       AND ou.role = 'admin' AND ou.accounting_entry_enabled
+       AND ou.accounting_entry_enabled_at <= now() - interval '30 days'
+       AND (ou.accounting_entry_reminded_at IS NULL OR ou.accounting_entry_reminded_at < ou.accounting_entry_enabled_at)
+    RETURNING ou.id, ou.org_id, o.slug, o.display_name, u.email
+  )
+  SELECT id, org_id, slug, display_name, email FROM due;
+$$;
+
+
+--
 -- Name: admin_delete_org(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -351,6 +376,7 @@ CREATE FUNCTION public.admin_delete_org(p_org_id integer) RETURNS TABLE(id integ
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
+  DELETE FROM workshop_projects WHERE workshop_projects.slug = 'getting-started-' || p_org_id::text;
   DELETE FROM coop_members WHERE coop_members.id = p_org_id
   RETURNING coop_members.id, coop_members.slug, coop_members.display_name;
 $$;
@@ -460,9 +486,18 @@ CREATE FUNCTION public.claim_due_pod_acr_outbox_rows(p_limit integer DEFAULT 50)
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  WITH claimed AS (
+  WITH reclaimed AS (
     UPDATE pod_acr_outbox
-       SET status = 'processing'
+       SET status = 'pending',
+           attempt_count = attempt_count + 1,
+           last_error = 'reclaimed: orphaned in processing status past grace period',
+           next_attempt_at = now()
+     WHERE status = 'processing'
+       AND (claimed_at IS NULL OR claimed_at < now() - interval '2 minutes')
+  ),
+  claimed AS (
+    UPDATE pod_acr_outbox
+       SET status = 'processing', claimed_at = now()
      WHERE id IN (
        SELECT o.id FROM pod_acr_outbox o
         WHERE o.status = 'pending' AND o.next_attempt_at <= now()
@@ -474,6 +509,42 @@ CREATE FUNCTION public.claim_due_pod_acr_outbox_rows(p_limit integer DEFAULT 50)
   SELECT c.id, c.org_id, m.slug AS org_slug, c.resource_url, c.reason, c.attempt_count
   FROM claimed c
   JOIN coop_members m ON m.id = c.org_id;
+$$;
+
+
+--
+-- Name: current_program_ids(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.current_program_ids() RETURNS integer[]
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT CASE
+    WHEN current_setting('app.current_program_ids', true) IS NULL THEN ARRAY[]::int[]
+    WHEN current_setting('app.current_program_ids', true) = '*' THEN NULL
+    WHEN current_setting('app.current_program_ids', true) = '' THEN ARRAY[]::int[]
+    ELSE string_to_array(current_setting('app.current_program_ids', true), ',')::int[]
+  END;
+$$;
+
+
+--
+-- Name: demo_org_reset_org_column(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.demo_org_reset_org_column(p_table_name text) RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT kcu.column_name::text
+  FROM information_schema.table_constraints tc
+  JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name
+  JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+  WHERE tc.constraint_type = 'FOREIGN KEY'
+    AND tc.table_schema = 'public'
+    AND tc.table_name = p_table_name
+    AND ccu.table_name = 'coop_members'
+  ORDER BY (kcu.column_name <> 'org_id'), kcu.column_name
+  LIMIT 1;
 $$;
 
 
@@ -492,7 +563,6 @@ CREATE FUNCTION public.demo_org_reset_tables() RETURNS text[]
     WHERE tc.constraint_type = 'FOREIGN KEY'
       AND tc.table_schema = 'public'
       AND ccu.table_name = 'coop_members'
-      AND kcu.column_name = 'org_id'
       AND tc.table_name NOT IN ('org_users', 'org_invites', 'org_membership_tiers', 'org_audit_log', 'org_pod_credentials')
     ORDER BY 1
   );
@@ -512,6 +582,47 @@ CREATE FUNCTION public.documents_due_for_local_purge(p_limit integer DEFAULT 100
      WHERE pod_synced_at IS NOT NULL AND local_copy_purged_at IS NULL
      ORDER BY pod_synced_at
      LIMIT p_limit;
+$$;
+
+
+--
+-- Name: enforce_org_has_admin(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enforce_org_has_admin() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  remaining_admins integer;
+  org_still_exists boolean;
+BEGIN
+  IF OLD.role IS DISTINCT FROM 'admin'::org_member_role THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.role = 'admin'::org_member_role THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT EXISTS (SELECT 1 FROM coop_members WHERE id = OLD.org_id) INTO org_still_exists;
+  IF NOT org_still_exists THEN
+    -- The org itself is gone (this row change is part of that same deletion's cascade) --
+    -- no invariant left to protect.
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
+  SELECT count(*) FILTER (WHERE role = 'admin'::org_member_role)
+    INTO remaining_admins
+    FROM org_users
+    WHERE org_id = OLD.org_id AND id <> OLD.id;
+
+  IF remaining_admins = 0 THEN
+    RAISE EXCEPTION 'org % must always keep at least one admin', OLD.org_id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN COALESCE(NEW, OLD);
+END;
 $$;
 
 
@@ -578,6 +689,320 @@ $$;
 
 
 --
+-- Name: org_allow_ledger_source(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_allow_ledger_source(p_source text) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  def text;
+  vals text[];
+BEGIN
+  SELECT pg_get_constraintdef(c.oid) INTO def
+    FROM pg_constraint c
+   WHERE c.conname = 'org_ledger_transactions_source_check' AND c.conrelid = 'org_ledger_transactions'::regclass;
+  IF def IS NULL THEN
+    RAISE EXCEPTION 'org_ledger_transactions_source_check not found';
+  END IF;
+  SELECT array_agg(m[1]) INTO vals FROM regexp_matches(def, '''([a-z_]+)''', 'g') AS m;
+  IF vals IS NULL OR array_length(vals, 1) < 2 THEN
+    RAISE EXCEPTION 'Could not read the allowed ledger sources from %', def;
+  END IF;
+  IF p_source = ANY (vals) THEN
+    RETURN;
+  END IF;
+  vals := array_append(vals, p_source);
+  ALTER TABLE org_ledger_transactions DROP CONSTRAINT org_ledger_transactions_source_check;
+  EXECUTE 'ALTER TABLE org_ledger_transactions ADD CONSTRAINT org_ledger_transactions_source_check CHECK (source = ANY (ARRAY['
+    || (SELECT string_agg(quote_literal(v) || '::text', ', ') FROM unnest(vals) AS v) || ']))';
+END $$;
+
+
+--
+-- Name: org_apply_sponsor_report_holds(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_apply_sponsor_report_holds() RETURNS TABLE(org_id integer, sponsored_project_id integer, action text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+#variable_conflict use_column
+BEGIN
+  RETURN QUERY
+  WITH cand AS (
+    SELECT p.id, p.sponsor_org_id, p.status, p.hold_kind, p.report_hold_waived_for,
+           org_sponsor_overdue_report_due(p.id, COALESCE(ss.overdue_report_hold_days, 30)) AS overdue_due
+      FROM org_sponsored_projects p
+      JOIN org_settings s ON s.org_id = p.sponsor_org_id AND s.fiscal_sponsorship_mode
+      LEFT JOIN org_sponsor_settings ss ON ss.org_id = p.sponsor_org_id
+     WHERE p.status IN ('active', 'winding_down') OR (p.status = 'on_hold' AND p.hold_kind = 'report_overdue')
+  ), placed AS (
+    UPDATE org_sponsored_projects p
+       SET status_before_hold = p.status, status = 'on_hold', hold_kind = 'report_overdue', hold_reason = 'report overdue',
+           hold_set_by = NULL, hold_set_at = now(), updated_at = now()
+      FROM cand c
+     WHERE c.id = p.id AND c.status IN ('active', 'winding_down') AND c.overdue_due IS NOT NULL
+       AND c.report_hold_waived_for IS DISTINCT FROM c.overdue_due
+    RETURNING p.sponsor_org_id, p.id
+  ), lifted AS (
+    UPDATE org_sponsored_projects p
+       SET status = COALESCE(p.status_before_hold, 'active'), status_before_hold = NULL, hold_kind = NULL, hold_reason = NULL,
+           hold_set_by = NULL, hold_set_at = NULL, updated_at = now()
+      FROM cand c
+     WHERE c.id = p.id AND c.status = 'on_hold' AND c.overdue_due IS NULL
+    RETURNING p.sponsor_org_id, p.id
+  ), logged AS (
+    INSERT INTO org_audit_log (org_id, user_id, action, table_name, record_id, field_name, old_value, new_value, metadata)
+    SELECT x.sponsor_org_id, NULL::integer, 'update', 'org_sponsored_projects', x.id, 'status', 'active', 'on_hold', '{"reason":"report overdue","by":"daily job"}'::jsonb FROM placed x
+    UNION ALL
+    SELECT x.sponsor_org_id, NULL::integer, 'update', 'org_sponsored_projects', x.id, 'status', 'on_hold', 'active', '{"reason":"report received or due date moved","by":"daily job"}'::jsonb FROM lifted x
+    RETURNING 1
+  )
+  SELECT x.sponsor_org_id, x.id, 'placed'::text FROM placed x
+  UNION ALL
+  SELECT x.sponsor_org_id, x.id, 'lifted'::text FROM lifted x;
+END $$;
+
+
+--
+-- Name: org_audit_ledger_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_ledger_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_old jsonb; v_new jsonb; v_src jsonb; v_org integer; v_user integer;
+BEGIN
+  v_old := CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END;
+  v_new := CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END;
+  IF TG_OP = 'UPDATE' AND v_old = v_new THEN RETURN NULL; END IF;
+  v_src := COALESCE(v_new, v_old);
+  IF TG_TABLE_NAME = 'org_ledger_transactions' THEN
+    v_org := (v_src->>'org_id')::integer;
+  ELSE
+    SELECT org_id INTO v_org FROM org_ledger_transactions WHERE id = (v_src->>'transaction_id')::integer;
+  END IF;
+  IF v_org IS NULL THEN RETURN NULL; END IF;
+  v_user := NULLIF(current_setting('app.current_user_id', true), '')::integer;
+  INSERT INTO org_audit_log (org_id, user_id, action, table_name, record_id, old_value, new_value)
+  VALUES (v_org, v_user, 'db_' || lower(TG_OP), TG_TABLE_NAME, (v_src->>'id')::bigint, v_old::text, v_new::text);
+  RETURN NULL;
+END $$;
+
+
+--
+-- Name: org_audit_log_chain(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_log_chain() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_prev text;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('org_audit_log:' || NEW.org_id::text, 0));
+  SELECT row_hash INTO v_prev FROM org_audit_log WHERE org_id = NEW.org_id ORDER BY id DESC LIMIT 1;
+  NEW.occurred_at := COALESCE(NEW.occurred_at, now());
+  NEW.prev_hash := v_prev;
+  NEW.row_hash := org_audit_row_hash(v_prev, NEW);
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: org_audit_log_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_log_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' OR current_user = 'causal_app' THEN
+    RAISE EXCEPTION 'org_audit_log rows cannot be changed or deleted by the application';
+  END IF;
+  RETURN OLD;
+END $$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: org_audit_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_audit_log (
+    id bigint NOT NULL,
+    org_id integer NOT NULL,
+    user_id integer,
+    action text NOT NULL,
+    table_name text NOT NULL,
+    record_id bigint NOT NULL,
+    field_name text,
+    old_value text,
+    new_value text,
+    metadata jsonb,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    prev_hash text,
+    row_hash text,
+    CONSTRAINT org_audit_log_action_check CHECK ((action = ANY (ARRAY['create'::text, 'update'::text, 'delete'::text, 'db_insert'::text, 'db_update'::text, 'db_delete'::text])))
+);
+
+ALTER TABLE ONLY public.org_audit_log FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_audit_row_hash(text, public.org_audit_log); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_row_hash(p_prev text, r public.org_audit_log) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT encode(sha256(convert_to(concat_ws('|',
+    coalesce(p_prev, ''), r.org_id::text, coalesce(r.user_id::text, ''), r.action, r.table_name,
+    r.record_id::text, coalesce(r.field_name, ''), coalesce(r.old_value, ''), coalesce(r.new_value, ''),
+    to_char(r.occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US'), coalesce(r.metadata::text, '')
+  ), 'UTF8')), 'hex')
+$$;
+
+
+--
+-- Name: org_audit_verify(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_verify(p_org_id integer) RETURNS TABLE(bad_id bigint, reason text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE r org_audit_log; v_prev text := NULL;
+BEGIN
+  FOR r IN SELECT * FROM org_audit_log WHERE org_id = p_org_id ORDER BY id LOOP
+    IF r.prev_hash IS DISTINCT FROM v_prev THEN bad_id := r.id; reason := 'link broken'; RETURN NEXT; RETURN; END IF;
+    IF r.row_hash IS DISTINCT FROM org_audit_row_hash(v_prev, r) THEN bad_id := r.id; reason := 'content changed'; RETURN NEXT; RETURN; END IF;
+    v_prev := r.row_hash;
+  END LOOP;
+END $$;
+
+
+--
+-- Name: org_claim_sponsor_report_reminders(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_claim_sponsor_report_reminders() RETURNS TABLE(reminder_id integer, org_id integer, sponsored_project_id integer, reminder_kind text, project_name text, due_date date, period_start date, period_end date, lead_email text, lead_name text, org_name text, reply_to text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+#variable_conflict use_column
+BEGIN
+  RETURN QUERY
+  WITH due AS (
+    SELECT r.id AS report_id, r.org_id, r.sponsored_project_id,
+           CASE WHEN r.due_date < CURRENT_DATE THEN 'overdue' ELSE 'due_soon' END AS kind
+      FROM org_sponsor_reports r
+      JOIN org_sponsored_projects p ON p.id = r.sponsored_project_id
+      JOIN org_settings s ON s.org_id = r.org_id AND s.fiscal_sponsorship_mode
+     WHERE r.kind = 'project_quarterly' AND r.received_at IS NULL
+       AND r.due_date <= CURRENT_DATE + 7 AND r.due_date >= CURRENT_DATE - 60
+       AND p.status IN ('active', 'on_hold', 'winding_down')
+  ), claimed AS (
+    INSERT INTO org_sponsor_report_reminders (org_id, sponsored_project_id, report_id, reminder_kind)
+    SELECT d.org_id, d.sponsored_project_id, d.report_id, d.kind FROM due d
+    ON CONFLICT (report_id, reminder_kind) DO NOTHING
+    RETURNING id, org_id, sponsored_project_id, report_id, reminder_kind
+  )
+  SELECT c.id, c.org_id, c.sponsored_project_id, c.reminder_kind, p.name, r.due_date, r.period_start, r.period_end,
+         COALESCE(NULLIF(lc.email, ''), p.contact_lead_email), COALESCE(lc.display_name, p.contact_lead_name), m.display_name,
+         COALESCE(NULLIF(s.reply_to_email, ''), s.contact_email)
+    FROM claimed c
+    JOIN org_sponsor_reports r ON r.id = c.report_id
+    JOIN org_sponsored_projects p ON p.id = c.sponsored_project_id
+    JOIN coop_members m ON m.id = c.org_id
+    JOIN org_settings s ON s.org_id = c.org_id
+    LEFT JOIN org_constituents lc ON lc.id = p.lead_constituent_id;
+END $$;
+
+
+--
+-- Name: org_claim_sponsor_statements(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_claim_sponsor_statements() RETURNS TABLE(statement_id integer, org_id integer, sponsored_project_id integer, month date)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+#variable_conflict use_column
+BEGIN
+  RETURN QUERY
+  INSERT INTO org_sponsor_statements (org_id, sponsored_project_id, month)
+  SELECT p.sponsor_org_id, p.id, (date_trunc('month', CURRENT_DATE) - interval '1 month')::date
+    FROM org_sponsored_projects p
+    JOIN org_settings s ON s.org_id = p.sponsor_org_id AND s.fiscal_sponsorship_mode
+    JOIN org_sponsor_settings ss ON ss.org_id = p.sponsor_org_id
+   WHERE p.status IN ('active', 'on_hold', 'winding_down')
+     AND extract(day FROM CURRENT_DATE) >= ss.statement_day_of_month
+     AND COALESCE(p.start_date, p.created_at::date) < date_trunc('month', CURRENT_DATE)::date
+     AND date_trunc('month', CURRENT_DATE) - interval '1 month' >= date_trunc('month', ss.created_at)
+  ON CONFLICT (sponsored_project_id, month) DO NOTHING
+  RETURNING id, org_id, sponsored_project_id, month;
+END $$;
+
+
+--
+-- Name: org_contact_has_role(integer, integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_contact_has_role(p_constituent_id integer, p_org_id integer, p_role text) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM org_contact_roles r
+     WHERE r.constituent_id = p_constituent_id AND r.org_id = p_org_id AND r.role = p_role
+       AND r.starts_on <= CURRENT_DATE AND (r.ends_on IS NULL OR r.ends_on > CURRENT_DATE)
+  );
+$$;
+
+
+--
+-- Name: org_contact_roles_check_org(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_contact_roles_check_org() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'org_contact_roles.constituent_id % must reference an org_constituents row in the same org', NEW.constituent_id
+      USING ERRCODE = 'CA004';
+  END IF;
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: org_documents_keep_sponsor_doc_type(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_documents_keep_sponsor_doc_type() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+BEGIN
+  IF NEW.sponsor_doc_type IS NULL AND NEW.supersedes_id IS NOT NULL THEN
+    SELECT d.sponsor_doc_type INTO NEW.sponsor_doc_type FROM org_documents d WHERE d.id = NEW.supersedes_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
 -- Name: org_enforce_actuals_source_writer(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -587,10 +1012,10 @@ CREATE FUNCTION public.org_enforce_actuals_source_writer() RETURNS trigger
 DECLARE
   v_actuals_source text;
 BEGIN
-  SELECT COALESCE(actuals_source, 'xero') INTO v_actuals_source
+  SELECT COALESCE(actuals_source, 'ledger') INTO v_actuals_source
     FROM org_settings WHERE org_id = NEW.org_id;
   IF v_actuals_source IS NULL THEN
-    v_actuals_source := 'xero';
+    v_actuals_source := 'ledger';
   END IF;
 
   IF NEW.source = 'ledger' AND v_actuals_source <> 'ledger' THEN
@@ -679,14 +1104,14 @@ $$;
 CREATE FUNCTION public.org_enforce_bill_constituent_is_vendor() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id AND c.is_vendor IS TRUE) THEN
-    RAISE EXCEPTION 'org_bills.constituent_id % must reference an org_constituents row with is_vendor = true, in the same org', NEW.constituent_id
-      USING ERRCODE = 'CA004';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+      BEGIN
+        IF NOT org_contact_has_role(NEW.constituent_id, NEW.org_id, 'vendor') THEN
+          RAISE EXCEPTION 'org_bills.constituent_id % must reference an org_constituents row with a current vendor role, in the same org', NEW.constituent_id
+            USING ERRCODE = 'CA004';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
 
 
 --
@@ -696,14 +1121,14 @@ $$;
 CREATE FUNCTION public.org_enforce_bill_credit_note_constituent_is_vendor() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id AND c.is_vendor IS TRUE) THEN
-    RAISE EXCEPTION 'org_bill_credit_notes.constituent_id % must reference an org_constituents row with is_vendor = true, in the same org', NEW.constituent_id
-      USING ERRCODE = 'CA004';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+      BEGIN
+        IF NOT org_contact_has_role(NEW.constituent_id, NEW.org_id, 'vendor') THEN
+          RAISE EXCEPTION 'org_bill_credit_notes.constituent_id % must reference an org_constituents row with a current vendor role, in the same org', NEW.constituent_id
+            USING ERRCODE = 'CA004';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
 
 
 --
@@ -828,7 +1253,13 @@ DECLARE
   v_org_id integer;
   v_fy integer;
   v_locked boolean;
+  v_scenario_id text;
 BEGIN
+  v_scenario_id := to_jsonb(COALESCE(NEW, OLD))->>'scenario_id';
+  IF v_scenario_id IS NOT NULL THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+
   v_org_id := COALESCE(NEW.org_id, OLD.org_id);
   v_fy := COALESCE(NEW.fiscal_year, OLD.fiscal_year);
   SELECT (locked_at IS NOT NULL) INTO v_locked
@@ -1017,14 +1448,14 @@ $$;
 CREATE FUNCTION public.org_enforce_invoice_constituent_is_customer() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id AND c.is_customer IS TRUE) THEN
-    RAISE EXCEPTION 'org_invoices.constituent_id % must reference an org_constituents row with is_customer = true, in the same org', NEW.constituent_id
-      USING ERRCODE = 'CA004';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+      BEGIN
+        IF NOT org_contact_has_role(NEW.constituent_id, NEW.org_id, 'customer') THEN
+          RAISE EXCEPTION 'org_invoices.constituent_id % must reference an org_constituents row with a current customer role, in the same org', NEW.constituent_id
+            USING ERRCODE = 'CA004';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
 
 
 --
@@ -1034,14 +1465,14 @@ $$;
 CREATE FUNCTION public.org_enforce_invoice_credit_note_constituent_is_customer() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id AND c.is_customer IS TRUE) THEN
-    RAISE EXCEPTION 'org_invoice_credit_notes.constituent_id % must reference an org_constituents row with is_customer = true, in the same org', NEW.constituent_id
-      USING ERRCODE = 'CA004';
-  END IF;
-  RETURN NEW;
-END;
-$$;
+      BEGIN
+        IF NOT org_contact_has_role(NEW.constituent_id, NEW.org_id, 'customer') THEN
+          RAISE EXCEPTION 'org_invoice_credit_notes.constituent_id % must reference an org_constituents row with a current customer role, in the same org', NEW.constituent_id
+            USING ERRCODE = 'CA004';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
 
 
 --
@@ -1224,6 +1655,24 @@ $$;
 
 
 --
+-- Name: org_enforce_ledger_transaction_contact_same_org(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_enforce_ledger_transaction_contact_same_org() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.constituent_id IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM org_constituents c WHERE c.id = NEW.constituent_id AND c.org_id = NEW.org_id) THEN
+    RAISE EXCEPTION 'org_ledger_transactions.constituent_id % must reference an org_constituents row in the same org', NEW.constituent_id
+      USING ERRCODE = 'CA004';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: org_enforce_plaid_accounts_same_org(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1400,6 +1849,43 @@ BEGIN
   END IF;
 END;
 $$;
+
+
+--
+-- Name: org_generate_sponsor_quarterly_reports(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_generate_sponsor_quarterly_reports(p_due_days integer DEFAULT 30) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  n integer;
+BEGIN
+  WITH proj AS (
+    SELECT p.id, p.sponsor_org_id, GREATEST(COALESCE(p.start_date, p.created_at::date), COALESCE(ss.created_at::date, CURRENT_DATE)) AS start_on,
+           ((COALESCE(s.fiscal_year_end_month, 12) % 12) + 1) AS fy_start
+      FROM org_sponsored_projects p JOIN org_settings s ON s.org_id = p.sponsor_org_id
+      LEFT JOIN org_sponsor_settings ss ON ss.org_id = p.sponsor_org_id
+     WHERE s.fiscal_sponsorship_mode AND p.status IN ('active', 'on_hold', 'winding_down')
+  ), bounds AS (
+    SELECT id, sponsor_org_id,
+           (date_trunc('month', start_on) - make_interval(months => ((extract(month FROM start_on)::int - fy_start + 12) % 12) % 3))::date AS first_q,
+           (date_trunc('month', CURRENT_DATE) - make_interval(months => ((extract(month FROM CURRENT_DATE)::int - fy_start + 12) % 12) % 3))::date AS last_q
+      FROM proj
+  ), quarters AS (
+    SELECT b.id, b.sponsor_org_id, q::date AS q_start, (q + interval '3 months' - interval '1 day')::date AS q_end
+      FROM bounds b, generate_series(b.first_q, b.last_q, interval '3 months') AS q
+  ), ins AS (
+    INSERT INTO org_sponsor_reports (org_id, sponsored_project_id, kind, title, period_start, period_end, due_date)
+    SELECT q.sponsor_org_id, q.id, 'project_quarterly', 'Quarterly report', q.q_start, q.q_end, q.q_end + p_due_days
+      FROM quarters q
+    ON CONFLICT (sponsored_project_id, period_end) WHERE kind = 'project_quarterly' DO NOTHING
+    RETURNING 1
+  )
+  SELECT count(*) INTO n FROM ins;
+  RETURN n;
+END $$;
 
 
 --
@@ -1624,7 +2110,7 @@ CREATE FUNCTION public.org_ledger_recompute_actuals_for_period(p_org_id integer,
 DECLARE
   v_actuals_source text;
 BEGIN
-  SELECT COALESCE(actuals_source, 'xero') INTO v_actuals_source FROM org_settings WHERE org_id = p_org_id;
+  SELECT COALESCE(actuals_source, 'ledger') INTO v_actuals_source FROM org_settings WHERE org_id = p_org_id;
 
   DELETE FROM org_actuals
    WHERE org_id = p_org_id AND period_year = p_period_year AND period_month = p_period_month
@@ -1676,6 +2162,60 @@ BEGIN
                ELSE SUM(l.credit_cents) - SUM(l.debit_cents)
           END) <> 0;
 END;
+$$;
+
+
+--
+-- Name: org_mark_sponsor_report_reminder(integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_mark_sponsor_report_reminder(p_id integer, p_status text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  UPDATE org_sponsor_report_reminders SET send_status = p_status, sent_at = CASE WHEN p_status = 'sent' THEN now() ELSE sent_at END
+   WHERE id = p_id AND p_status IN ('sent', 'failed', 'skipped');
+$$;
+
+
+--
+-- Name: org_membership_message_event(text, text, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_membership_message_event(p_message_id text, p_kind text, p_at timestamp with time zone) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+DECLARE
+  n integer;
+BEGIN
+  IF p_kind = 'delivered' THEN
+    UPDATE org_membership_messages SET delivered_at = COALESCE(delivered_at, p_at) WHERE provider_message_id = p_message_id;
+  ELSIF p_kind = 'opened' THEN
+    UPDATE org_membership_messages SET opened_at = COALESCE(opened_at, p_at), delivered_at = COALESCE(delivered_at, p_at) WHERE provider_message_id = p_message_id;
+  ELSIF p_kind = 'bounced' THEN
+    UPDATE org_membership_messages SET status = 'failed' WHERE provider_message_id = p_message_id;
+  ELSE
+    RETURN 0;
+  END IF;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
+-- Name: org_membership_workspaces(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_membership_workspaces() RETURNS TABLE(org_id integer, slug text, display_name text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  SELECT c.id, c.slug::text, c.display_name::text
+    FROM coop_members c JOIN org_settings s ON s.org_id = c.id
+   WHERE s.membership_enabled AND c.deleted_at IS NULL
+   ORDER BY c.id;
 $$;
 
 
@@ -1744,6 +2284,7 @@ $$;
 
 CREATE FUNCTION public.org_run_due_recurring_schedules() RETURNS TABLE(schedule_id integer, generated_kind text, generated_id integer)
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
     AS $$
 DECLARE
   s RECORD;
@@ -1753,30 +2294,39 @@ DECLARE
   v_fiscal_year integer;
   v_new_id integer;
   v_next date;
+  v_due_days integer;
+  v_any boolean;
+  v_pass integer := 0;
 BEGIN
+  LOOP
+  v_any := false;
+  v_pass := v_pass + 1;
   FOR s IN
     SELECT * FROM org_recurring_schedules
     WHERE active IS TRUE AND next_occurrence_date <= CURRENT_DATE
     ORDER BY id
   LOOP
+    v_any := true;
     v_constituent_id := (s.template->>'constituent_id')::integer;
     v_reference := s.template->>'reference';
     v_fiscal_year := org_fiscal_year_for_date(s.org_id, s.next_occurrence_date);
+    v_due_days := NULLIF(s.template->>'due_days', '')::integer;
 
     IF s.schedule_type = 'bill' THEN
-      INSERT INTO org_bills (org_id, constituent_id, bill_date, reference, fiscal_year, created_by)
-      VALUES (s.org_id, v_constituent_id, s.next_occurrence_date, v_reference, v_fiscal_year, s.created_by)
+      INSERT INTO org_bills (org_id, bill_number, constituent_id, bill_date, due_date, reference, fiscal_year, created_by)
+      VALUES (s.org_id, NULL, v_constituent_id, s.next_occurrence_date, CASE WHEN v_due_days IS NULL THEN NULL ELSE s.next_occurrence_date + v_due_days END, v_reference, v_fiscal_year, s.created_by)
       RETURNING id INTO v_new_id;
 
       FOR v_line IN SELECT * FROM jsonb_array_elements(COALESCE(s.template->'lines', '[]'::jsonb))
       LOOP
-        INSERT INTO org_bill_lines (bill_id, account_id, program_id, grant_id, amount_cents)
+        INSERT INTO org_bill_lines (bill_id, account_id, program_id, grant_id, amount_cents, line_memo)
         VALUES (
           v_new_id,
           (v_line->>'account_id')::integer,
           (v_line->>'program_id')::integer,
           NULLIF(v_line->>'grant_id', '')::integer,
-          (v_line->>'amount_cents')::bigint
+          (v_line->>'amount_cents')::bigint,
+          NULLIF(v_line->>'description', '')
         );
       END LOOP;
 
@@ -1784,8 +2334,8 @@ BEGIN
       RETURN NEXT;
 
     ELSIF s.schedule_type = 'invoice' THEN
-      INSERT INTO org_invoices (org_id, constituent_id, invoice_date, reference, fiscal_year, created_by)
-      VALUES (s.org_id, v_constituent_id, s.next_occurrence_date, v_reference, v_fiscal_year, s.created_by)
+      INSERT INTO org_invoices (org_id, invoice_number, constituent_id, invoice_date, due_date, reference, fiscal_year, created_by)
+      VALUES (s.org_id, NULL, v_constituent_id, s.next_occurrence_date, CASE WHEN v_due_days IS NULL THEN NULL ELSE s.next_occurrence_date + v_due_days END, v_reference, v_fiscal_year, s.created_by)
       RETURNING id INTO v_new_id;
 
       FOR v_line IN SELECT * FROM jsonb_array_elements(COALESCE(s.template->'lines', '[]'::jsonb))
@@ -1812,7 +2362,82 @@ BEGIN
           updated_at = NOW()
       WHERE id = s.id;
   END LOOP;
+  EXIT WHEN NOT v_any OR v_pass >= 60;
+  END LOOP;
   RETURN;
+END;
+$$;
+
+
+--
+-- Name: org_sponsor_enable_rls(text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_sponsor_enable_rls(p_table text, p_with_project boolean) RETURNS void
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+BEGIN
+  EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', p_table);
+  EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', p_table);
+  EXECUTE format('DROP POLICY IF EXISTS %I ON %I', p_table || '_org_isolation', p_table);
+  EXECUTE format($p$CREATE POLICY %I ON %I
+    USING (org_id = (NULLIF(current_setting('app.current_org_id', true), ''))::integer)
+    WITH CHECK (org_id = (NULLIF(current_setting('app.current_org_id', true), ''))::integer)$p$, p_table || '_org_isolation', p_table);
+  IF p_with_project THEN
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', p_table || '_program_scope', p_table);
+    EXECUTE format($p$CREATE POLICY %I ON %I AS RESTRICTIVE
+      USING (current_program_ids() IS NULL OR EXISTS (
+        SELECT 1 FROM org_sponsored_projects p WHERE p.id = sponsored_project_id AND p.program_id = ANY (current_program_ids())))$p$,
+      p_table || '_program_scope', p_table);
+  END IF;
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE ON %I TO causal_app', p_table);
+  EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %I TO causal_app', p_table || '_id_seq');
+END $_$;
+
+
+--
+-- Name: org_sponsor_overdue_report_due(integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_sponsor_overdue_report_due(p_project_id integer, p_hold_days integer) RETURNS date
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  SELECT COALESCE(
+    (SELECT min(r.due_date) FROM org_sponsor_reports r
+      WHERE r.sponsored_project_id = p_project_id AND r.kind = 'project_quarterly' AND r.received_at IS NULL
+        AND r.due_date + p_hold_days < CURRENT_DATE),
+    (SELECT p.next_report_due FROM org_sponsored_projects p
+      WHERE p.id = p_project_id AND p.next_report_due IS NOT NULL AND p.next_report_due + p_hold_days < CURRENT_DATE
+        AND (p.last_report_received_at IS NULL OR p.last_report_received_at < p.next_report_due)
+        AND NOT EXISTS (SELECT 1 FROM org_sponsor_reports r WHERE r.sponsored_project_id = p.id AND r.kind = 'project_quarterly')));
+$$;
+
+
+--
+-- Name: org_take_document_number(integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_take_document_number(p_org_id integer, p_kind text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_prefix text;
+  v_n integer;
+BEGIN
+  IF p_kind = 'invoice' THEN
+    UPDATE org_settings SET invoice_next_number = invoice_next_number + 1
+      WHERE org_id = p_org_id RETURNING invoice_number_prefix, invoice_next_number - 1 INTO v_prefix, v_n;
+  ELSIF p_kind = 'bill' THEN
+    UPDATE org_settings SET bill_next_number = bill_next_number + 1
+      WHERE org_id = p_org_id RETURNING bill_number_prefix, bill_next_number - 1 INTO v_prefix, v_n;
+  ELSE
+    RAISE EXCEPTION 'unknown document kind %', p_kind;
+  END IF;
+  IF v_n IS NULL THEN RETURN NULL; END IF;
+  RETURN v_prefix || lpad(v_n::text, 4, '0');
 END;
 $$;
 
@@ -1863,6 +2488,38 @@ $$;
 
 
 --
+-- Name: resolve_invite_by_id(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.resolve_invite_by_id(p_invite_id integer) RETURNS TABLE(id integer, org_id integer, email text, role text, org_slug text, program_ids integer[])
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT i.id, i.org_id, i.email, i.role::text, o.slug, i.program_ids
+  FROM org_invites i
+  INNER JOIN coop_members o ON o.id = i.org_id
+  WHERE i.id = p_invite_id AND i.used = FALSE AND i.expires_at > NOW() AND o.deleted_at IS NULL
+  LIMIT 1;
+$$;
+
+
+--
+-- Name: resolve_invite_by_token(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.resolve_invite_by_token(p_token_hash text) RETURNS TABLE(id integer, org_id integer, email text, role text, expires_at timestamp with time zone, org_slug text, org_display_name text, program_ids integer[])
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT i.id, i.org_id, i.email, i.role::text, i.expires_at, o.slug, o.display_name, i.program_ids
+  FROM org_invites i
+  INNER JOIN coop_members o ON o.id = i.org_id
+  WHERE i.token_hash = p_token_hash AND i.used = FALSE AND i.expires_at > NOW() AND o.deleted_at IS NULL
+  LIMIT 1;
+$$;
+
+
+--
 -- Name: resolve_member_org_id(integer, text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1883,11 +2540,20 @@ $$;
 -- Name: resolve_member_org_id_and_role(integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.resolve_member_org_id_and_role(p_user_id integer, p_slug text) RETURNS TABLE(org_id integer, role text)
+CREATE FUNCTION public.resolve_member_org_id_and_role(p_user_id integer, p_slug text) RETURNS TABLE(org_id integer, role text, org_user_id integer, program_ids integer[])
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT o.id, m.role::text
+  SELECT
+    o.id,
+    m.role::text,
+    m.id,
+    COALESCE(
+      (SELECT array_agg(g.program_id ORDER BY g.program_id)
+         FROM org_program_grants g
+        WHERE g.org_user_id = m.id),
+      ARRAY[]::integer[]
+    )
   FROM coop_members o
   INNER JOIN org_users m ON m.org_id = o.id AND m.user_id = p_user_id
   WHERE o.slug = p_slug AND o.deleted_at IS NULL
@@ -1905,6 +2571,72 @@ CREATE FUNCTION public.resolve_org_pod_credential(p_org_id integer) RETURNS TABL
     AS $$
   SELECT account_email, encrypted_password, encryption_iv, encryption_auth_tag, pod_webid
   FROM org_pod_credentials WHERE org_id = p_org_id;
+$$;
+
+
+--
+-- Name: resolve_pending_invites_for_email(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.resolve_pending_invites_for_email(p_email text) RETURNS TABLE(id integer, role text, created_at timestamp with time zone, org_slug text, org_display_name text)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT i.id, i.role::text, i.created_at, o.slug, o.display_name
+  FROM org_invites i
+  INNER JOIN coop_members o ON o.id = i.org_id
+  WHERE LOWER(i.email) = LOWER(p_email) AND i.used = FALSE AND i.expires_at > NOW() AND o.deleted_at IS NULL
+  ORDER BY i.created_at DESC;
+$$;
+
+
+--
+-- Name: org_plaid_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_plaid_items (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    item_id text NOT NULL,
+    access_token text NOT NULL,
+    institution_id text,
+    institution_name text,
+    status text DEFAULT 'active'::text NOT NULL,
+    error_message text,
+    cursor text,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_plaid_items_status_check CHECK ((status = ANY (ARRAY['active'::text, 'error'::text, 'revoked'::text])))
+);
+
+ALTER TABLE ONLY public.org_plaid_items FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: resolve_plaid_item_by_item_id(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.resolve_plaid_item_by_item_id(p_item_id text) RETURNS public.org_plaid_items
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT * FROM org_plaid_items WHERE item_id = p_item_id LIMIT 1;
+$$;
+
+
+--
+-- Name: resolve_pod_share(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.resolve_pod_share(p_token text) RETURNS TABLE(permission_id integer, org_id integer, org_slug text, share_resource_url text, recipient_label text, expires_at timestamp with time zone, revoked_at timestamp with time zone)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT p.id, p.org_id, c.slug, p.share_resource_url, p.recipient_label, p.expires_at, p.revoked_at
+    FROM pod_access_permissions p
+    JOIN coop_members c ON c.id = p.org_id
+   WHERE p.share_token = p_token AND p.share_token IS NOT NULL;
 $$;
 
 
@@ -1931,6 +2663,7 @@ CREATE FUNCTION public.restore_demo_org() RETURNS integer
 DECLARE
   v_org_id integer;
   t text;
+  col text;
   tables text[] := demo_org_reset_tables();
   v_restored integer := 0;
 BEGIN
@@ -1947,7 +2680,10 @@ BEGIN
   END LOOP;
 
   FOREACH t IN ARRAY tables LOOP
-    EXECUTE format('DELETE FROM %I WHERE org_id = $1', t) USING v_org_id;
+    col := demo_org_reset_org_column(t);
+    CONTINUE WHEN col IS NULL;
+
+    EXECUTE format('DELETE FROM %I WHERE %I = $1', t, col) USING v_org_id;
 
     EXECUTE format(
       'INSERT INTO %I SELECT * FROM jsonb_populate_recordset(NULL::%I,
@@ -1958,6 +2694,13 @@ BEGIN
   END LOOP;
 
   DELETE FROM org_audit_log WHERE org_id = v_org_id;
+
+  -- Child tables with no org_id column are never covered by the table loop above, so lines that
+  -- belonged to a visitor's now-deleted bills/invoices/transactions would otherwise pile up
+  -- nightly (found 2026-10-03: 26 orphan ledger lines). Purge only lines whose parent is gone.
+  DELETE FROM org_ledger_lines l WHERE NOT EXISTS (SELECT 1 FROM org_ledger_transactions t WHERE t.id = l.transaction_id);
+  DELETE FROM org_bill_lines l WHERE NOT EXISTS (SELECT 1 FROM org_bills b WHERE b.id = l.bill_id);
+  DELETE FROM org_invoice_lines l WHERE NOT EXISTS (SELECT 1 FROM org_invoices i WHERE i.id = l.invoice_id);
 
   FOREACH t IN ARRAY tables LOOP
     EXECUTE format('ALTER TABLE %I ENABLE TRIGGER ALL', t);
@@ -1984,6 +2727,7 @@ CREATE FUNCTION public.snapshot_demo_org() RETURNS integer
 DECLARE
   v_org_id integer;
   t text;
+  col text;
 BEGIN
   SELECT id INTO v_org_id FROM coop_members WHERE slug = 'demo-company' LIMIT 1;
   IF v_org_id IS NULL THEN
@@ -1993,9 +2737,11 @@ BEGIN
   DELETE FROM org_demo_snapshot;
 
   FOREACH t IN ARRAY demo_org_reset_tables() LOOP
+    col := demo_org_reset_org_column(t);
+    CONTINUE WHEN col IS NULL;
     EXECUTE format(
-      'INSERT INTO org_demo_snapshot (table_name, row_data) SELECT %L, to_jsonb(x) FROM %I x WHERE x.org_id = $1',
-      t, t
+      'INSERT INTO org_demo_snapshot (table_name, row_data) SELECT %L, to_jsonb(x) FROM %I x WHERE x.%I = $1',
+      t, t, col
     ) USING v_org_id;
   END LOOP;
 
@@ -2020,20 +2766,6 @@ CREATE FUNCTION public.store_org_pod_credential(p_org_id integer, p_account_emai
     encryption_iv = EXCLUDED.encryption_iv,
     encryption_auth_tag = EXCLUDED.encryption_auth_tag,
     pod_webid = EXCLUDED.pod_webid;
-$$;
-
-
---
--- Name: update_membership_members_updated_at(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.update_membership_members_updated_at() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
 $$;
 
 
@@ -2079,9 +2811,18 @@ END;
 $$;
 
 
-SET default_tablespace = '';
+--
+-- Name: accounting_review_entry; Type: TABLE; Schema: public; Owner: -
+--
 
-SET default_table_access_method = heap;
+CREATE TABLE public.accounting_review_entry (
+    item_id text NOT NULL,
+    data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    updated_by text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    reviewer text NOT NULL
+);
+
 
 --
 -- Name: actions; Type: TABLE; Schema: public; Owner: -
@@ -2316,6 +3057,8 @@ CREATE TABLE public.compliance_extension_proposals (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE ONLY public.compliance_extension_proposals FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: compliance_extension_proposals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -2436,7 +3179,10 @@ CREATE TABLE public.coop_members (
     deleted_at timestamp with time zone,
     deleted_by_user_id integer,
     is_platform_demo boolean DEFAULT false NOT NULL,
+    is_demo_fixture boolean DEFAULT false NOT NULL,
+    created_via text,
     CONSTRAINT coop_members_cooperative_turnarounds_check CHECK (((array_length(cooperative_turnarounds, 1) IS NULL) OR (cooperative_turnarounds <@ ARRAY['energy'::text, 'food'::text, 'inequality'::text, 'poverty'::text, 'womens_empowerment'::text]))),
+    CONSTRAINT coop_members_created_via_check CHECK (((created_via IS NULL) OR (created_via = 'invited_sample'::text))),
     CONSTRAINT coop_members_membership_status_check CHECK ((membership_status = ANY (ARRAY['trial'::text, 'active'::text, 'inactive'::text]))),
     CONSTRAINT coop_members_size_band_check CHECK ((size_band = ANY (ARRAY['under $250K'::text, '$250K-$500K'::text, '$500K-$1M'::text, 'over $1M'::text])))
 );
@@ -2641,6 +3387,61 @@ ALTER SEQUENCE public.cooperative_work_requests_id_seq OWNED BY public.cooperati
 
 
 --
+-- Name: demo_visit_excluded; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.demo_visit_excluded (
+    visitor_hash text NOT NULL,
+    added_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: demo_visit_key; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.demo_visit_key (
+    id smallint DEFAULT 1 NOT NULL,
+    key text NOT NULL,
+    CONSTRAINT demo_visit_key_id_check CHECK ((id = 1))
+);
+
+
+--
+-- Name: demo_visit_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.demo_visit_log (
+    id bigint NOT NULL,
+    visited_at timestamp with time zone DEFAULT now() NOT NULL,
+    entry text NOT NULL,
+    visitor_hash text NOT NULL,
+    referrer_host text,
+    is_bot boolean DEFAULT false NOT NULL,
+    CONSTRAINT demo_visit_log_entry_check CHECK ((entry = ANY (ARRAY['demo'::text, 'demo-coop'::text, 'odi'::text])))
+);
+
+
+--
+-- Name: demo_visit_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.demo_visit_log_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: demo_visit_log_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.demo_visit_log_id_seq OWNED BY public.demo_visit_log.id;
+
+
+--
 -- Name: financial_rep_pledges; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2777,6 +3578,49 @@ ALTER SEQUENCE public.local_event_attendance_id_seq OWNED BY public.local_event_
 
 
 --
+-- Name: org_access_permissions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_access_permissions (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    org_user_id integer NOT NULL,
+    permission text NOT NULL,
+    reason text NOT NULL,
+    ends_at timestamp with time zone,
+    given_by_user_id integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    renewed_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    revoked_by_user_id integer,
+    CONSTRAINT org_access_permissions_permission_check CHECK ((permission = ANY ('{reports,accounting_read,donor_details,manage_budget,manage_personnel,manage_funding,manage_compliance,manage_sponsorship,manage_structure,manage_donors,manage_membership}'::text[]))),
+    CONSTRAINT org_access_permissions_reason_check CHECK ((length(btrim(reason)) >= 5))
+);
+
+ALTER TABLE ONLY public.org_access_permissions FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_access_permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_access_permissions_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_access_permissions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_access_permissions_id_seq OWNED BY public.org_access_permissions.id;
+
+
+--
 -- Name: org_accounts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2809,6 +3653,10 @@ CREATE TABLE public.org_accounts (
     is_statistical boolean DEFAULT false NOT NULL,
     is_non_cash boolean DEFAULT false NOT NULL,
     is_system_expense_claims_payable_account boolean DEFAULT false NOT NULL,
+    is_mtdc_excluded boolean DEFAULT false NOT NULL,
+    is_system_unallocated_receipts_account boolean DEFAULT false NOT NULL,
+    description text,
+    archived_at timestamp with time zone,
     CONSTRAINT org_accounts_budget_source_chk CHECK ((budget_source = ANY (ARRAY['schedule'::text, 'personnel'::text, 'grant_allocation'::text, 'insurance'::text, 'input'::text]))),
     CONSTRAINT org_accounts_level_check CHECK ((level = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT org_accounts_level_posting_match CHECK ((((level = ANY (ARRAY[1, 2])) AND (is_posting = false)) OR ((level = 3) AND (is_posting = true)))),
@@ -2943,6 +3791,20 @@ COMMENT ON COLUMN public.org_accounts.is_statistical IS 'True for non-dollar KPI
 --
 
 COMMENT ON COLUMN public.org_accounts.is_non_cash IS 'True for expense accounts that never move cash (depreciation, amortization, in-kind/donated-services expense). The Statement of Cash Flows adds these back to operating cash flow. Set explicitly per org/account -- do not infer from account name.';
+
+
+--
+-- Name: COLUMN org_accounts.is_mtdc_excluded; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_accounts.is_mtdc_excluded IS 'True for direct-cost expense accounts that Modified Total Direct Costs excludes per 2 CFR 200.1: capital equipment, tuition remission, and participant support costs (stipends/travel for training or conference participants -- easy to miss, unlike the other two). Set explicitly per org/account -- do not infer from account name or type, same discipline as is_non_cash. Does NOT and cannot handle the subaward-portion-above-threshold exclusion ($25,000 for awards before Oct 1 2024, $50,000 on/after) -- that is a per-subaward dollar threshold, not a whole-account exclusion, and needs manual adjustment for subaward-heavy grants until per-subaward tracking exists. See indirectCostRecovery.js and the grant''s indirect cost rate settings UI for the same warning surfaced to users.';
+
+
+--
+-- Name: COLUMN org_accounts.is_system_unallocated_receipts_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_accounts.is_system_unallocated_receipts_account IS 'At most one per org. A holding account for incoming cash not yet tied to a specific grant/gift record -- see server/organizational/lib/giftPosting.js''s link-transaction reclassify path. Excluded from Find & Recode targeting, same as the other system-account flags.';
 
 
 --
@@ -3189,28 +4051,6 @@ ALTER SEQUENCE public.org_allocation_schedules_id_seq OWNED BY public.org_alloca
 
 
 --
--- Name: org_audit_log; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.org_audit_log (
-    id bigint NOT NULL,
-    org_id integer NOT NULL,
-    user_id integer,
-    action text NOT NULL,
-    table_name text NOT NULL,
-    record_id bigint NOT NULL,
-    field_name text,
-    old_value text,
-    new_value text,
-    metadata jsonb,
-    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT org_audit_log_action_check CHECK ((action = ANY (ARRAY['create'::text, 'update'::text, 'delete'::text])))
-);
-
-ALTER TABLE ONLY public.org_audit_log FORCE ROW LEVEL SECURITY;
-
-
---
 -- Name: org_audit_log_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3272,6 +4112,63 @@ CREATE SEQUENCE public.org_balance_sheet_snapshots_id_seq
 --
 
 ALTER SEQUENCE public.org_balance_sheet_snapshots_id_seq OWNED BY public.org_balance_sheet_snapshots.id;
+
+
+--
+-- Name: org_bank_reconciliation_periods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_bank_reconciliation_periods (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    bank_account_id integer NOT NULL,
+    period_start date NOT NULL,
+    period_end date NOT NULL,
+    opening_balance_cents bigint NOT NULL,
+    closing_balance_cents bigint NOT NULL,
+    status text DEFAULT 'draft'::text NOT NULL,
+    closed_at timestamp with time zone,
+    closed_by integer,
+    reopened_at timestamp with time zone,
+    reopened_by integer,
+    reopen_reason text,
+    report_snapshot jsonb,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_bank_recon_periods_closed_check CHECK (((status = 'closed'::text) = (closed_at IS NOT NULL))),
+    CONSTRAINT org_bank_recon_periods_dates_check CHECK ((period_start <= period_end)),
+    CONSTRAINT org_bank_recon_periods_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'closed'::text])))
+);
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_bank_reconciliation_periods; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_bank_reconciliation_periods IS 'Month-end reconciliation per bank/card account. Closed = bank side locked and report_snapshot stored. Reopen only for the latest closed period of the account.';
+
+
+--
+-- Name: org_bank_reconciliation_periods_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_bank_reconciliation_periods_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_bank_reconciliation_periods_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_bank_reconciliation_periods_id_seq OWNED BY public.org_bank_reconciliation_periods.id;
 
 
 --
@@ -3471,6 +4368,7 @@ CREATE TABLE public.org_bill_credit_notes (
     fiscal_year integer NOT NULL,
     created_by integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    note_date date,
     CONSTRAINT org_bill_credit_notes_amount_cents_check CHECK ((amount_cents > 0)),
     CONSTRAINT org_bill_credit_notes_fy_reasonable CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
     CONSTRAINT org_bill_credit_notes_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'applied'::text, 'void'::text])))
@@ -3604,6 +4502,7 @@ CREATE TABLE public.org_bills (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     scheduled_payment_date date,
+    bill_number text,
     CONSTRAINT org_bills_fy_reasonable CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
     CONSTRAINT org_bills_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'pending_approval'::text, 'approved'::text, 'scheduled'::text, 'partially_paid'::text, 'paid'::text, 'void'::text])))
 );
@@ -3794,6 +4693,121 @@ ALTER SEQUENCE public.org_budget_lines_id_seq OWNED BY public.org_budget_lines.i
 
 
 --
+-- Name: org_budget_scenario_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_budget_scenario_lines (
+    id integer NOT NULL,
+    scenario_id integer NOT NULL,
+    account_id integer NOT NULL,
+    program_id integer,
+    grant_id integer,
+    month smallint NOT NULL,
+    amount_cents bigint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_type text DEFAULT 'manual'::text NOT NULL,
+    source_ref_id integer,
+    source_ref_type text,
+    is_override boolean DEFAULT false NOT NULL,
+    CONSTRAINT org_budget_scenario_lines_month_check CHECK (((month >= 1) AND (month <= 12))),
+    CONSTRAINT org_budget_scenario_lines_source_type_check CHECK ((source_type = ANY (ARRAY['manual'::text, 'personnel'::text, 'schedule'::text, 'grant_allocation'::text])))
+);
+
+ALTER TABLE ONLY public.org_budget_scenario_lines FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_budget_scenario_lines; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_budget_scenario_lines IS 'Sparse override cells for a scenario. Absence of a row for a given account/program/grant/month means "use the live org_budget_lines value." Promoting a scenario to live UPSERTs each override row into org_budget_lines and leaves untouched cells alone.';
+
+
+--
+-- Name: COLUMN org_budget_scenario_lines.source_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_budget_scenario_lines.source_type IS '''manual'' = user typed this override directly (v1 Quick Overlay behavior, or an explicit override inside a detailed scenario). ''personnel''/''schedule''/''grant_allocation'' = written by that recalc engine from the scenario''s forked inputs; wiped and rewritten on every recalc unless is_override is true.';
+
+
+--
+-- Name: COLUMN org_budget_scenario_lines.is_override; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_budget_scenario_lines.is_override IS 'True once a user has manually edited a cell that a recalc engine also writes to -- protects it from being overwritten on the next scenario recalc, same semantics as org_budget_lines.is_override.';
+
+
+--
+-- Name: org_budget_scenario_lines_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_budget_scenario_lines_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_budget_scenario_lines_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_budget_scenario_lines_id_seq OWNED BY public.org_budget_scenario_lines.id;
+
+
+--
+-- Name: org_budget_scenarios; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_budget_scenarios (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    fiscal_year integer NOT NULL,
+    name text NOT NULL,
+    description text,
+    status text DEFAULT 'draft'::text NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    scenario_type text DEFAULT 'overlay'::text NOT NULL,
+    CONSTRAINT org_budget_scenarios_scenario_type_check CHECK ((scenario_type = ANY (ARRAY['overlay'::text, 'detailed'::text]))),
+    CONSTRAINT org_budget_scenarios_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'archived'::text])))
+);
+
+ALTER TABLE ONLY public.org_budget_scenarios FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_budget_scenarios; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_budget_scenarios IS 'A named draft budget variant for a fiscal year (e.g. "Flat funding", "Growth -- new grant lands"). The live org_budget_lines table is the implicit baseline; scenarios never store a full copy, only the cells they override.';
+
+
+--
+-- Name: org_budget_scenarios_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_budget_scenarios_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_budget_scenarios_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_budget_scenarios_id_seq OWNED BY public.org_budget_scenarios.id;
+
+
+--
 -- Name: org_compliance_obligations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3884,7 +4898,6 @@ ALTER SEQUENCE public.org_constituent_interactions_id_seq OWNED BY public.org_co
 CREATE TABLE public.org_constituents (
     id integer NOT NULL,
     org_id integer NOT NULL,
-    type character varying(30) DEFAULT 'individual'::character varying NOT NULL,
     display_name text NOT NULL,
     first_name text,
     last_name text,
@@ -3898,34 +4911,29 @@ CREATE TABLE public.org_constituents (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     tags text[],
-    is_donor boolean DEFAULT false NOT NULL,
-    is_vendor boolean DEFAULT false NOT NULL,
-    is_customer boolean DEFAULT false NOT NULL,
-    CONSTRAINT org_constituents_type_check CHECK (((type)::text = ANY ((ARRAY['foundation'::character varying, 'individual'::character varying, 'board'::character varying, 'prospect'::character varying, 'member_org'::character varying])::text[])))
+    kind text NOT NULL,
+    org_type text,
+    additional_emails text[],
+    CONSTRAINT org_constituents_kind_check CHECK ((kind = ANY (ARRAY['individual'::text, 'organization'::text]))),
+    CONSTRAINT org_constituents_org_type_check CHECK ((org_type = ANY (ARRAY['foundation'::text, 'corporate'::text, 'government'::text, 'nonprofit'::text, 'member_organization'::text]))),
+    CONSTRAINT org_constituents_org_type_organizations_only CHECK (((org_type IS NULL) OR (kind = 'organization'::text)))
 );
 
 ALTER TABLE ONLY public.org_constituents FORCE ROW LEVEL SECURITY;
 
 
 --
--- Name: COLUMN org_constituents.is_donor; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN org_constituents.kind; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.org_constituents.is_donor IS 'Defaulted true on existing rows at migration time (every prior row was donor-side data); false is the default for new rows going forward -- a new contact is not a donor unless marked one.';
-
-
---
--- Name: COLUMN org_constituents.is_vendor; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.org_constituents.is_vendor IS 'Purchases/AP: a bill''s constituent_id must reference a row with is_vendor = true.';
+COMMENT ON COLUMN public.org_constituents.kind IS 'individual or organization. Roles (donor, vendor, customer, ...) are rows in org_contact_roles.';
 
 
 --
--- Name: COLUMN org_constituents.is_customer; Type: COMMENT; Schema: public; Owner: -
+-- Name: COLUMN org_constituents.org_type; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.org_constituents.is_customer IS 'Sales/AR: an invoice''s constituent_id must reference a row with is_customer = true.';
+COMMENT ON COLUMN public.org_constituents.org_type IS 'Optional, organizations only: foundation, corporate (a company), government, nonprofit, member_organization. Overlaps org_grants.institution_type (free text), which still says what kind of funder a grant is.';
 
 
 --
@@ -3946,6 +4954,127 @@ CREATE SEQUENCE public.org_constituents_id_seq
 --
 
 ALTER SEQUENCE public.org_constituents_id_seq OWNED BY public.org_constituents.id;
+
+
+--
+-- Name: org_contact_email_prefs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_contact_email_prefs (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    scope text DEFAULT 'membership'::text NOT NULL,
+    unsubscribed_at timestamp with time zone DEFAULT now() NOT NULL,
+    source text,
+    CONSTRAINT org_contact_email_prefs_scope_check CHECK ((scope = ANY (ARRAY['membership'::text, 'all'::text])))
+);
+
+ALTER TABLE ONLY public.org_contact_email_prefs FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_contact_email_prefs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_contact_email_prefs_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_contact_email_prefs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_contact_email_prefs_id_seq OWNED BY public.org_contact_email_prefs.id;
+
+
+--
+-- Name: org_contact_roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_contact_roles (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    role text NOT NULL,
+    starts_on date DEFAULT CURRENT_DATE NOT NULL,
+    ends_on date,
+    details jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_contact_roles_dates CHECK (((ends_on IS NULL) OR (ends_on >= starts_on))),
+    CONSTRAINT org_contact_roles_role_check CHECK ((role = ANY (ARRAY['donor'::text, 'vendor'::text, 'customer'::text, 'board_member'::text, 'staff'::text, 'dues_member'::text])))
+);
+
+ALTER TABLE ONLY public.org_contact_roles FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_contact_roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_contact_roles_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_contact_roles_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_contact_roles_id_seq OWNED BY public.org_contact_roles.id;
+
+
+--
+-- Name: org_conversion_balances; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_conversion_balances (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    conversion_date date NOT NULL,
+    program_id integer,
+    balancing_account_id integer,
+    ledger_transaction_id integer,
+    status text DEFAULT 'open'::text NOT NULL,
+    entered_by integer,
+    locked_by integer,
+    locked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_conversion_balances_status_check CHECK ((status = ANY (ARRAY['open'::text, 'locked'::text])))
+);
+
+ALTER TABLE ONLY public.org_conversion_balances FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_conversion_balances_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_conversion_balances_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_conversion_balances_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_conversion_balances_id_seq OWNED BY public.org_conversion_balances.id;
 
 
 --
@@ -3975,6 +5104,8 @@ CREATE TABLE public.org_document_expectations (
     CONSTRAINT org_document_expectations_cadence_check CHECK ((cadence = ANY (ARRAY['annual'::text, 'one_time'::text, 'as_occurs'::text])))
 );
 
+ALTER TABLE ONLY public.org_document_expectations FORCE ROW LEVEL SECURITY;
+
 
 --
 -- Name: org_document_expectations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -3994,6 +5125,44 @@ CREATE SEQUENCE public.org_document_expectations_id_seq
 --
 
 ALTER SEQUENCE public.org_document_expectations_id_seq OWNED BY public.org_document_expectations.id;
+
+
+--
+-- Name: org_document_retention_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_document_retention_rules (
+    id integer NOT NULL,
+    org_id integer,
+    category public.org_document_category NOT NULL,
+    retention_class public.org_document_retention_class DEFAULT 'fixed_term'::public.org_document_retention_class NOT NULL,
+    retention_years integer,
+    trigger text DEFAULT 'year_end'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_document_retention_rules_trigger_check CHECK ((trigger = ANY (ARRAY['record_date'::text, 'year_end'::text])))
+);
+
+ALTER TABLE ONLY public.org_document_retention_rules FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_document_retention_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_document_retention_rules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_document_retention_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_document_retention_rules_id_seq OWNED BY public.org_document_retention_rules.id;
 
 
 --
@@ -4034,7 +5203,9 @@ CREATE TABLE public.org_documents (
     source_ref_id bigint,
     source_ref_type text,
     sponsored_project_id integer,
-    CONSTRAINT org_documents_fy_reasonable CHECK (((fiscal_year IS NULL) OR ((fiscal_year >= 1900) AND (fiscal_year <= 2200))))
+    sponsor_doc_type text,
+    CONSTRAINT org_documents_fy_reasonable CHECK (((fiscal_year IS NULL) OR ((fiscal_year >= 1900) AND (fiscal_year <= 2200)))),
+    CONSTRAINT org_documents_sponsor_doc_type_check CHECK (((sponsor_doc_type IS NULL) OR (sponsor_doc_type = ANY (ARRAY['application'::text, 'agreement'::text, 'insurance'::text, 'report'::text, 'correspondence'::text, 'tax_form'::text, 'donor_letter'::text]))))
 );
 
 ALTER TABLE ONLY public.org_documents FORCE ROW LEVEL SECURITY;
@@ -4120,7 +5291,7 @@ CREATE TABLE public.org_expense_claim_lines (
     expense_date date NOT NULL,
     description text NOT NULL,
     miles numeric(8,1),
-    rate_cents_per_mile integer,
+    rate_cents_per_mile numeric(7,3),
     amount_cents bigint NOT NULL,
     line_memo text,
     CONSTRAINT org_expense_claim_lines_amount_positive CHECK ((amount_cents > 0))
@@ -4429,8 +5600,12 @@ CREATE TABLE public.org_fixed_assets (
     program_id integer NOT NULL,
     created_by integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    acquisition_ledger_transaction_id integer,
+    prior_depreciation_cents bigint DEFAULT 0 NOT NULL,
+    prior_depreciation_through date,
     CONSTRAINT org_fixed_assets_cost_positive CHECK ((cost_cents > 0)),
     CONSTRAINT org_fixed_assets_disposal_consistency CHECK (((status = 'disposed'::text) = (disposal_date IS NOT NULL))),
+    CONSTRAINT org_fixed_assets_prior_depreciation_cents_check CHECK ((prior_depreciation_cents >= 0)),
     CONSTRAINT org_fixed_assets_salvage_lt_cost CHECK ((salvage_value_cents < cost_cents)),
     CONSTRAINT org_fixed_assets_salvage_nonneg CHECK ((salvage_value_cents >= 0)),
     CONSTRAINT org_fixed_assets_status_check CHECK ((status = ANY (ARRAY['active'::text, 'fully_depreciated'::text, 'disposed'::text]))),
@@ -4590,6 +5765,48 @@ ALTER SEQUENCE public.org_functional_classifications_id_seq OWNED BY public.org_
 
 
 --
+-- Name: org_gift_pledge_installments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_gift_pledge_installments (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    gift_id integer NOT NULL,
+    due_date date NOT NULL,
+    amount_cents bigint NOT NULL,
+    status text DEFAULT 'expected'::text NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    ledger_transaction_id integer,
+    collected_at date,
+    CONSTRAINT org_gift_pledge_installments_amount_positive CHECK ((amount_cents > 0)),
+    CONSTRAINT org_gift_pledge_installments_status_check CHECK ((status = ANY (ARRAY['expected'::text, 'collected'::text, 'written_off'::text])))
+);
+
+ALTER TABLE ONLY public.org_gift_pledge_installments FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_gift_pledge_installments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_gift_pledge_installments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_gift_pledge_installments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_gift_pledge_installments_id_seq OWNED BY public.org_gift_pledge_installments.id;
+
+
+--
 -- Name: org_gifts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4613,10 +5830,79 @@ CREATE TABLE public.org_gifts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     sponsored_project_id integer,
-    CONSTRAINT org_gifts_amount_cents_check CHECK ((amount_cents >= 0))
+    posting_status text DEFAULT 'not_applicable'::text NOT NULL,
+    ledger_transaction_id integer,
+    program_id integer,
+    in_kind_description text,
+    in_kind_valuation_method text,
+    in_kind_fair_value_notes text,
+    in_kind_revenue_account_id integer,
+    in_kind_expense_account_id integer,
+    total_pledged_cents bigint,
+    is_multi_year_pledge boolean DEFAULT false NOT NULL,
+    discount_rate_bps integer,
+    discounted_present_value_cents bigint,
+    receivable_account_id integer,
+    pledge_years numeric(5,2),
+    discounting_accepted_at timestamp with time zone,
+    discounting_accepted_by_user_id integer,
+    pledge_status text,
+    pledge_condition text,
+    pledge_status_changed_by integer,
+    pledge_status_changed_at timestamp with time zone,
+    pledge_status_note text,
+    source text DEFAULT 'funding'::text NOT NULL,
+    review_status text DEFAULT 'confirmed'::text NOT NULL,
+    reviewed_by integer,
+    reviewed_at timestamp with time zone,
+    review_note text,
+    not_gift_flagged_at timestamp with time zone,
+    not_gift_flagged_by integer,
+    not_gift_note text,
+    sponsor_fee_exempt boolean DEFAULT false NOT NULL,
+    sponsor_fee_exempt_reason text,
+    sponsor_untagged_reviewed_at timestamp with time zone,
+    sponsor_untagged_reviewed_by integer,
+    donor_letter_document_id integer,
+    CONSTRAINT org_gifts_amount_cents_check CHECK ((amount_cents >= 0)),
+    CONSTRAINT org_gifts_discount_rate_bps_range CHECK (((discount_rate_bps IS NULL) OR ((discount_rate_bps >= 0) AND (discount_rate_bps <= 5000)))),
+    CONSTRAINT org_gifts_in_kind_valuation_method_check CHECK (((in_kind_valuation_method IS NULL) OR (in_kind_valuation_method = ANY (ARRAY['quoted_market_price'::text, 'comparable_sales'::text, 'cost_replacement'::text, 'professional_appraisal'::text, 'donor_stated'::text, 'other'::text])))),
+    CONSTRAINT org_gifts_pledge_status_check CHECK (((pledge_status IS NULL) OR (pledge_status = ANY (ARRAY['intention'::text, 'conditional'::text, 'unconditional'::text])))),
+    CONSTRAINT org_gifts_posting_status_check CHECK ((posting_status = ANY (ARRAY['not_applicable'::text, 'held'::text, 'unposted'::text, 'posted'::text, 'void'::text]))),
+    CONSTRAINT org_gifts_review_status_check CHECK ((review_status = ANY (ARRAY['confirmed'::text, 'to_confirm'::text, 'dismissed'::text]))),
+    CONSTRAINT org_gifts_source_check CHECK ((source = ANY (ARRAY['funding'::text, 'accounting'::text]))),
+    CONSTRAINT org_gifts_total_pledged_nonneg CHECK (((total_pledged_cents IS NULL) OR (total_pledged_cents >= 0)))
 );
 
 ALTER TABLE ONLY public.org_gifts FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: COLUMN org_gifts.posting_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_gifts.posting_status IS 'not_applicable for cash donation/grant/dues gifts (never posted here -- reach the ledger via ordinary bank-deposit coding). unposted/posted/void only apply to in-kind gifts and pledge commitments, which have no other path to the ledger. Set to unposted at create time by donors.js; only server/organizational/routes/giftPostings.js moves it to posted/void, via postLedgerTransaction, mirroring org_bank_statement_lines'' unconfirmed/confirmed pattern.';
+
+
+--
+-- Name: COLUMN org_gifts.in_kind_valuation_method; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_gifts.in_kind_valuation_method IS 'Required for payment_method = in_kind. ASU 2020-07 requires nonprofits to disclose the valuation technique used to determine fair value for contributed nonfinancial assets.';
+
+
+--
+-- Name: COLUMN org_gifts.total_pledged_cents; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_gifts.total_pledged_cents IS 'Face value of the promise for gift_type = pledge. amount_cents holds the amount actually posted at commitment (= discounted_present_value_cents if is_multi_year_pledge, else total_pledged_cents) -- kept distinct so the discount is always visible, not silently absorbed into amount_cents.';
+
+
+--
+-- Name: COLUMN org_gifts.discount_rate_bps; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_gifts.discount_rate_bps IS 'Fixed at pledge commitment per ASC 958-605 (does not float with the pledge''s remaining term). Only meaningful when is_multi_year_pledge.';
 
 
 --
@@ -4640,6 +5926,52 @@ ALTER SEQUENCE public.org_gifts_id_seq OWNED BY public.org_gifts.id;
 
 
 --
+-- Name: org_grant_allocation_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_grant_allocation_requests (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    grant_id integer NOT NULL,
+    coop_program_id integer NOT NULL,
+    fiscal_year integer NOT NULL,
+    amount_cents integer NOT NULL,
+    note text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    requested_by_user_id integer,
+    decided_by_user_id integer,
+    decided_at timestamp with time zone,
+    decision_note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_grant_allocation_requests_amount_cents_check CHECK ((amount_cents >= 0)),
+    CONSTRAINT org_grant_allocation_requests_fiscal_year_check CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
+    CONSTRAINT org_grant_allocation_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'withdrawn'::text])))
+);
+
+ALTER TABLE ONLY public.org_grant_allocation_requests FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_grant_allocation_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_grant_allocation_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_grant_allocation_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_grant_allocation_requests_id_seq OWNED BY public.org_grant_allocation_requests.id;
+
+
+--
 -- Name: org_grant_allocations; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4653,7 +5985,8 @@ CREATE TABLE public.org_grant_allocations (
     notes text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    auto_generated boolean DEFAULT false NOT NULL
+    auto_generated boolean DEFAULT false NOT NULL,
+    scenario_id integer
 );
 
 ALTER TABLE ONLY public.org_grant_allocations FORCE ROW LEVEL SECURITY;
@@ -4664,6 +5997,13 @@ ALTER TABLE ONLY public.org_grant_allocations FORCE ROW LEVEL SECURITY;
 --
 
 COMMENT ON COLUMN public.org_grant_allocations.auto_generated IS 'TRUE when this FY allocation was auto-filled from the grant''s period_start_date/period_end_date + award amount (even split across missing years), rather than entered by a human. Flips FALSE on the first human edit.';
+
+
+--
+-- Name: COLUMN org_grant_allocations.scenario_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_grant_allocations.scenario_id IS 'NULL = live allocation. Set only on rows forked into a detailed scenario -- see 2026-09-14-scenario-budgeting-v2-input-fork-spec.md.';
 
 
 --
@@ -4731,8 +6071,14 @@ CREATE TABLE public.org_grants (
     pass_through_entity_name text,
     pass_through_identifying_number text,
     amount_passed_to_subrecipients_cents bigint,
+    indirect_cost_rate_type public.org_indirect_cost_rate_type DEFAULT 'none'::public.org_indirect_cost_rate_type NOT NULL,
+    indirect_cost_rate_bps integer,
+    indirect_cost_base public.org_indirect_cost_base DEFAULT 'mtdc'::public.org_indirect_cost_base NOT NULL,
+    nicra_expiration_date date,
+    nicra_document_id integer,
     CONSTRAINT org_grants_allocation_mode_check CHECK (((allocation_mode)::text = ANY ((ARRAY['amount'::character varying, 'percent'::character varying])::text[]))),
     CONSTRAINT org_grants_amount_passed_to_subrecipients_cents_check CHECK (((amount_passed_to_subrecipients_cents IS NULL) OR (amount_passed_to_subrecipients_cents >= 0))),
+    CONSTRAINT org_grants_indirect_cost_rate_bps_check CHECK ((((indirect_cost_rate_type = 'none'::public.org_indirect_cost_rate_type) AND (indirect_cost_rate_bps IS NULL)) OR ((indirect_cost_rate_type = 'de_minimis'::public.org_indirect_cost_rate_type) AND (indirect_cost_rate_bps = ANY (ARRAY[1000, 1500]))) OR ((indirect_cost_rate_type = 'negotiated'::public.org_indirect_cost_rate_type) AND (indirect_cost_rate_bps > 0) AND (indirect_cost_rate_bps <= 10000)))),
     CONSTRAINT org_grants_status_lifecycle_chk CHECK ((status = ANY (ARRAY['prospect'::text, 'applied'::text, 'awarded'::text, 'declined'::text, 'closed'::text])))
 );
 
@@ -4831,6 +6177,20 @@ COMMENT ON COLUMN public.org_grants.pass_through_entity_name IS 'Set only when t
 
 
 --
+-- Name: COLUMN org_grants.indirect_cost_rate_bps; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_grants.indirect_cost_rate_bps IS 'De minimis is 1500 bps (15% of MTDC) for awards under the Oct 2024 Uniform Guidance revision, or 1000 bps (10%) for older awards that elected under the pre-revision rate -- both allowed values kept since an org can hold awards from either era. Negotiated (NICRA) rates are org-specific and unconstrained beyond a 100% sanity ceiling.';
+
+
+--
+-- Name: COLUMN org_grants.indirect_cost_base; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_grants.indirect_cost_base IS 'MTDC (modified total direct costs) is the federal default base. Kept editable per grant, not hardcoded to MTDC, since a pre-2 CFR 200 legacy award or a private (non-federal) funder can specify a different base.';
+
+
+--
 -- Name: org_grants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4890,6 +6250,50 @@ ALTER SEQUENCE public.org_import_history_id_seq OWNED BY public.org_import_histo
 
 
 --
+-- Name: org_indirect_cost_recovery_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_indirect_cost_recovery_entries (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    grant_id integer NOT NULL,
+    period_start_date date NOT NULL,
+    period_end_date date NOT NULL,
+    mtdc_base_cents bigint NOT NULL,
+    rate_bps integer NOT NULL,
+    recovery_amount_cents bigint NOT NULL,
+    ledger_transaction_id integer NOT NULL,
+    posted_by_user_id integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_indirect_cost_recovery_entries_amount_nonneg CHECK ((recovery_amount_cents >= 0)),
+    CONSTRAINT org_indirect_cost_recovery_entries_base_nonneg CHECK ((mtdc_base_cents >= 0)),
+    CONSTRAINT org_indirect_cost_recovery_entries_period_order CHECK ((period_end_date >= period_start_date))
+);
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_indirect_cost_recovery_entries_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_indirect_cost_recovery_entries_id_seq OWNED BY public.org_indirect_cost_recovery_entries.id;
+
+
+--
 -- Name: org_invites; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4902,7 +6306,8 @@ CREATE TABLE public.org_invites (
     invited_by integer,
     expires_at timestamp with time zone NOT NULL,
     used boolean DEFAULT false NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    program_ids integer[] DEFAULT '{}'::integer[] NOT NULL
 );
 
 ALTER TABLE ONLY public.org_invites FORCE ROW LEVEL SECURITY;
@@ -4946,6 +6351,7 @@ CREATE TABLE public.org_invoice_credit_notes (
     fiscal_year integer NOT NULL,
     created_by integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    note_date date,
     CONSTRAINT org_invoice_credit_notes_amount_cents_check CHECK ((amount_cents > 0)),
     CONSTRAINT org_invoice_credit_notes_fy_reasonable CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
     CONSTRAINT org_invoice_credit_notes_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'applied'::text, 'void'::text])))
@@ -5086,6 +6492,7 @@ CREATE TABLE public.org_invoices (
     created_by integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    invoice_number text,
     CONSTRAINT org_invoices_fy_reasonable CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
     CONSTRAINT org_invoices_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'sent'::text, 'partially_paid'::text, 'paid'::text, 'overdue'::text, 'void'::text, 'written_off'::text])))
 );
@@ -5160,8 +6567,11 @@ CREATE TABLE public.org_ledger_lines (
     credit_cents bigint DEFAULT 0 NOT NULL,
     line_memo text,
     board_designation_id integer,
+    source_line_type text,
+    source_line_id integer,
     CONSTRAINT org_ledger_lines_amounts_non_negative CHECK (((debit_cents >= 0) AND (credit_cents >= 0))),
-    CONSTRAINT org_ledger_lines_exactly_one_side CHECK (((debit_cents > 0) <> (credit_cents > 0)))
+    CONSTRAINT org_ledger_lines_exactly_one_side CHECK (((debit_cents > 0) <> (credit_cents > 0))),
+    CONSTRAINT org_ledger_lines_source_line_type_check CHECK ((((source_line_type IS NULL) AND (source_line_id IS NULL)) OR ((source_line_type = ANY (ARRAY['org_bill_lines'::text, 'org_invoice_lines'::text, 'org_expense_claim_lines'::text, 'org_gifts'::text])) AND (source_line_id IS NOT NULL))))
 );
 
 ALTER TABLE ONLY public.org_ledger_lines FORCE ROW LEVEL SECURITY;
@@ -5218,9 +6628,13 @@ CREATE TABLE public.org_ledger_transactions (
     approved_at timestamp with time zone,
     source_ref_id bigint,
     source_ref_type text,
+    entry_type text,
+    journal_reason text,
+    constituent_id integer,
+    CONSTRAINT org_ledger_transactions_entry_type_check CHECK (((entry_type IS NULL) OR (entry_type = ANY (ARRAY['receive'::text, 'spend'::text, 'transfer'::text, 'journal'::text])))),
     CONSTRAINT org_ledger_transactions_fy_reasonable CHECK (((fiscal_year >= 1900) AND (fiscal_year <= 2200))),
     CONSTRAINT org_ledger_transactions_no_self_reverse CHECK ((reverses_transaction_id IS DISTINCT FROM id)),
-    CONSTRAINT org_ledger_transactions_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'bank_reconciliation'::text, 'bill_approval'::text, 'invoice'::text, 'bill_payment'::text, 'invoice_payment'::text, 'fixed_asset_depreciation'::text, 'fixed_asset_disposal'::text, 'expense_claim_approval'::text, 'expense_claim_payment'::text]))),
+    CONSTRAINT org_ledger_transactions_source_check CHECK ((source = ANY ('{manual,bank_reconciliation,bill_approval,invoice,bill_payment,invoice_payment,fixed_asset_depreciation,fixed_asset_disposal,expense_claim_approval,expense_claim_payment,recode,gift_in_kind,pledge_commitment,pledge_accretion,indirect_cost_recovery,gift_reclassify,sponsored_disbursement,conversion_balance,sponsor_fee,sponsor_recall,sponsor_closing,membership_dues}'::text[]))),
     CONSTRAINT org_ledger_transactions_status_check CHECK ((status = ANY (ARRAY['posted'::text, 'voided'::text, 'pending_approval'::text]))),
     CONSTRAINT org_ledger_transactions_voided_consistency CHECK (((status = 'voided'::text) = (voided_at IS NOT NULL)))
 );
@@ -5250,6 +6664,27 @@ COMMENT ON COLUMN public.org_ledger_transactions.source_ref_type IS 'Discriminat
 
 
 --
+-- Name: COLUMN org_ledger_transactions.entry_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_ledger_transactions.entry_type IS 'Which manual-entry form created this: receive, spend, transfer or journal. NULL for entries from other modules and older manual entries.';
+
+
+--
+-- Name: COLUMN org_ledger_transactions.journal_reason; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_ledger_transactions.journal_reason IS 'Required explanation for a manual journal entry (entry_type = journal).';
+
+
+--
+-- Name: COLUMN org_ledger_transactions.constituent_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_ledger_transactions.constituent_id IS 'The contact this entry is with (vendor, customer, donor). Null when no party applies or none is matched. payee stays as the text typed or imported.';
+
+
+--
 -- Name: org_ledger_transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -5270,36 +6705,27 @@ ALTER SEQUENCE public.org_ledger_transactions_id_seq OWNED BY public.org_ledger_
 
 
 --
--- Name: org_members; Type: TABLE; Schema: public; Owner: -
+-- Name: org_membership_directory_optin; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.org_members (
+CREATE TABLE public.org_membership_directory_optin (
     id integer NOT NULL,
     org_id integer NOT NULL,
-    tier_id integer,
-    first_name character varying(255) NOT NULL,
-    last_name character varying(255) NOT NULL,
-    email character varying(255) NOT NULL,
-    phone character varying(50),
-    mailing_address text,
-    joined_at timestamp with time zone DEFAULT now() NOT NULL,
-    current_period_start timestamp with time zone NOT NULL,
-    current_period_end timestamp with time zone NOT NULL,
-    status public.membership_status DEFAULT 'pending_first_payment'::public.membership_status NOT NULL,
-    notes text,
-    cooperative_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    constituent_id integer NOT NULL,
+    fields text[] DEFAULT '{}'::text[] NOT NULL,
+    visibility text DEFAULT 'private'::text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_membership_directory_optin_visibility_check CHECK ((visibility = ANY (ARRAY['public'::text, 'private'::text])))
 );
 
-ALTER TABLE ONLY public.org_members FORCE ROW LEVEL SECURITY;
+ALTER TABLE ONLY public.org_membership_directory_optin FORCE ROW LEVEL SECURITY;
 
 
 --
--- Name: org_members_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: org_membership_directory_optin_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.org_members_id_seq
+CREATE SEQUENCE public.org_membership_directory_optin_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5309,10 +6735,110 @@ CREATE SEQUENCE public.org_members_id_seq
 
 
 --
--- Name: org_members_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: org_membership_directory_optin_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.org_members_id_seq OWNED BY public.org_members.id;
+ALTER SEQUENCE public.org_membership_directory_optin_id_seq OWNED BY public.org_membership_directory_optin.id;
+
+
+--
+-- Name: org_membership_join_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_join_requests (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    status text DEFAULT 'unconfirmed'::text NOT NULL,
+    kind text DEFAULT 'individual'::text NOT NULL,
+    email text,
+    details jsonb DEFAULT '{}'::jsonb NOT NULL,
+    tier_id integer,
+    price_cents integer,
+    eligibility_confirmed boolean DEFAULT false NOT NULL,
+    extra_gift_cents integer DEFAULT 0 NOT NULL,
+    link_id integer,
+    constituent_id integer,
+    term_id integer,
+    gift_id integer,
+    decided_by integer,
+    decision_reason text,
+    ip_hash text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    confirmed_at timestamp with time zone,
+    decided_at timestamp with time zone,
+    CONSTRAINT org_membership_join_requests_check CHECK (((status <> 'declined'::text) OR (length(btrim(COALESCE(decision_reason, ''::text))) > 0))),
+    CONSTRAINT org_membership_join_requests_extra_gift_cents_check CHECK ((extra_gift_cents >= 0)),
+    CONSTRAINT org_membership_join_requests_kind_check CHECK ((kind = ANY (ARRAY['individual'::text, 'organization'::text]))),
+    CONSTRAINT org_membership_join_requests_price_cents_check CHECK (((price_cents IS NULL) OR (price_cents >= 0))),
+    CONSTRAINT org_membership_join_requests_status_check CHECK ((status = ANY (ARRAY['unconfirmed'::text, 'awaiting_approval'::text, 'accepted'::text, 'declined'::text])))
+);
+
+ALTER TABLE ONLY public.org_membership_join_requests FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_join_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_join_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_join_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_join_requests_id_seq OWNED BY public.org_membership_join_requests.id;
+
+
+--
+-- Name: org_membership_messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_messages (
+    id bigint NOT NULL,
+    org_id integer NOT NULL,
+    term_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    template_key text NOT NULL,
+    offset_days integer DEFAULT 0 NOT NULL,
+    to_email text,
+    status text DEFAULT 'queued'::text NOT NULL,
+    provider_message_id text,
+    sent_at timestamp with time zone,
+    delivered_at timestamp with time zone,
+    opened_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    subject text,
+    created_by integer,
+    CONSTRAINT org_membership_messages_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
+);
+
+ALTER TABLE ONLY public.org_membership_messages FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_messages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_messages_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_messages_id_seq OWNED BY public.org_membership_messages.id;
 
 
 --
@@ -5321,17 +6847,37 @@ ALTER SEQUENCE public.org_members_id_seq OWNED BY public.org_members.id;
 
 CREATE TABLE public.org_membership_payments (
     id integer NOT NULL,
-    member_id integer NOT NULL,
     amount_cents integer NOT NULL,
     currency character varying(3) DEFAULT 'USD'::character varying NOT NULL,
     payment_date timestamp with time zone DEFAULT now() NOT NULL,
-    period_covered_start timestamp with time zone NOT NULL,
-    period_covered_end timestamp with time zone NOT NULL,
-    payment_method character varying(100),
     notes text,
     recorded_by_user_id integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT org_membership_payments_amount_cents_check CHECK ((amount_cents >= 0))
+    posting_status text DEFAULT 'unposted'::text NOT NULL,
+    ledger_transaction_id integer,
+    org_id integer NOT NULL,
+    term_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    kind text DEFAULT 'payment'::text NOT NULL,
+    method text,
+    discount_cents integer DEFAULT 0 NOT NULL,
+    discount_reason text,
+    reason text,
+    processor_ref text,
+    approved_by integer,
+    approved_at timestamp with time zone,
+    refund_of_id integer,
+    posted_contribution_cents integer,
+    posted_deferred_cents integer,
+    posted_revenue_cents integer,
+    deposit_account_id integer,
+    posted_by integer,
+    posted_at timestamp with time zone,
+    CONSTRAINT org_membership_payments_amount_cents_check CHECK ((amount_cents >= 0)),
+    CONSTRAINT org_membership_payments_kind_check CHECK ((kind = ANY (ARRAY['payment'::text, 'refund'::text, 'waiver'::text]))),
+    CONSTRAINT org_membership_payments_method_check CHECK (((method IS NULL) OR (method = ANY (ARRAY['card'::text, 'check'::text, 'transfer'::text, 'cash'::text, 'other'::text])))),
+    CONSTRAINT org_membership_payments_posting_status_check CHECK ((posting_status = ANY (ARRAY['unposted'::text, 'posted'::text, 'void'::text, 'not_applicable'::text]))),
+    CONSTRAINT org_membership_payments_rules_check CHECK (((discount_cents >= 0) AND ((discount_cents = 0) OR (length(btrim(COALESCE(discount_reason, ''::text))) > 0)) AND ((kind = 'payment'::text) OR (length(btrim(COALESCE(reason, ''::text))) > 0)) AND ((kind <> 'refund'::text) OR (refund_of_id IS NOT NULL)) AND ((kind = 'payment'::text) OR (method IS NOT NULL) OR (kind = 'waiver'::text)) AND ((approved_by IS NULL) OR (recorded_by_user_id IS NULL) OR (approved_by <> recorded_by_user_id))))
 );
 
 ALTER TABLE ONLY public.org_membership_payments FORCE ROW LEVEL SECURITY;
@@ -5358,27 +6904,29 @@ ALTER SEQUENCE public.org_membership_payments_id_seq OWNED BY public.org_members
 
 
 --
--- Name: org_membership_reminders; Type: TABLE; Schema: public; Owner: -
+-- Name: org_membership_recognition; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.org_membership_reminders (
+CREATE TABLE public.org_membership_recognition (
     id integer NOT NULL,
-    member_id integer NOT NULL,
-    sent_at timestamp with time zone DEFAULT now() NOT NULL,
-    reminder_type public.reminder_type NOT NULL,
-    delivery_method character varying(50) DEFAULT 'email'::character varying NOT NULL,
-    delivered boolean DEFAULT false NOT NULL,
-    notes text
+    org_id integer NOT NULL,
+    term_id integer NOT NULL,
+    month date NOT NULL,
+    amount_cents integer NOT NULL,
+    ledger_transaction_id integer,
+    posted_by integer,
+    posted_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_membership_recognition_month_check CHECK ((month = (date_trunc('month'::text, (month)::timestamp with time zone))::date))
 );
 
-ALTER TABLE ONLY public.org_membership_reminders FORCE ROW LEVEL SECURITY;
+ALTER TABLE ONLY public.org_membership_recognition FORCE ROW LEVEL SECURITY;
 
 
 --
--- Name: org_membership_reminders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: org_membership_recognition_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.org_membership_reminders_id_seq
+CREATE SEQUENCE public.org_membership_recognition_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5388,10 +6936,232 @@ CREATE SEQUENCE public.org_membership_reminders_id_seq
 
 
 --
--- Name: org_membership_reminders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+-- Name: org_membership_recognition_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
-ALTER SEQUENCE public.org_membership_reminders_id_seq OWNED BY public.org_membership_reminders.id;
+ALTER SEQUENCE public.org_membership_recognition_id_seq OWNED BY public.org_membership_recognition.id;
+
+
+--
+-- Name: org_membership_seats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_seats (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    term_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    label text,
+    starts_on date DEFAULT CURRENT_DATE NOT NULL,
+    ends_on date,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_membership_seats_check CHECK (((ends_on IS NULL) OR (ends_on >= starts_on)))
+);
+
+ALTER TABLE ONLY public.org_membership_seats FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_seats_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_seats_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_seats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_seats_id_seq OWNED BY public.org_membership_seats.id;
+
+
+--
+-- Name: org_membership_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_settings (
+    org_id integer NOT NULL,
+    year_mode text DEFAULT 'rolling'::text NOT NULL,
+    fixed_start_month smallint DEFAULT 1 NOT NULL,
+    fixed_start_day smallint DEFAULT 1 NOT NULL,
+    renewal_window_days integer DEFAULT 60 NOT NULL,
+    proration_mode text DEFAULT 'none'::text NOT NULL,
+    grace_days integer DEFAULT 30 NOT NULL,
+    join_requires_approval boolean DEFAULT false NOT NULL,
+    recognition_mode text DEFAULT 'spread'::text NOT NULL,
+    deferred_dues_account_id integer,
+    contribution_account_id integer,
+    dues_revenue_account_id integer,
+    default_program_id integer,
+    directory_fields text[] DEFAULT '{}'::text[] NOT NULL,
+    join_form_enabled boolean DEFAULT false NOT NULL,
+    form_fields jsonb DEFAULT '[]'::jsonb NOT NULL,
+    extra_gift_enabled boolean DEFAULT false NOT NULL,
+    auto_renew_default boolean DEFAULT false NOT NULL,
+    updated_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    payment_mode text DEFAULT 'test'::text NOT NULL,
+    card_payments_enabled boolean DEFAULT false NOT NULL,
+    monthly_instalments_enabled boolean DEFAULT false NOT NULL,
+    directory_enabled boolean DEFAULT false NOT NULL,
+    CONSTRAINT org_membership_settings_fixed_start_day_check CHECK (((fixed_start_day >= 1) AND (fixed_start_day <= 31))),
+    CONSTRAINT org_membership_settings_fixed_start_month_check CHECK (((fixed_start_month >= 1) AND (fixed_start_month <= 12))),
+    CONSTRAINT org_membership_settings_grace_days_check CHECK (((grace_days >= 0) AND (grace_days <= 366))),
+    CONSTRAINT org_membership_settings_payment_mode_check CHECK ((payment_mode = ANY (ARRAY['test'::text, 'live'::text]))),
+    CONSTRAINT org_membership_settings_proration_mode_check CHECK ((proration_mode = ANY (ARRAY['none'::text, 'monthly'::text]))),
+    CONSTRAINT org_membership_settings_recognition_mode_check CHECK ((recognition_mode = ANY (ARRAY['spread'::text, 'at_receipt'::text]))),
+    CONSTRAINT org_membership_settings_renewal_window_days_check CHECK (((renewal_window_days >= 0) AND (renewal_window_days <= 366))),
+    CONSTRAINT org_membership_settings_year_mode_check CHECK ((year_mode = ANY (ARRAY['rolling'::text, 'fixed'::text])))
+);
+
+ALTER TABLE ONLY public.org_membership_settings FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_templates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_templates (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    key text NOT NULL,
+    subject text NOT NULL,
+    body text NOT NULL,
+    offset_days integer DEFAULT 0 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    updated_by integer,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_membership_templates_key_check CHECK ((key ~ '^[a-z0-9_]+$'::text))
+);
+
+ALTER TABLE ONLY public.org_membership_templates FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_templates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_templates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_templates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_templates_id_seq OWNED BY public.org_membership_templates.id;
+
+
+--
+-- Name: org_membership_terms; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_terms (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    constituent_id integer NOT NULL,
+    tier_id integer,
+    starts_on date NOT NULL,
+    ends_on date NOT NULL,
+    price_cents integer DEFAULT 0 NOT NULL,
+    contribution_cents integer DEFAULT 0 NOT NULL,
+    source text DEFAULT 'staff'::text NOT NULL,
+    status_override text,
+    status_reason text,
+    ended_on date,
+    ended_by integer,
+    extension_count integer DEFAULT 0 NOT NULL,
+    invoice_id integer,
+    auto_renew boolean DEFAULT false NOT NULL,
+    processor_subscription_ref text,
+    renews_term_id integer,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    processor_customer_ref text,
+    instalment_plan text,
+    payment_failed_at timestamp with time zone,
+    CONSTRAINT org_membership_terms_check CHECK ((ends_on >= starts_on)),
+    CONSTRAINT org_membership_terms_check1 CHECK (((status_override IS NULL) OR (length(btrim(COALESCE(status_reason, ''::text))) > 0))),
+    CONSTRAINT org_membership_terms_contribution_cents_check CHECK ((contribution_cents >= 0)),
+    CONSTRAINT org_membership_terms_instalment_plan_check CHECK (((instalment_plan IS NULL) OR (instalment_plan = 'monthly'::text))),
+    CONSTRAINT org_membership_terms_price_cents_check CHECK ((price_cents >= 0)),
+    CONSTRAINT org_membership_terms_source_check CHECK ((source = ANY (ARRAY['staff'::text, 'join_form'::text, 'renewal'::text, 'import'::text]))),
+    CONSTRAINT org_membership_terms_status_override_check CHECK ((status_override = 'ended'::text))
+);
+
+ALTER TABLE ONLY public.org_membership_terms FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_terms_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_terms_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_terms_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_terms_id_seq OWNED BY public.org_membership_terms.id;
+
+
+--
+-- Name: org_membership_tier_prices; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_membership_tier_prices (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    tier_id integer NOT NULL,
+    effective_on date NOT NULL,
+    price_cents integer NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_membership_tier_prices_price_cents_check CHECK ((price_cents >= 0))
+);
+
+ALTER TABLE ONLY public.org_membership_tier_prices FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_membership_tier_prices_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_membership_tier_prices_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_membership_tier_prices_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_membership_tier_prices_id_seq OWNED BY public.org_membership_tier_prices.id;
 
 
 --
@@ -5403,7 +7173,6 @@ CREATE TABLE public.org_membership_tiers (
     org_id integer NOT NULL,
     name character varying(255) NOT NULL,
     description text,
-    dues_amount_cents integer NOT NULL,
     dues_currency character varying(3) DEFAULT 'USD'::character varying NOT NULL,
     renewal_period public.renewal_period DEFAULT 'annual'::public.renewal_period NOT NULL,
     benefits_markdown text,
@@ -5411,7 +7180,22 @@ CREATE TABLE public.org_membership_tiers (
     display_order integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT org_membership_tiers_dues_amount_cents_check CHECK ((dues_amount_cents >= 0))
+    revenue_account_id integer,
+    program_id integer,
+    applies_to text DEFAULT 'either'::text NOT NULL,
+    pay_what_you_can boolean DEFAULT false NOT NULL,
+    min_price_cents integer,
+    suggested_price_cents integer,
+    budget_low_cents bigint,
+    budget_high_cents bigint,
+    benefit_value_cents integer,
+    seats_included integer DEFAULT 0 NOT NULL,
+    benefits text[] DEFAULT '{}'::text[] NOT NULL,
+    eligibility_statement text,
+    eligibility_required boolean DEFAULT false NOT NULL,
+    archived_at timestamp with time zone,
+    CONSTRAINT org_membership_tiers_amounts_check CHECK ((((min_price_cents IS NULL) OR (min_price_cents >= 0)) AND ((suggested_price_cents IS NULL) OR (suggested_price_cents >= 0)) AND ((benefit_value_cents IS NULL) OR (benefit_value_cents >= 0)) AND (seats_included >= 0) AND ((budget_low_cents IS NULL) OR (budget_high_cents IS NULL) OR (budget_high_cents >= budget_low_cents)))),
+    CONSTRAINT org_membership_tiers_applies_to_check CHECK ((applies_to = ANY (ARRAY['individual'::text, 'organization'::text, 'either'::text])))
 );
 
 ALTER TABLE ONLY public.org_membership_tiers FORCE ROW LEVEL SECURITY;
@@ -5435,6 +7219,51 @@ CREATE SEQUENCE public.org_membership_tiers_id_seq
 --
 
 ALTER SEQUENCE public.org_membership_tiers_id_seq OWNED BY public.org_membership_tiers.id;
+
+
+--
+-- Name: org_payment_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_payment_accounts (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    provider text NOT NULL,
+    mode text NOT NULL,
+    account_ref text,
+    secret_enc text,
+    secret_iv text,
+    secret_tag text,
+    webhook_secret_enc text,
+    webhook_secret_iv text,
+    webhook_secret_tag text,
+    updated_by integer,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_payment_accounts_mode_check CHECK ((mode = ANY (ARRAY['test'::text, 'live'::text]))),
+    CONSTRAINT org_payment_accounts_provider_check CHECK ((provider = 'stripe'::text))
+);
+
+ALTER TABLE ONLY public.org_payment_accounts FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_payment_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_payment_accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_payment_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_payment_accounts_id_seq OWNED BY public.org_payment_accounts.id;
 
 
 --
@@ -5474,6 +7303,9 @@ CREATE TABLE public.org_personnel (
     department_code text,
     flsa_status text DEFAULT 'exempt'::text,
     auto_generated boolean DEFAULT false NOT NULL,
+    scenario_id integer,
+    avg_hours_per_week numeric(4,1),
+    is_officer_or_key boolean DEFAULT false NOT NULL,
     CONSTRAINT org_personnel_contract_type_check CHECK ((contract_type = ANY (ARRAY['hourly'::text, 'monthly'::text, 'annual'::text, 'project'::text, 'ongoing'::text]))),
     CONSTRAINT org_personnel_employment_type_check CHECK ((employment_type = ANY (ARRAY['full-time'::text, 'part-time'::text, 'hourly'::text, 'contract'::text, 'seasonal'::text]))),
     CONSTRAINT org_personnel_end_month_check CHECK (((end_month >= 1) AND (end_month <= 12))),
@@ -5491,6 +7323,20 @@ ALTER TABLE ONLY public.org_personnel FORCE ROW LEVEL SECURITY;
 --
 
 COMMENT ON COLUMN public.org_personnel.auto_generated IS 'TRUE when this fiscal_year''s row was auto-carried-forward from an ongoing position in fiscal_year-1 (same salary/FTE, no raise applied), rather than entered by a human.';
+
+
+--
+-- Name: COLUMN org_personnel.scenario_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_personnel.scenario_id IS 'NULL = live personnel record. Set only on rows forked into a detailed scenario (org_budget_scenarios.scenario_type = ''detailed'') -- see 2026-09-14-scenario-budgeting-v2-input-fork-spec.md.';
+
+
+--
+-- Name: COLUMN org_personnel.is_officer_or_key; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_personnel.is_officer_or_key IS 'Officer, director or key employee: shown to board members (and only these people) on 990 Schedule J.';
 
 
 --
@@ -5629,29 +7475,6 @@ ALTER SEQUENCE public.org_plaid_accounts_id_seq OWNED BY public.org_plaid_accoun
 
 
 --
--- Name: org_plaid_items; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.org_plaid_items (
-    id integer NOT NULL,
-    org_id integer NOT NULL,
-    item_id text NOT NULL,
-    access_token text NOT NULL,
-    institution_id text,
-    institution_name text,
-    status text DEFAULT 'active'::text NOT NULL,
-    error_message text,
-    cursor text,
-    created_by integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT org_plaid_items_status_check CHECK ((status = ANY (ARRAY['active'::text, 'error'::text, 'revoked'::text])))
-);
-
-ALTER TABLE ONLY public.org_plaid_items FORCE ROW LEVEL SECURITY;
-
-
---
 -- Name: org_plaid_items_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -5672,6 +7495,44 @@ ALTER SEQUENCE public.org_plaid_items_id_seq OWNED BY public.org_plaid_items.id;
 
 
 --
+-- Name: org_pledge_accretion_entries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_pledge_accretion_entries (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    gift_id integer NOT NULL,
+    period_date date NOT NULL,
+    amount_cents bigint NOT NULL,
+    ledger_transaction_id integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_pledge_accretion_entries_amount_positive CHECK ((amount_cents > 0))
+);
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_pledge_accretion_entries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_pledge_accretion_entries_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_pledge_accretion_entries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_pledge_accretion_entries_id_seq OWNED BY public.org_pledge_accretion_entries.id;
+
+
+--
 -- Name: org_pod_credentials; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5686,6 +7547,42 @@ CREATE TABLE public.org_pod_credentials (
 );
 
 ALTER TABLE ONLY public.org_pod_credentials FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_program_grants; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_program_grants (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    org_user_id integer NOT NULL,
+    program_id integer NOT NULL,
+    created_by_user_id integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_program_grants FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_program_grants_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_program_grants_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_program_grants_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_program_grants_id_seq OWNED BY public.org_program_grants.id;
 
 
 --
@@ -5798,6 +7695,152 @@ CREATE SEQUENCE public.org_projections_id_seq
 --
 
 ALTER SEQUENCE public.org_projections_id_seq OWNED BY public.org_projections.id;
+
+
+--
+-- Name: org_public_link_uses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_public_link_uses (
+    id bigint NOT NULL,
+    org_id integer NOT NULL,
+    link_id integer NOT NULL,
+    action text NOT NULL,
+    ip_hash text,
+    used_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_public_link_uses FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_public_link_uses_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_public_link_uses_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_public_link_uses_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_public_link_uses_id_seq OWNED BY public.org_public_link_uses.id;
+
+
+--
+-- Name: org_public_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_public_links (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    purpose text NOT NULL,
+    constituent_id integer,
+    sponsored_project_id integer,
+    token_hash text NOT NULL,
+    single_use boolean DEFAULT false NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    revoked_by integer,
+    revoke_reason text,
+    label text,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_used_at timestamp with time zone,
+    CONSTRAINT org_public_links_purpose_check CHECK ((purpose ~ '^[a-z_]+$'::text))
+);
+
+ALTER TABLE ONLY public.org_public_links FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_public_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_public_links_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_public_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_public_links_id_seq OWNED BY public.org_public_links.id;
+
+
+--
+-- Name: org_public_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_public_settings (
+    org_id integer NOT NULL,
+    challenge_verify_url text,
+    challenge_site_key text,
+    challenge_secret_enc text,
+    challenge_secret_iv text,
+    challenge_secret_tag text,
+    updated_by integer,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_public_settings FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_record_notes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_record_notes (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    record_type text NOT NULL,
+    record_id integer NOT NULL,
+    body text NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_record_notes_body_check CHECK ((length(btrim(body)) > 0)),
+    CONSTRAINT org_record_notes_type_check CHECK ((record_type = ANY (ARRAY['bill'::text, 'invoice'::text, 'ledger_transaction'::text, 'contact'::text])))
+);
+
+ALTER TABLE ONLY public.org_record_notes FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_record_notes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_record_notes IS 'Free-text notes on a bill, invoice or ledger entry. Append-only. History comes from org_audit_log, not this table.';
+
+
+--
+-- Name: org_record_notes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_record_notes_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_record_notes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_record_notes_id_seq OWNED BY public.org_record_notes.id;
 
 
 --
@@ -5924,6 +7967,7 @@ CREATE TABLE public.org_schedule_items (
     policy_end_date date,
     origin_item_id integer,
     auto_generated boolean DEFAULT false NOT NULL,
+    scenario_id integer,
     CONSTRAINT org_schedule_items_frequency_check CHECK ((frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'annual'::text, 'one_time'::text, 'custom_months'::text]))),
     CONSTRAINT org_schedule_items_schedule_type_check CHECK ((schedule_type = ANY (ARRAY['personnel'::text, 'insurance'::text, 'stipend'::text, 'grant_milestone'::text, 'indirect_cost'::text, 'custom'::text])))
 );
@@ -5985,6 +8029,13 @@ COMMENT ON COLUMN public.org_schedule_items.origin_item_id IS 'Set when this row
 --
 
 COMMENT ON COLUMN public.org_schedule_items.auto_generated IS 'TRUE until a human edits this row directly; the carryforward engine only ever creates/updates/deletes rows still TRUE here, never one a human has claimed.';
+
+
+--
+-- Name: COLUMN org_schedule_items.scenario_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.org_schedule_items.scenario_id IS 'NULL = live schedule item. Set only on rows forked into a detailed scenario -- see 2026-09-14-scenario-budgeting-v2-input-fork-spec.md.';
 
 
 --
@@ -6097,16 +8148,50 @@ CREATE TABLE public.org_settings (
     pod_provisioned_at timestamp with time zone,
     pod_provisioning_error text,
     pod_last_synced_at timestamp with time zone,
-    actuals_source text DEFAULT 'xero'::text NOT NULL,
+    actuals_source text DEFAULT 'ledger'::text NOT NULL,
     expense_claim_approval_mode text DEFAULT 'pre_approval'::text NOT NULL,
     expense_claim_receipt_required_threshold_cents integer DEFAULT 0 NOT NULL,
     session_timeout_minutes smallint,
+    finance_can_give_access boolean DEFAULT false NOT NULL,
+    finance_giveable_permissions text[] DEFAULT '{}'::text[] NOT NULL,
+    reports_1099 boolean DEFAULT true NOT NULL,
+    threshold_1099_cents integer,
+    board_may_approve boolean DEFAULT false NOT NULL,
+    capitalization_threshold_cents integer DEFAULT 500000 NOT NULL,
+    state text,
+    show_number_colors boolean DEFAULT false NOT NULL,
+    default_pledge_receivable_account_id integer,
+    default_bank_account_id integer,
+    default_individual_gift_account_id integer,
+    legal_name text,
+    mailing_address text,
+    phone text,
+    contact_email text,
+    payment_instructions text,
+    invoice_number_prefix text DEFAULT 'INV-'::text NOT NULL,
+    invoice_next_number integer DEFAULT 1 NOT NULL,
+    bill_number_prefix text DEFAULT 'BILL-'::text NOT NULL,
+    bill_next_number integer DEFAULT 1 NOT NULL,
+    default_invoice_terms_days integer,
+    default_bill_terms_days integer,
+    mileage_rate_cents_per_mile numeric(7,3),
+    acknowledgment_message text,
+    acknowledgment_signoff text,
+    report_display jsonb,
     CONSTRAINT org_settings_actuals_source_check CHECK ((actuals_source = ANY (ARRAY['xero'::text, 'ledger'::text]))),
+    CONSTRAINT org_settings_bill_next_number_check CHECK ((bill_next_number >= 1)),
+    CONSTRAINT org_settings_capitalization_threshold_cents_check CHECK ((capitalization_threshold_cents >= 0)),
     CONSTRAINT org_settings_default_admin_rate_check CHECK (((default_admin_rate >= (0)::numeric) AND (default_admin_rate <= (100)::numeric))),
+    CONSTRAINT org_settings_default_bill_terms_days_check CHECK (((default_bill_terms_days IS NULL) OR ((default_bill_terms_days >= 0) AND (default_bill_terms_days <= 365)))),
+    CONSTRAINT org_settings_default_invoice_terms_days_check CHECK (((default_invoice_terms_days IS NULL) OR ((default_invoice_terms_days >= 0) AND (default_invoice_terms_days <= 365)))),
     CONSTRAINT org_settings_expense_claim_approval_mode_check CHECK ((expense_claim_approval_mode = ANY (ARRAY['pre_approval'::text, 'post_payout'::text]))),
     CONSTRAINT org_settings_fiscal_year_end_month_check CHECK (((fiscal_year_end_month >= 1) AND (fiscal_year_end_month <= 12))),
+    CONSTRAINT org_settings_invoice_next_number_check CHECK ((invoice_next_number >= 1)),
+    CONSTRAINT org_settings_mileage_rate_cents_per_mile_check CHECK (((mileage_rate_cents_per_mile IS NULL) OR (mileage_rate_cents_per_mile > (0)::numeric))),
     CONSTRAINT org_settings_onboarding_step_check CHECK ((onboarding_step = ANY (ARRAY['basics'::text, 'accounts'::text, 'prior_data'::text, 'programs'::text, 'complete'::text]))),
-    CONSTRAINT org_settings_session_timeout_minutes_check CHECK (((session_timeout_minutes IS NULL) OR (session_timeout_minutes = ANY (ARRAY[15, 30, 60, 120, 240, 480]))))
+    CONSTRAINT org_settings_session_timeout_minutes_check CHECK (((session_timeout_minutes IS NULL) OR (session_timeout_minutes = ANY (ARRAY[15, 30, 60, 120, 240, 480])))),
+    CONSTRAINT org_settings_state_check CHECK (((state IS NULL) OR (state ~ '^[A-Z]{2}$'::text))),
+    CONSTRAINT org_settings_threshold_1099_cents_check CHECK (((threshold_1099_cents IS NULL) OR (threshold_1099_cents >= 0)))
 );
 
 ALTER TABLE ONLY public.org_settings FORCE ROW LEVEL SECURITY;
@@ -6155,6 +8240,659 @@ COMMENT ON COLUMN public.org_settings.expense_claim_receipt_required_threshold_c
 
 
 --
+-- Name: org_sponsor_acknowledgments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_acknowledgments (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    item_key text NOT NULL,
+    acknowledged_on date NOT NULL,
+    document_id integer,
+    note text,
+    recorded_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_acknowledgments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_acknowledgments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_acknowledgments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_acknowledgments_id_seq OWNED BY public.org_sponsor_acknowledgments.id;
+
+
+--
+-- Name: org_sponsor_agreement_amendments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_agreement_amendments (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    agreement_id integer NOT NULL,
+    effective_date date NOT NULL,
+    summary text NOT NULL,
+    document_id integer NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_agreement_amendments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_agreement_amendments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_agreement_amendments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_agreement_amendments_id_seq OWNED BY public.org_sponsor_agreement_amendments.id;
+
+
+--
+-- Name: org_sponsor_agreement_templates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_agreement_templates (
+    id integer NOT NULL,
+    org_id integer,
+    model text,
+    title text NOT NULL,
+    body text NOT NULL,
+    archived_at timestamp with time zone,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_sponsor_agreement_templates_model_check CHECK (((model IS NULL) OR (model = ANY (ARRAY['model_a'::text, 'model_c'::text, 'other'::text]))))
+);
+
+ALTER TABLE ONLY public.org_sponsor_agreement_templates FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_agreement_templates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_agreement_templates_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_agreement_templates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_agreement_templates_id_seq OWNED BY public.org_sponsor_agreement_templates.id;
+
+
+--
+-- Name: org_sponsor_agreements; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_agreements (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    template_id integer,
+    effective_date date NOT NULL,
+    term_values jsonb DEFAULT '{}'::jsonb NOT NULL,
+    generated_document_id integer,
+    signed_document_id integer,
+    signed_at date,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_sponsor_agreements FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_agreements_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_agreements_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_agreements_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_agreements_id_seq OWNED BY public.org_sponsor_agreements.id;
+
+
+--
+-- Name: org_sponsor_applications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_applications (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    applicant_constituent_id integer,
+    lead_constituent_id integer,
+    project_name text NOT NULL,
+    mission text,
+    activities text,
+    budget_cents bigint,
+    leaders text,
+    expected_funders text,
+    risks text,
+    status text DEFAULT 'submitted'::text NOT NULL,
+    source text DEFAULT 'staff'::text NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    decided_by integer,
+    decided_at timestamp with time zone,
+    decision_reason text,
+    sponsored_project_id integer,
+    CONSTRAINT org_sponsor_applications_budget_cents_check CHECK (((budget_cents IS NULL) OR (budget_cents >= 0))),
+    CONSTRAINT org_sponsor_applications_source_check CHECK ((source = ANY (ARRAY['staff'::text, 'public'::text]))),
+    CONSTRAINT org_sponsor_applications_status_check CHECK ((status = ANY (ARRAY['submitted'::text, 'in_review'::text, 'accepted'::text, 'declined'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_applications FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_applications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_applications_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_applications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_applications_id_seq OWNED BY public.org_sponsor_applications.id;
+
+
+--
+-- Name: org_sponsor_approvals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_approvals (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    kind text NOT NULL,
+    title text NOT NULL,
+    funder_constituent_id integer,
+    draft_document_id integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    requested_by integer,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    decided_by integer,
+    decided_at timestamp with time zone,
+    decision_reason text,
+    signed_document_id integer,
+    CONSTRAINT org_sponsor_approvals_kind_check CHECK ((kind = ANY (ARRAY['letter_of_inquiry'::text, 'proposal'::text, 'pledge'::text, 'agreement'::text, 'solicitation'::text, 'publicity'::text]))),
+    CONSTRAINT org_sponsor_approvals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'declined'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_approvals FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_approvals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_approvals_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_approvals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_approvals_id_seq OWNED BY public.org_sponsor_approvals.id;
+
+
+--
+-- Name: org_sponsor_closings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_closings (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    destination_kind text NOT NULL,
+    destination_constituent_id integer,
+    amount_cents bigint NOT NULL,
+    closing_date date NOT NULL,
+    reason text NOT NULL,
+    document_id integer,
+    status text DEFAULT 'pending'::text NOT NULL,
+    ledger_transaction_id integer,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    void_reason text,
+    CONSTRAINT org_sponsor_closings_amount_cents_check CHECK ((amount_cents >= 0)),
+    CONSTRAINT org_sponsor_closings_destination_kind_check CHECK ((destination_kind = ANY (ARRAY['project_charity'::text, 'new_sponsor'::text, 'sponsor_decides'::text]))),
+    CONSTRAINT org_sponsor_closings_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'posted'::text, 'void'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_closings FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_closings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_closings_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_closings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_closings_id_seq OWNED BY public.org_sponsor_closings.id;
+
+
+--
+-- Name: org_sponsor_fee_postings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_fee_postings (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    period_start date NOT NULL,
+    period_end date NOT NULL,
+    amount_cents bigint NOT NULL,
+    ledger_transaction_id integer,
+    voided_at timestamp with time zone,
+    void_reason text,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_sponsor_fee_postings_amount_cents_check CHECK ((amount_cents <> 0))
+);
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_fee_postings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_fee_postings_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_fee_postings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_fee_postings_id_seq OWNED BY public.org_sponsor_fee_postings.id;
+
+
+--
+-- Name: org_sponsor_fee_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_fee_rules (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    kind text DEFAULT 'percent'::text NOT NULL,
+    rate numeric(7,4),
+    tiers jsonb,
+    flat_cents bigint,
+    minimum_quarter_cents bigint DEFAULT 0 NOT NULL,
+    effective_from date NOT NULL,
+    amendment_document_id integer,
+    amendment_reason text,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_sponsor_fee_rules_flat_cents_check CHECK (((flat_cents IS NULL) OR (flat_cents >= 0))),
+    CONSTRAINT org_sponsor_fee_rules_kind_check CHECK ((kind = ANY (ARRAY['percent'::text, 'flat'::text, 'tiered'::text]))),
+    CONSTRAINT org_sponsor_fee_rules_minimum_quarter_cents_check CHECK ((minimum_quarter_cents >= 0)),
+    CONSTRAINT org_sponsor_fee_rules_rate_check CHECK (((rate IS NULL) OR (rate >= (0)::numeric))),
+    CONSTRAINT org_sponsor_fee_rules_shape CHECK ((((kind = 'percent'::text) AND (rate IS NOT NULL)) OR ((kind = 'flat'::text) AND (flat_cents IS NOT NULL)) OR ((kind = 'tiered'::text) AND (tiers IS NOT NULL) AND (jsonb_typeof(tiers) = 'array'::text))))
+);
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_fee_rules_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_fee_rules_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_fee_rules_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_fee_rules_id_seq OWNED BY public.org_sponsor_fee_rules.id;
+
+
+--
+-- Name: org_sponsor_payment_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_payment_requests (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    requester_link_ref text,
+    payee_constituent_id integer NOT NULL,
+    amount_cents bigint NOT NULL,
+    purpose text NOT NULL,
+    method text DEFAULT 'check'::text NOT NULL,
+    document_id integer,
+    budget_line text,
+    needed_by date,
+    status text DEFAULT 'submitted'::text NOT NULL,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    reviewer_id integer,
+    reviewed_at timestamp with time zone,
+    decision_reason text,
+    override_reason text,
+    override_by integer,
+    override_at timestamp with time zone,
+    disbursement_id integer,
+    CONSTRAINT org_sponsor_payment_requests_amount_cents_check CHECK ((amount_cents > 0)),
+    CONSTRAINT org_sponsor_payment_requests_method_check CHECK ((method = ANY (ARRAY['check'::text, 'bank_transfer'::text, 'wire'::text, 'card'::text, 'other'::text]))),
+    CONSTRAINT org_sponsor_payment_requests_status_check CHECK ((status = ANY (ARRAY['submitted'::text, 'in_review'::text, 'needs_info'::text, 'approved'::text, 'rejected'::text, 'withdrawn'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_payment_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_payment_requests_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_payment_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_payment_requests_id_seq OWNED BY public.org_sponsor_payment_requests.id;
+
+
+--
+-- Name: org_sponsor_recalls; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_recalls (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    amount_cents bigint NOT NULL,
+    recall_date date NOT NULL,
+    reason text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    ledger_transaction_id integer,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    void_reason text,
+    CONSTRAINT org_sponsor_recalls_amount_cents_check CHECK ((amount_cents > 0)),
+    CONSTRAINT org_sponsor_recalls_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'posted'::text, 'void'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_recalls FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_recalls_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_recalls_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_recalls_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_recalls_id_seq OWNED BY public.org_sponsor_recalls.id;
+
+
+--
+-- Name: org_sponsor_report_reminders; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_report_reminders (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    report_id integer NOT NULL,
+    reminder_kind text NOT NULL,
+    send_status text DEFAULT 'pending'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    CONSTRAINT org_sponsor_report_reminders_reminder_kind_check CHECK ((reminder_kind = ANY (ARRAY['due_soon'::text, 'overdue'::text]))),
+    CONSTRAINT org_sponsor_report_reminders_send_status_check CHECK ((send_status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_report_reminders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_report_reminders_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_report_reminders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_report_reminders_id_seq OWNED BY public.org_sponsor_report_reminders.id;
+
+
+--
+-- Name: org_sponsor_reports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_reports (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    kind text NOT NULL,
+    funder_constituent_id integer,
+    title text,
+    period_start date,
+    period_end date,
+    due_date date NOT NULL,
+    received_at date,
+    received_by integer,
+    document_id integer,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_sponsor_reports_kind_check CHECK ((kind = ANY (ARRAY['project_quarterly'::text, 'funder'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_reports FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_reports_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_reports_id_seq OWNED BY public.org_sponsor_reports.id;
+
+
+--
+-- Name: org_sponsor_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_settings (
+    org_id integer NOT NULL,
+    default_fee_minimum_cents bigint DEFAULT 0 NOT NULL,
+    second_approval_threshold_cents bigint DEFAULT 500000 NOT NULL,
+    overdue_report_hold_days integer DEFAULT 30 NOT NULL,
+    donor_letter_threshold_cents bigint DEFAULT 500000 NOT NULL,
+    information_return_thresholds jsonb DEFAULT '{"2026": 200000}'::jsonb NOT NULL,
+    statement_day_of_month smallint DEFAULT 5 NOT NULL,
+    fee_income_account_id integer,
+    fee_income_program_id integer,
+    fee_expense_account_id integer,
+    untagged_review_from timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    recall_expense_account_id integer,
+    recall_income_account_id integer,
+    CONSTRAINT org_sponsor_settings_default_fee_minimum_cents_check CHECK ((default_fee_minimum_cents >= 0)),
+    CONSTRAINT org_sponsor_settings_donor_letter_threshold_cents_check CHECK ((donor_letter_threshold_cents >= 0)),
+    CONSTRAINT org_sponsor_settings_overdue_report_hold_days_check CHECK ((overdue_report_hold_days >= 0)),
+    CONSTRAINT org_sponsor_settings_second_approval_threshold_cents_check CHECK ((second_approval_threshold_cents >= 0)),
+    CONSTRAINT org_sponsor_settings_statement_day_of_month_check CHECK (((statement_day_of_month >= 1) AND (statement_day_of_month <= 28)))
+);
+
+ALTER TABLE ONLY public.org_sponsor_settings FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_statements; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_sponsor_statements (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    sponsored_project_id integer NOT NULL,
+    month date NOT NULL,
+    opening_cents bigint,
+    income_cents bigint,
+    fees_cents bigint,
+    expenses_cents bigint,
+    closing_cents bigint,
+    generated_document_id integer,
+    send_status text DEFAULT 'pending'::text NOT NULL,
+    sent_at timestamp with time zone,
+    sent_to text,
+    created_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_sponsor_statements_month_check CHECK ((EXTRACT(day FROM month) = (1)::numeric)),
+    CONSTRAINT org_sponsor_statements_send_status_check CHECK ((send_status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'skipped'::text, 'not_sent'::text])))
+);
+
+ALTER TABLE ONLY public.org_sponsor_statements FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: org_sponsor_statements_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_sponsor_statements_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_sponsor_statements_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_sponsor_statements_id_seq OWNED BY public.org_sponsor_statements.id;
+
+
+--
 -- Name: org_sponsored_project_disbursements; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6171,8 +8909,20 @@ CREATE TABLE public.org_sponsored_project_disbursements (
     status text DEFAULT 'pending_approval'::text NOT NULL,
     approved_by integer,
     approved_at timestamp with time zone,
+    ledger_transaction_id integer,
+    payment_request_id integer,
+    first_approved_by integer,
+    first_approved_at timestamp with time zone,
+    override_reason text,
+    override_by integer,
+    override_at timestamp with time zone,
+    kind text DEFAULT 'cash'::text NOT NULL,
+    property_gift_id integer,
+    payee_constituent_id integer,
+    grant_agreement_document_id integer,
     CONSTRAINT org_sponsored_project_disbursements_admin_fee_cents_check CHECK (((admin_fee_cents IS NULL) OR (admin_fee_cents >= 0))),
     CONSTRAINT org_sponsored_project_disbursements_amount_cents_check CHECK ((amount_cents > 0)),
+    CONSTRAINT org_sponsored_project_disbursements_kind_check CHECK ((kind = ANY (ARRAY['cash'::text, 'property'::text]))),
     CONSTRAINT org_sponsored_project_disbursements_status_check CHECK ((status = ANY (ARRAY['pending_approval'::text, 'approved'::text, 'void'::text])))
 );
 
@@ -6229,8 +8979,24 @@ CREATE TABLE public.org_sponsored_projects (
     admin_rate numeric(5,2),
     next_report_due date,
     last_report_received_at date,
+    disbursement_expense_account_id integer,
+    agreement_signed_at date,
+    hold_reason text,
+    hold_kind text,
+    hold_set_by integer,
+    hold_set_at timestamp with time zone,
+    status_before_hold text,
+    report_hold_waived_for date,
+    lead_constituent_id integer,
+    receiving_constituent_id integer,
+    w9_on_file boolean DEFAULT false NOT NULL,
+    w9_document_id integer,
+    w9_received_at date,
+    public_page_enabled boolean DEFAULT false NOT NULL,
+    public_summary text,
+    CONSTRAINT org_sponsored_projects_hold_kind_check CHECK (((hold_kind IS NULL) OR (hold_kind = ANY (ARRAY['manual'::text, 'report_overdue'::text])))),
     CONSTRAINT org_sponsored_projects_sponsorship_model_check CHECK (((sponsorship_model IS NULL) OR (sponsorship_model = ANY (ARRAY['model_a'::text, 'model_c'::text, 'other'::text])))),
-    CONSTRAINT org_sponsored_projects_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'completed'::text, 'winding_down'::text])))
+    CONSTRAINT org_sponsored_projects_status_check CHECK ((status = ANY (ARRAY['applicant'::text, 'accepted'::text, 'active'::text, 'on_hold'::text, 'winding_down'::text, 'ended'::text, 'lapsed'::text, 'paused'::text, 'completed'::text])))
 );
 
 ALTER TABLE ONLY public.org_sponsored_projects FORCE ROW LEVEL SECURITY;
@@ -6364,7 +9130,10 @@ CREATE TABLE public.org_users (
     role public.org_member_role DEFAULT 'staff'::public.org_member_role NOT NULL,
     invited_by integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    last_dashboard_visit_at timestamp with time zone
+    last_dashboard_visit_at timestamp with time zone,
+    accounting_entry_enabled boolean DEFAULT false NOT NULL,
+    accounting_entry_enabled_at timestamp with time zone,
+    accounting_entry_reminded_at timestamp with time zone
 );
 
 ALTER TABLE ONLY public.org_users FORCE ROW LEVEL SECURITY;
@@ -6520,7 +9289,8 @@ CREATE TABLE public.orgs (
     donation_url character varying(500),
     change_nonprofit_id text,
     activity_summary_text text,
-    activity_summary_generated_at timestamp with time zone
+    activity_summary_generated_at timestamp with time zone,
+    external_id uuid DEFAULT gen_random_uuid() NOT NULL
 );
 
 
@@ -6553,6 +9323,13 @@ COMMENT ON COLUMN public.orgs.sender_domains IS 'Lowercase hostnames from From: 
 
 
 --
+-- Name: COLUMN orgs.external_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.orgs.external_id IS 'Stable opaque identifier for referencing this org outside this database. Never reused or edited; orgs.id stays the local key for all existing foreign keys.';
+
+
+--
 -- Name: orgs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -6578,7 +9355,7 @@ ALTER SEQUENCE public.orgs_id_seq OWNED BY public.orgs.id;
 
 CREATE TABLE public.page_views (
     id integer NOT NULL,
-    user_id integer NOT NULL,
+    user_id integer,
     path text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -6636,6 +9413,41 @@ CREATE SEQUENCE public.password_reset_tokens_id_seq
 --
 
 ALTER SEQUENCE public.password_reset_tokens_id_seq OWNED BY public.password_reset_tokens.id;
+
+
+--
+-- Name: payment_provider_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_provider_events (
+    id bigint NOT NULL,
+    provider text NOT NULL,
+    event_id text NOT NULL,
+    org_id integer,
+    event_type text,
+    received_at timestamp with time zone DEFAULT now() NOT NULL,
+    processed_at timestamp with time zone,
+    result text
+);
+
+
+--
+-- Name: payment_provider_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.payment_provider_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: payment_provider_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.payment_provider_events_id_seq OWNED BY public.payment_provider_events.id;
 
 
 --
@@ -6805,6 +9617,7 @@ CREATE TABLE public.pod_access_permissions (
     is_container boolean DEFAULT false NOT NULL,
     can_write boolean DEFAULT false NOT NULL,
     share_resource_url text,
+    share_token text,
     CONSTRAINT pod_access_permissions_container_shape_check CHECK (((is_container AND (org_document_id IS NULL)) OR ((NOT is_container) AND (org_document_id IS NOT NULL)))),
     CONSTRAINT pod_access_permissions_recipient_shape_check CHECK (((recipient_webid IS NOT NULL) <> (share_resource_url IS NOT NULL))),
     CONSTRAINT pod_access_permissions_revoked_reason_check CHECK ((revoked_reason = ANY (ARRAY['manual'::text, 'expired'::text, 'group_removed'::text])))
@@ -6849,6 +9662,7 @@ CREATE TABLE public.pod_acr_outbox (
     next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     done_at timestamp with time zone,
+    claimed_at timestamp with time zone,
     CONSTRAINT pod_acr_outbox_reason_check CHECK ((reason = ANY (ARRAY['permission'::text, 'revoke'::text, 'delete_share'::text]))),
     CONSTRAINT pod_acr_outbox_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'done'::text, 'failed'::text])))
 );
@@ -6874,6 +9688,45 @@ CREATE SEQUENCE public.pod_acr_outbox_id_seq
 --
 
 ALTER SEQUENCE public.pod_acr_outbox_id_seq OWNED BY public.pod_acr_outbox.id;
+
+
+--
+-- Name: pod_share_challenges; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pod_share_challenges (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    permission_id integer NOT NULL,
+    code_hash text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    verified_at timestamp with time zone,
+    requested_ip text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.pod_share_challenges FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: pod_share_challenges_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.pod_share_challenges_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: pod_share_challenges_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.pod_share_challenges_id_seq OWNED BY public.pod_share_challenges.id;
 
 
 --
@@ -6922,6 +9775,41 @@ CREATE SEQUENCE public.representatives_id_seq
 --
 
 ALTER SEQUENCE public.representatives_id_seq OWNED BY public.representatives.id;
+
+
+--
+-- Name: reviewer_access_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.reviewer_access_links (
+    id integer NOT NULL,
+    token text NOT NULL,
+    user_id integer NOT NULL,
+    label text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: reviewer_access_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.reviewer_access_links_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: reviewer_access_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.reviewer_access_links_id_seq OWNED BY public.reviewer_access_links.id;
 
 
 --
@@ -7705,7 +10593,7 @@ ALTER SEQUENCE public.workshop_proposals_id_seq OWNED BY public.workshop_proposa
 CREATE TABLE public.workshop_space_members (
     id integer NOT NULL,
     space_id integer NOT NULL,
-    user_id integer NOT NULL,
+    user_id integer,
     org_id integer,
     role public.workshop_space_role DEFAULT 'participant'::public.workshop_space_role NOT NULL,
     joined_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -7884,6 +10772,13 @@ ALTER TABLE ONLY public.cooperative_work_requests ALTER COLUMN id SET DEFAULT ne
 
 
 --
+-- Name: demo_visit_log id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_visit_log ALTER COLUMN id SET DEFAULT nextval('public.demo_visit_log_id_seq'::regclass);
+
+
+--
 -- Name: financial_rep_pledges id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -7902,6 +10797,13 @@ ALTER TABLE ONLY public.inbound_debug_emails ALTER COLUMN id SET DEFAULT nextval
 --
 
 ALTER TABLE ONLY public.local_event_attendance ALTER COLUMN id SET DEFAULT nextval('public.local_event_attendance_id_seq'::regclass);
+
+
+--
+-- Name: org_access_permissions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions ALTER COLUMN id SET DEFAULT nextval('public.org_access_permissions_id_seq'::regclass);
 
 
 --
@@ -7958,6 +10860,13 @@ ALTER TABLE ONLY public.org_audit_log ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.org_balance_sheet_snapshots ALTER COLUMN id SET DEFAULT nextval('public.org_balance_sheet_snapshots_id_seq'::regclass);
+
+
+--
+-- Name: org_bank_reconciliation_periods id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods ALTER COLUMN id SET DEFAULT nextval('public.org_bank_reconciliation_periods_id_seq'::regclass);
 
 
 --
@@ -8024,6 +10933,20 @@ ALTER TABLE ONLY public.org_budget_lines ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
+-- Name: org_budget_scenario_lines id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines ALTER COLUMN id SET DEFAULT nextval('public.org_budget_scenario_lines_id_seq'::regclass);
+
+
+--
+-- Name: org_budget_scenarios id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenarios ALTER COLUMN id SET DEFAULT nextval('public.org_budget_scenarios_id_seq'::regclass);
+
+
+--
 -- Name: org_compliance_obligations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -8045,10 +10968,38 @@ ALTER TABLE ONLY public.org_constituents ALTER COLUMN id SET DEFAULT nextval('pu
 
 
 --
+-- Name: org_contact_email_prefs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_email_prefs ALTER COLUMN id SET DEFAULT nextval('public.org_contact_email_prefs_id_seq'::regclass);
+
+
+--
+-- Name: org_contact_roles id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_roles ALTER COLUMN id SET DEFAULT nextval('public.org_contact_roles_id_seq'::regclass);
+
+
+--
+-- Name: org_conversion_balances id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances ALTER COLUMN id SET DEFAULT nextval('public.org_conversion_balances_id_seq'::regclass);
+
+
+--
 -- Name: org_document_expectations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_document_expectations ALTER COLUMN id SET DEFAULT nextval('public.org_document_expectations_id_seq'::regclass);
+
+
+--
+-- Name: org_document_retention_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_document_retention_rules ALTER COLUMN id SET DEFAULT nextval('public.org_document_retention_rules_id_seq'::regclass);
 
 
 --
@@ -8129,10 +11080,24 @@ ALTER TABLE ONLY public.org_functional_classifications ALTER COLUMN id SET DEFAU
 
 
 --
+-- Name: org_gift_pledge_installments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gift_pledge_installments ALTER COLUMN id SET DEFAULT nextval('public.org_gift_pledge_installments_id_seq'::regclass);
+
+
+--
 -- Name: org_gifts id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_gifts ALTER COLUMN id SET DEFAULT nextval('public.org_gifts_id_seq'::regclass);
+
+
+--
+-- Name: org_grant_allocation_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests ALTER COLUMN id SET DEFAULT nextval('public.org_grant_allocation_requests_id_seq'::regclass);
 
 
 --
@@ -8154,6 +11119,13 @@ ALTER TABLE ONLY public.org_grants ALTER COLUMN id SET DEFAULT nextval('public.o
 --
 
 ALTER TABLE ONLY public.org_import_history ALTER COLUMN id SET DEFAULT nextval('public.org_import_history_id_seq'::regclass);
+
+
+--
+-- Name: org_indirect_cost_recovery_entries id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries ALTER COLUMN id SET DEFAULT nextval('public.org_indirect_cost_recovery_entries_id_seq'::regclass);
 
 
 --
@@ -8206,10 +11178,24 @@ ALTER TABLE ONLY public.org_ledger_transactions ALTER COLUMN id SET DEFAULT next
 
 
 --
--- Name: org_members id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: org_membership_directory_optin id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_members ALTER COLUMN id SET DEFAULT nextval('public.org_members_id_seq'::regclass);
+ALTER TABLE ONLY public.org_membership_directory_optin ALTER COLUMN id SET DEFAULT nextval('public.org_membership_directory_optin_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_join_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests ALTER COLUMN id SET DEFAULT nextval('public.org_membership_join_requests_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_messages id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages ALTER COLUMN id SET DEFAULT nextval('public.org_membership_messages_id_seq'::regclass);
 
 
 --
@@ -8220,10 +11206,38 @@ ALTER TABLE ONLY public.org_membership_payments ALTER COLUMN id SET DEFAULT next
 
 
 --
--- Name: org_membership_reminders id; Type: DEFAULT; Schema: public; Owner: -
+-- Name: org_membership_recognition id; Type: DEFAULT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_membership_reminders ALTER COLUMN id SET DEFAULT nextval('public.org_membership_reminders_id_seq'::regclass);
+ALTER TABLE ONLY public.org_membership_recognition ALTER COLUMN id SET DEFAULT nextval('public.org_membership_recognition_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_seats id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats ALTER COLUMN id SET DEFAULT nextval('public.org_membership_seats_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_templates id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_templates ALTER COLUMN id SET DEFAULT nextval('public.org_membership_templates_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_terms id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms ALTER COLUMN id SET DEFAULT nextval('public.org_membership_terms_id_seq'::regclass);
+
+
+--
+-- Name: org_membership_tier_prices id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices ALTER COLUMN id SET DEFAULT nextval('public.org_membership_tier_prices_id_seq'::regclass);
 
 
 --
@@ -8231,6 +11245,13 @@ ALTER TABLE ONLY public.org_membership_reminders ALTER COLUMN id SET DEFAULT nex
 --
 
 ALTER TABLE ONLY public.org_membership_tiers ALTER COLUMN id SET DEFAULT nextval('public.org_membership_tiers_id_seq'::regclass);
+
+
+--
+-- Name: org_payment_accounts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_payment_accounts ALTER COLUMN id SET DEFAULT nextval('public.org_payment_accounts_id_seq'::regclass);
 
 
 --
@@ -8269,6 +11290,20 @@ ALTER TABLE ONLY public.org_plaid_items ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: org_pledge_accretion_entries id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries ALTER COLUMN id SET DEFAULT nextval('public.org_pledge_accretion_entries_id_seq'::regclass);
+
+
+--
+-- Name: org_program_grants id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants ALTER COLUMN id SET DEFAULT nextval('public.org_program_grants_id_seq'::regclass);
+
+
+--
 -- Name: org_programs id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -8280,6 +11315,27 @@ ALTER TABLE ONLY public.org_programs ALTER COLUMN id SET DEFAULT nextval('public
 --
 
 ALTER TABLE ONLY public.org_projections ALTER COLUMN id SET DEFAULT nextval('public.org_projections_id_seq'::regclass);
+
+
+--
+-- Name: org_public_link_uses id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_link_uses ALTER COLUMN id SET DEFAULT nextval('public.org_public_link_uses_id_seq'::regclass);
+
+
+--
+-- Name: org_public_links id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links ALTER COLUMN id SET DEFAULT nextval('public.org_public_links_id_seq'::regclass);
+
+
+--
+-- Name: org_record_notes id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_record_notes ALTER COLUMN id SET DEFAULT nextval('public.org_record_notes_id_seq'::regclass);
 
 
 --
@@ -8308,6 +11364,104 @@ ALTER TABLE ONLY public.org_schedule_items ALTER COLUMN id SET DEFAULT nextval('
 --
 
 ALTER TABLE ONLY public.org_schedules ALTER COLUMN id SET DEFAULT nextval('public.org_schedules_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_acknowledgments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_acknowledgments_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_agreement_amendments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_agreement_amendments_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_agreement_templates id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_templates ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_agreement_templates_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_agreements id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_agreements_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_applications id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_applications_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_approvals id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_approvals_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_closings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_closings_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_fee_postings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_fee_postings_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_fee_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_fee_rules_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_payment_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_payment_requests_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_recalls id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_recalls ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_recalls_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_report_reminders id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_report_reminders_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_reports id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_reports_id_seq'::regclass);
+
+
+--
+-- Name: org_sponsor_statements id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements ALTER COLUMN id SET DEFAULT nextval('public.org_sponsor_statements_id_seq'::regclass);
 
 
 --
@@ -8381,6 +11535,13 @@ ALTER TABLE ONLY public.password_reset_tokens ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: payment_provider_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_provider_events ALTER COLUMN id SET DEFAULT nextval('public.payment_provider_events_id_seq'::regclass);
+
+
+--
 -- Name: pending_confirmations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -8423,10 +11584,24 @@ ALTER TABLE ONLY public.pod_acr_outbox ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: pod_share_challenges id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pod_share_challenges ALTER COLUMN id SET DEFAULT nextval('public.pod_share_challenges_id_seq'::regclass);
+
+
+--
 -- Name: representatives id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.representatives ALTER COLUMN id SET DEFAULT nextval('public.representatives_id_seq'::regclass);
+
+
+--
+-- Name: reviewer_access_links id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reviewer_access_links ALTER COLUMN id SET DEFAULT nextval('public.reviewer_access_links_id_seq'::regclass);
 
 
 --
@@ -8591,6 +11766,14 @@ ALTER TABLE ONLY public.workshop_workspaces ALTER COLUMN id SET DEFAULT nextval(
 
 
 --
+-- Name: accounting_review_entry accounting_review_entry_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.accounting_review_entry
+    ADD CONSTRAINT accounting_review_entry_pkey PRIMARY KEY (item_id, reviewer);
+
+
+--
 -- Name: actions actions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8743,6 +11926,30 @@ ALTER TABLE ONLY public.cooperative_work_requests
 
 
 --
+-- Name: demo_visit_excluded demo_visit_excluded_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_visit_excluded
+    ADD CONSTRAINT demo_visit_excluded_pkey PRIMARY KEY (visitor_hash);
+
+
+--
+-- Name: demo_visit_key demo_visit_key_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_visit_key
+    ADD CONSTRAINT demo_visit_key_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: demo_visit_log demo_visit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.demo_visit_log
+    ADD CONSTRAINT demo_visit_log_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: financial_rep_pledges financial_rep_pledges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8780,6 +11987,14 @@ ALTER TABLE ONLY public.local_event_attendance
 
 ALTER TABLE ONLY public.local_event_attendance
     ADD CONSTRAINT local_event_attendance_user_id_source_event_key_key UNIQUE (user_id, source, event_key);
+
+
+--
+-- Name: org_access_permissions org_access_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions
+    ADD CONSTRAINT org_access_permissions_pkey PRIMARY KEY (id);
 
 
 --
@@ -8895,6 +12110,22 @@ ALTER TABLE ONLY public.org_balance_sheet_snapshots
 
 
 --
+-- Name: org_bank_reconciliation_periods org_bank_recon_periods_unique_end; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_recon_periods_unique_end UNIQUE (org_id, bank_account_id, period_end);
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: org_bank_rules org_bank_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8975,6 +12206,22 @@ ALTER TABLE ONLY public.org_budget_lines
 
 
 --
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines
+    ADD CONSTRAINT org_budget_scenario_lines_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_budget_scenarios org_budget_scenarios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenarios
+    ADD CONSTRAINT org_budget_scenarios_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: org_compliance_obligations org_compliance_obligations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8999,11 +12246,75 @@ ALTER TABLE ONLY public.org_constituents
 
 
 --
+-- Name: org_contact_email_prefs org_contact_email_prefs_constituent_id_scope_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_email_prefs
+    ADD CONSTRAINT org_contact_email_prefs_constituent_id_scope_key UNIQUE (constituent_id, scope);
+
+
+--
+-- Name: org_contact_email_prefs org_contact_email_prefs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_email_prefs
+    ADD CONSTRAINT org_contact_email_prefs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_contact_roles org_contact_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_roles
+    ADD CONSTRAINT org_contact_roles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_contact_roles org_contact_roles_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_roles
+    ADD CONSTRAINT org_contact_roles_unique UNIQUE (constituent_id, role, starts_on);
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_org_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_org_id_key UNIQUE (org_id);
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: org_document_expectations org_document_expectations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_document_expectations
     ADD CONSTRAINT org_document_expectations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_document_retention_rules org_document_retention_rules_org_id_category_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_document_retention_rules
+    ADD CONSTRAINT org_document_retention_rules_org_id_category_key UNIQUE NULLS NOT DISTINCT (org_id, category);
+
+
+--
+-- Name: org_document_retention_rules org_document_retention_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_document_retention_rules
+    ADD CONSTRAINT org_document_retention_rules_pkey PRIMARY KEY (id);
 
 
 --
@@ -9127,11 +12438,27 @@ ALTER TABLE ONLY public.org_functional_classifications
 
 
 --
+-- Name: org_gift_pledge_installments org_gift_pledge_installments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gift_pledge_installments
+    ADD CONSTRAINT org_gift_pledge_installments_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: org_gifts org_gifts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_gifts
     ADD CONSTRAINT org_gifts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -9156,6 +12483,22 @@ ALTER TABLE ONLY public.org_grants
 
 ALTER TABLE ONLY public.org_import_history
     ADD CONSTRAINT org_import_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_unique UNIQUE (grant_id, period_start_date, period_end_date);
 
 
 --
@@ -9223,19 +12566,43 @@ ALTER TABLE ONLY public.org_ledger_transactions
 
 
 --
--- Name: org_members org_members_coop_org_id_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_directory_optin org_membership_directory_optin_constituent_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_members
-    ADD CONSTRAINT org_members_coop_org_id_email_key UNIQUE (org_id, email);
+ALTER TABLE ONLY public.org_membership_directory_optin
+    ADD CONSTRAINT org_membership_directory_optin_constituent_id_key UNIQUE (constituent_id);
 
 
 --
--- Name: org_members org_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_directory_optin org_membership_directory_optin_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_members
-    ADD CONSTRAINT org_members_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.org_membership_directory_optin
+    ADD CONSTRAINT org_membership_directory_optin_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_messages org_membership_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_messages org_membership_messages_term_id_template_key_offset_days_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_term_id_template_key_offset_days_key UNIQUE (term_id, template_key, offset_days);
 
 
 --
@@ -9247,11 +12614,75 @@ ALTER TABLE ONLY public.org_membership_payments
 
 
 --
--- Name: org_membership_reminders org_membership_reminders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_recognition org_membership_recognition_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_membership_reminders
-    ADD CONSTRAINT org_membership_reminders_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_recognition org_membership_recognition_term_id_month_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_term_id_month_key UNIQUE (term_id, month);
+
+
+--
+-- Name: org_membership_seats org_membership_seats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats
+    ADD CONSTRAINT org_membership_seats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_settings org_membership_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_pkey PRIMARY KEY (org_id);
+
+
+--
+-- Name: org_membership_templates org_membership_templates_org_id_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_templates
+    ADD CONSTRAINT org_membership_templates_org_id_key_key UNIQUE (org_id, key);
+
+
+--
+-- Name: org_membership_templates org_membership_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_templates
+    ADD CONSTRAINT org_membership_templates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_terms org_membership_terms_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices
+    ADD CONSTRAINT org_membership_tier_prices_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_tier_id_effective_on_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices
+    ADD CONSTRAINT org_membership_tier_prices_tier_id_effective_on_key UNIQUE (tier_id, effective_on);
 
 
 --
@@ -9260,6 +12691,22 @@ ALTER TABLE ONLY public.org_membership_reminders
 
 ALTER TABLE ONLY public.org_membership_tiers
     ADD CONSTRAINT org_membership_tiers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_payment_accounts org_payment_accounts_org_id_provider_mode_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_payment_accounts
+    ADD CONSTRAINT org_payment_accounts_org_id_provider_mode_key UNIQUE (org_id, provider, mode);
+
+
+--
+-- Name: org_payment_accounts org_payment_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_payment_accounts
+    ADD CONSTRAINT org_payment_accounts_pkey PRIMARY KEY (id);
 
 
 --
@@ -9327,11 +12774,43 @@ ALTER TABLE ONLY public.org_plaid_items
 
 
 --
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries
+    ADD CONSTRAINT org_pledge_accretion_entries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries
+    ADD CONSTRAINT org_pledge_accretion_entries_unique UNIQUE (gift_id, period_date);
+
+
+--
 -- Name: org_pod_credentials org_pod_credentials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_pod_credentials
     ADD CONSTRAINT org_pod_credentials_pkey PRIMARY KEY (org_id);
+
+
+--
+-- Name: org_program_grants org_program_grants_org_user_id_program_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_org_user_id_program_id_key UNIQUE (org_user_id, program_id);
+
+
+--
+-- Name: org_program_grants org_program_grants_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_pkey PRIMARY KEY (id);
 
 
 --
@@ -9348,6 +12827,46 @@ ALTER TABLE ONLY public.org_programs
 
 ALTER TABLE ONLY public.org_projections
     ADD CONSTRAINT org_projections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_public_link_uses org_public_link_uses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_link_uses
+    ADD CONSTRAINT org_public_link_uses_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_public_links org_public_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links
+    ADD CONSTRAINT org_public_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_public_links org_public_links_token_hash_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links
+    ADD CONSTRAINT org_public_links_token_hash_key UNIQUE (token_hash);
+
+
+--
+-- Name: org_public_settings org_public_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_settings
+    ADD CONSTRAINT org_public_settings_pkey PRIMARY KEY (org_id);
+
+
+--
+-- Name: org_record_notes org_record_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_record_notes
+    ADD CONSTRAINT org_record_notes_pkey PRIMARY KEY (id);
 
 
 --
@@ -9404,6 +12923,150 @@ ALTER TABLE ONLY public.org_schedules
 
 ALTER TABLE ONLY public.org_settings
     ADD CONSTRAINT org_settings_pkey PRIMARY KEY (org_id);
+
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments
+    ADD CONSTRAINT org_sponsor_acknowledgments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments
+    ADD CONSTRAINT org_sponsor_agreement_amendments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_agreement_templates org_sponsor_agreement_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_templates
+    ADD CONSTRAINT org_sponsor_agreement_templates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications
+    ADD CONSTRAINT org_sponsor_applications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings
+    ADD CONSTRAINT org_sponsor_fee_postings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules
+    ADD CONSTRAINT org_sponsor_fee_rules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_sponsored_project_id_effective_from_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules
+    ADD CONSTRAINT org_sponsor_fee_rules_sponsored_project_id_effective_from_key UNIQUE (sponsored_project_id, effective_from);
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_recalls
+    ADD CONSTRAINT org_sponsor_recalls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders
+    ADD CONSTRAINT org_sponsor_report_reminders_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_report_id_reminder_kind_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders
+    ADD CONSTRAINT org_sponsor_report_reminders_report_id_reminder_kind_key UNIQUE (report_id, reminder_kind);
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports
+    ADD CONSTRAINT org_sponsor_reports_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_pkey PRIMARY KEY (org_id);
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements
+    ADD CONSTRAINT org_sponsor_statements_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_sponsored_project_id_month_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements
+    ADD CONSTRAINT org_sponsor_statements_sponsored_project_id_month_key UNIQUE (sponsored_project_id, month);
 
 
 --
@@ -9519,6 +13182,22 @@ ALTER TABLE ONLY public.password_reset_tokens
 
 
 --
+-- Name: payment_provider_events payment_provider_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_provider_events
+    ADD CONSTRAINT payment_provider_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_provider_events payment_provider_events_provider_event_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_provider_events
+    ADD CONSTRAINT payment_provider_events_provider_event_id_key UNIQUE (provider, event_id);
+
+
+--
 -- Name: pending_confirmations pending_confirmations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9583,11 +13262,35 @@ ALTER TABLE ONLY public.pod_acr_outbox
 
 
 --
+-- Name: pod_share_challenges pod_share_challenges_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pod_share_challenges
+    ADD CONSTRAINT pod_share_challenges_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: representatives representatives_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.representatives
     ADD CONSTRAINT representatives_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: reviewer_access_links reviewer_access_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reviewer_access_links
+    ADD CONSTRAINT reviewer_access_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: reviewer_access_links reviewer_access_links_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reviewer_access_links
+    ADD CONSTRAINT reviewer_access_links_token_key UNIQUE (token);
 
 
 --
@@ -10125,6 +13828,20 @@ CREATE INDEX idx_cooperative_work_requests_status ON public.cooperative_work_req
 
 
 --
+-- Name: idx_demo_visit_log_visited; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_demo_visit_log_visited ON public.demo_visit_log USING btree (visited_at DESC);
+
+
+--
+-- Name: idx_demo_visit_log_visitor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_demo_visit_log_visitor ON public.demo_visit_log USING btree (visitor_hash);
+
+
+--
 -- Name: idx_inbound_debug_emails_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10139,66 +13856,10 @@ CREATE INDEX idx_local_event_attendance_user_attended ON public.local_event_atte
 
 
 --
--- Name: idx_membership_members_cooperative_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_members_cooperative_user_id ON public.org_members USING btree (cooperative_user_id);
-
-
---
--- Name: idx_membership_members_org_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_members_org_id ON public.org_members USING btree (org_id);
-
-
---
--- Name: idx_membership_members_period_end; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_members_period_end ON public.org_members USING btree (org_id, current_period_end);
-
-
---
--- Name: idx_membership_members_status; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_members_status ON public.org_members USING btree (org_id, status);
-
-
---
--- Name: idx_membership_members_tier_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_members_tier_id ON public.org_members USING btree (tier_id);
-
-
---
--- Name: idx_membership_payments_member_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_payments_member_id ON public.org_membership_payments USING btree (member_id);
-
-
---
 -- Name: idx_membership_payments_payment_date; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_membership_payments_payment_date ON public.org_membership_payments USING btree (payment_date);
-
-
---
--- Name: idx_membership_reminders_member_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_reminders_member_id ON public.org_membership_reminders USING btree (member_id);
-
-
---
--- Name: idx_membership_reminders_sent_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_membership_reminders_sent_at ON public.org_membership_reminders USING btree (sent_at);
 
 
 --
@@ -10213,6 +13874,13 @@ CREATE INDEX idx_membership_tiers_active ON public.org_membership_tiers USING bt
 --
 
 CREATE INDEX idx_membership_tiers_org_id ON public.org_membership_tiers USING btree (org_id);
+
+
+--
+-- Name: idx_org_access_permissions_org; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_access_permissions_org ON public.org_access_permissions USING btree (org_id);
 
 
 --
@@ -10262,6 +13930,20 @@ CREATE UNIQUE INDEX idx_org_accounts_one_contrib_rev_account_per_org ON public.o
 --
 
 CREATE UNIQUE INDEX idx_org_accounts_one_expense_claims_payable_per_org ON public.org_accounts USING btree (org_id) WHERE is_system_expense_claims_payable_account;
+
+
+--
+-- Name: idx_org_accounts_one_unalloc_receipts_account_per_org; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_org_accounts_one_unalloc_receipts_account_per_org ON public.org_accounts USING btree (org_id) WHERE is_system_unallocated_receipts_account;
+
+
+--
+-- Name: idx_org_accounts_org_archived; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_accounts_org_archived ON public.org_accounts USING btree (org_id) WHERE (archived_at IS NULL);
 
 
 --
@@ -10332,6 +14014,13 @@ CREATE UNIQUE INDEX idx_org_actuals_period_cell_unique ON public.org_actuals USI
 --
 
 CREATE INDEX idx_org_aliases_org_id ON public.org_aliases USING btree (org_id);
+
+
+--
+-- Name: idx_org_bank_recon_periods_account; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_bank_recon_periods_account ON public.org_bank_reconciliation_periods USING btree (org_id, bank_account_id, period_end);
 
 
 --
@@ -10461,6 +14150,20 @@ CREATE INDEX idx_org_budget_lines_program ON public.org_budget_lines USING btree
 
 
 --
+-- Name: idx_org_budget_scenario_lines_scenario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_budget_scenario_lines_scenario ON public.org_budget_scenario_lines USING btree (scenario_id);
+
+
+--
+-- Name: idx_org_budget_scenarios_org_fy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_budget_scenarios_org_fy ON public.org_budget_scenarios USING btree (org_id, fiscal_year);
+
+
+--
 -- Name: idx_org_compliance_obligations_category; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10489,17 +14192,10 @@ CREATE INDEX idx_org_compliance_obligations_template ON public.org_compliance_ob
 
 
 --
--- Name: idx_org_constituents_is_customer; Type: INDEX; Schema: public; Owner: -
+-- Name: idx_org_constituents_kind; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_org_constituents_is_customer ON public.org_constituents USING btree (org_id, is_customer) WHERE is_customer;
-
-
---
--- Name: idx_org_constituents_is_vendor; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_org_constituents_is_vendor ON public.org_constituents USING btree (org_id, is_vendor) WHERE is_vendor;
+CREATE INDEX idx_org_constituents_kind ON public.org_constituents USING btree (org_id, kind);
 
 
 --
@@ -10517,13 +14213,6 @@ CREATE INDEX idx_org_constituents_tags ON public.org_constituents USING gin (tag
 
 
 --
--- Name: idx_org_constituents_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_org_constituents_type ON public.org_constituents USING btree (org_id, type);
-
-
---
 -- Name: idx_org_constituents_xero; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10535,6 +14224,20 @@ CREATE INDEX idx_org_constituents_xero ON public.org_constituents USING btree (x
 --
 
 CREATE UNIQUE INDEX idx_org_constituents_xero_unique ON public.org_constituents USING btree (org_id, xero_contact_id) WHERE (xero_contact_id IS NOT NULL);
+
+
+--
+-- Name: idx_org_contact_roles_constituent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_contact_roles_constituent ON public.org_contact_roles USING btree (constituent_id);
+
+
+--
+-- Name: idx_org_contact_roles_org_role; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_contact_roles_org_role ON public.org_contact_roles USING btree (org_id, role);
 
 
 --
@@ -10657,6 +14360,20 @@ CREATE INDEX idx_org_fixed_assets_org_status ON public.org_fixed_assets USING bt
 
 
 --
+-- Name: idx_org_gift_pledge_installments_gift; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_gift_pledge_installments_gift ON public.org_gift_pledge_installments USING btree (gift_id);
+
+
+--
+-- Name: idx_org_gift_pledge_installments_org_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_gift_pledge_installments_org_due ON public.org_gift_pledge_installments USING btree (org_id, due_date) WHERE (status = 'expected'::text);
+
+
+--
 -- Name: idx_org_gifts_constituent; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10678,10 +14395,24 @@ CREATE INDEX idx_org_gifts_org ON public.org_gifts USING btree (org_id);
 
 
 --
+-- Name: idx_org_gifts_posting_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_gifts_posting_status ON public.org_gifts USING btree (org_id, posting_status) WHERE (posting_status = 'unposted'::text);
+
+
+--
 -- Name: idx_org_gifts_received_at; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_org_gifts_received_at ON public.org_gifts USING btree (org_id, received_at DESC);
+
+
+--
+-- Name: idx_org_gifts_review; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_gifts_review ON public.org_gifts USING btree (org_id, review_status) WHERE (review_status = 'to_confirm'::text);
 
 
 --
@@ -10696,6 +14427,20 @@ CREATE INDEX idx_org_gifts_sponsored_project ON public.org_gifts USING btree (sp
 --
 
 CREATE UNIQUE INDEX idx_org_gifts_stripe ON public.org_gifts USING btree (stripe_payment_intent_id) WHERE (stripe_payment_intent_id IS NOT NULL);
+
+
+--
+-- Name: idx_org_grant_alloc_requests_grant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_grant_alloc_requests_grant ON public.org_grant_allocation_requests USING btree (grant_id, status);
+
+
+--
+-- Name: idx_org_grant_alloc_requests_org; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_grant_alloc_requests_org ON public.org_grant_allocation_requests USING btree (org_id, status);
 
 
 --
@@ -10727,10 +14472,17 @@ CREATE INDEX idx_org_grant_allocations_program ON public.org_grant_allocations U
 
 
 --
+-- Name: idx_org_grant_allocations_scenario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_grant_allocations_scenario ON public.org_grant_allocations USING btree (scenario_id) WHERE (scenario_id IS NOT NULL);
+
+
+--
 -- Name: idx_org_grant_allocations_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX idx_org_grant_allocations_unique ON public.org_grant_allocations USING btree (grant_id, coop_program_id, fiscal_year);
+CREATE UNIQUE INDEX idx_org_grant_allocations_unique ON public.org_grant_allocations USING btree (grant_id, coop_program_id, fiscal_year, COALESCE(scenario_id, '-1'::integer));
 
 
 --
@@ -10780,6 +14532,13 @@ CREATE INDEX idx_org_grants_revenue_account ON public.org_grants USING btree (re
 --
 
 CREATE INDEX idx_org_import_history_org_kind ON public.org_import_history USING btree (org_id, import_kind, finished_at DESC);
+
+
+--
+-- Name: idx_org_indirect_cost_recovery_entries_org_grant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_indirect_cost_recovery_entries_org_grant ON public.org_indirect_cost_recovery_entries USING btree (org_id, grant_id);
 
 
 --
@@ -10874,10 +14633,24 @@ CREATE INDEX idx_org_ledger_lines_program ON public.org_ledger_lines USING btree
 
 
 --
+-- Name: idx_org_ledger_lines_source_line; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_ledger_lines_source_line ON public.org_ledger_lines USING btree (source_line_type, source_line_id) WHERE (source_line_type IS NOT NULL);
+
+
+--
 -- Name: idx_org_ledger_lines_transaction; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_org_ledger_lines_transaction ON public.org_ledger_lines USING btree (transaction_id);
+
+
+--
+-- Name: idx_org_ledger_transactions_constituent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_ledger_transactions_constituent ON public.org_ledger_transactions USING btree (org_id, constituent_id) WHERE (constituent_id IS NOT NULL);
 
 
 --
@@ -10895,10 +14668,45 @@ CREATE INDEX idx_org_ledger_transactions_org_fy ON public.org_ledger_transaction
 
 
 --
+-- Name: idx_org_personnel_scenario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_personnel_scenario ON public.org_personnel USING btree (scenario_id) WHERE (scenario_id IS NOT NULL);
+
+
+--
 -- Name: idx_org_plaid_accounts_one_per_org_account; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX idx_org_plaid_accounts_one_per_org_account ON public.org_plaid_accounts USING btree (org_account_id);
+
+
+--
+-- Name: idx_org_pledge_accretion_entries_org_gift; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_pledge_accretion_entries_org_gift ON public.org_pledge_accretion_entries USING btree (org_id, gift_id);
+
+
+--
+-- Name: idx_org_program_grants_org; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_program_grants_org ON public.org_program_grants USING btree (org_id);
+
+
+--
+-- Name: idx_org_program_grants_program; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_program_grants_program ON public.org_program_grants USING btree (program_id);
+
+
+--
+-- Name: idx_org_program_grants_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_program_grants_user ON public.org_program_grants USING btree (org_user_id);
 
 
 --
@@ -10927,6 +14735,13 @@ CREATE UNIQUE INDEX idx_org_programs_one_transfer_program_per_org ON public.org_
 --
 
 CREATE INDEX idx_org_programs_parent_id ON public.org_programs USING btree (parent_id);
+
+
+--
+-- Name: idx_org_record_notes_record; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_record_notes_record ON public.org_record_notes USING btree (org_id, record_type, record_id, created_at);
 
 
 --
@@ -10969,6 +14784,13 @@ CREATE INDEX idx_org_schedule_items_org_fy ON public.org_schedule_items USING bt
 --
 
 CREATE INDEX idx_org_schedule_items_origin ON public.org_schedule_items USING btree (origin_item_id) WHERE (origin_item_id IS NOT NULL);
+
+
+--
+-- Name: idx_org_schedule_items_scenario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_org_schedule_items_scenario ON public.org_schedule_items USING btree (scenario_id) WHERE (scenario_id IS NOT NULL);
 
 
 --
@@ -11098,6 +14920,13 @@ CREATE INDEX idx_pending_confirmations_user_id_created ON public.pending_confirm
 
 
 --
+-- Name: idx_pledge_installments_entry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pledge_installments_entry ON public.org_gift_pledge_installments USING btree (ledger_transaction_id) WHERE (ledger_transaction_id IS NOT NULL);
+
+
+--
 -- Name: idx_pod_access_group_members_group; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11172,6 +15001,20 @@ CREATE INDEX idx_pod_acr_outbox_org ON public.pod_acr_outbox USING btree (org_id
 --
 
 CREATE INDEX idx_pod_acr_outbox_pending ON public.pod_acr_outbox USING btree (next_attempt_at) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: idx_pod_share_challenges_permission; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pod_share_challenges_permission ON public.pod_share_challenges USING btree (permission_id, created_at DESC);
+
+
+--
+-- Name: idx_reviewer_access_links_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_reviewer_access_links_token ON public.reviewer_access_links USING btree (token) WHERE (revoked_at IS NULL);
 
 
 --
@@ -11462,6 +15305,104 @@ CREATE INDEX org_allocation_schedules_org_fy_idx ON public.org_allocation_schedu
 
 
 --
+-- Name: org_bills_number_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_bills_number_unique ON public.org_bills USING btree (org_id, bill_number) WHERE (bill_number IS NOT NULL);
+
+
+--
+-- Name: org_gifts_sponsored_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_gifts_sponsored_project_idx ON public.org_gifts USING btree (org_id, sponsored_project_id) WHERE (sponsored_project_id IS NOT NULL);
+
+
+--
+-- Name: org_invoices_number_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_invoices_number_unique ON public.org_invoices USING btree (org_id, invoice_number) WHERE (invoice_number IS NOT NULL);
+
+
+--
+-- Name: org_membership_join_requests_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_join_requests_status_idx ON public.org_membership_join_requests USING btree (org_id, status);
+
+
+--
+-- Name: org_membership_messages_contact_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_messages_contact_idx ON public.org_membership_messages USING btree (org_id, constituent_id);
+
+
+--
+-- Name: org_membership_messages_provider_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_messages_provider_idx ON public.org_membership_messages USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL);
+
+
+--
+-- Name: org_membership_payments_processor_ref_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_membership_payments_processor_ref_key ON public.org_membership_payments USING btree (processor_ref) WHERE (processor_ref IS NOT NULL);
+
+
+--
+-- Name: org_membership_payments_term_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_payments_term_idx ON public.org_membership_payments USING btree (term_id);
+
+
+--
+-- Name: org_membership_recognition_month_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_recognition_month_idx ON public.org_membership_recognition USING btree (org_id, month);
+
+
+--
+-- Name: org_membership_seats_open_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_membership_seats_open_key ON public.org_membership_seats USING btree (term_id, constituent_id) WHERE (ends_on IS NULL);
+
+
+--
+-- Name: org_membership_seats_term_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_seats_term_idx ON public.org_membership_seats USING btree (term_id);
+
+
+--
+-- Name: org_membership_terms_contact_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_terms_contact_idx ON public.org_membership_terms USING btree (org_id, constituent_id);
+
+
+--
+-- Name: org_membership_terms_ends_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_terms_ends_idx ON public.org_membership_terms USING btree (org_id, ends_on);
+
+
+--
+-- Name: org_membership_terms_subscription_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_membership_terms_subscription_idx ON public.org_membership_terms USING btree (processor_subscription_ref) WHERE (processor_subscription_ref IS NOT NULL);
+
+
+--
 -- Name: org_personnel_changes_org; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11518,6 +15459,97 @@ CREATE UNIQUE INDEX org_projections_uq_monthly ON public.org_projections USING b
 
 
 --
+-- Name: org_public_link_uses_link_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_public_link_uses_link_idx ON public.org_public_link_uses USING btree (link_id, used_at);
+
+
+--
+-- Name: org_public_links_contact_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_public_links_contact_idx ON public.org_public_links USING btree (constituent_id) WHERE (constituent_id IS NOT NULL);
+
+
+--
+-- Name: org_public_links_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_public_links_project_idx ON public.org_public_links USING btree (sponsored_project_id) WHERE (sponsored_project_id IS NOT NULL);
+
+
+--
+-- Name: org_sponsor_acknowledgments_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_acknowledgments_project_idx ON public.org_sponsor_acknowledgments USING btree (sponsored_project_id, item_key, acknowledged_on);
+
+
+--
+-- Name: org_sponsor_closings_one_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_sponsor_closings_one_live ON public.org_sponsor_closings USING btree (sponsored_project_id) WHERE (status <> 'void'::text);
+
+
+--
+-- Name: org_sponsor_fee_postings_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_fee_postings_project_idx ON public.org_sponsor_fee_postings USING btree (sponsored_project_id, period_end);
+
+
+--
+-- Name: org_sponsor_fee_rules_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_fee_rules_project_idx ON public.org_sponsor_fee_rules USING btree (sponsored_project_id, effective_from);
+
+
+--
+-- Name: org_sponsor_payment_requests_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_payment_requests_project_idx ON public.org_sponsor_payment_requests USING btree (sponsored_project_id, status);
+
+
+--
+-- Name: org_sponsor_recalls_project_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_recalls_project_idx ON public.org_sponsor_recalls USING btree (sponsored_project_id);
+
+
+--
+-- Name: org_sponsor_reports_due_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_sponsor_reports_due_idx ON public.org_sponsor_reports USING btree (org_id, due_date) WHERE (received_at IS NULL);
+
+
+--
+-- Name: org_sponsor_reports_quarter_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_sponsor_reports_quarter_uq ON public.org_sponsor_reports USING btree (sponsored_project_id, period_end) WHERE (kind = 'project_quarterly'::text);
+
+
+--
+-- Name: org_sponsored_project_disbursements_property_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_sponsored_project_disbursements_property_uq ON public.org_sponsored_project_disbursements USING btree (property_gift_id) WHERE ((property_gift_id IS NOT NULL) AND (status <> 'void'::text));
+
+
+--
+-- Name: orgs_external_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX orgs_external_id_key ON public.orgs USING btree (external_id);
+
+
+--
 -- Name: pod_access_group_rules_category_uniq; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11529,6 +15561,13 @@ CREATE UNIQUE INDEX pod_access_group_rules_category_uniq ON public.pod_access_gr
 --
 
 CREATE UNIQUE INDEX pod_access_group_rules_document_uniq ON public.pod_access_group_rules USING btree (org_id, org_document_id, group_id) WHERE (org_document_id IS NOT NULL);
+
+
+--
+-- Name: pod_access_permissions_share_token_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX pod_access_permissions_share_token_key ON public.pod_access_permissions USING btree (share_token) WHERE (share_token IS NOT NULL);
 
 
 --
@@ -11553,10 +15592,80 @@ CREATE UNIQUE INDEX uq_np_grants_org_grant_code ON public.org_grants USING btree
 
 
 --
--- Name: uq_org_documents_org_checksum; Type: INDEX; Schema: public; Owner: -
+-- Name: uq_org_access_permissions_open; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX uq_org_documents_org_checksum ON public.org_documents USING btree (org_id, checksum_sha256) WHERE (archived_at IS NULL);
+CREATE UNIQUE INDEX uq_org_access_permissions_open ON public.org_access_permissions USING btree (org_user_id, permission) WHERE (revoked_at IS NULL);
+
+
+--
+-- Name: uq_org_budget_scenario_lines_cell; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_budget_scenario_lines_cell ON public.org_budget_scenario_lines USING btree (scenario_id, account_id, COALESCE(program_id, '-1'::integer), COALESCE(grant_id, '-1'::integer), month);
+
+
+--
+-- Name: uq_org_documents_record_checksum; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_documents_record_checksum ON public.org_documents USING btree (org_id, checksum_sha256, source_ref_type, source_ref_id) WHERE ((archived_at IS NULL) AND (source_ref_type IS NOT NULL));
+
+
+--
+-- Name: uq_org_documents_vault_checksum; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_documents_vault_checksum ON public.org_documents USING btree (org_id, checksum_sha256) WHERE ((archived_at IS NULL) AND (source_ref_type IS NULL));
+
+
+--
+-- Name: uq_org_fixed_assets_acquisition_txn; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_fixed_assets_acquisition_txn ON public.org_fixed_assets USING btree (acquisition_ledger_transaction_id) WHERE (acquisition_ledger_transaction_id IS NOT NULL);
+
+
+--
+-- Name: uq_org_gifts_accounting_entry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_gifts_accounting_entry ON public.org_gifts USING btree (ledger_transaction_id) WHERE ((source = 'accounting'::text) AND (ledger_transaction_id IS NOT NULL));
+
+
+--
+-- Name: uq_org_ledger_one_live_entry_per_closing; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_ledger_one_live_entry_per_closing ON public.org_ledger_transactions USING btree (org_id, source_ref_id) WHERE ((source_ref_type = 'org_sponsor_closings'::text) AND (status <> 'voided'::text));
+
+
+--
+-- Name: uq_org_ledger_one_live_entry_per_disbursement; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_ledger_one_live_entry_per_disbursement ON public.org_ledger_transactions USING btree (org_id, source_ref_id) WHERE ((source_ref_type = 'org_sponsored_project_disbursements'::text) AND (status <> 'voided'::text));
+
+
+--
+-- Name: uq_org_ledger_one_live_entry_per_recall; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_ledger_one_live_entry_per_recall ON public.org_ledger_transactions USING btree (org_id, source_ref_id) WHERE ((source_ref_type = 'org_sponsor_recalls'::text) AND (status <> 'voided'::text));
+
+
+--
+-- Name: uq_org_ledger_one_live_reversal; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_ledger_one_live_reversal ON public.org_ledger_transactions USING btree (org_id, reverses_transaction_id) WHERE ((reverses_transaction_id IS NOT NULL) AND (status <> 'voided'::text));
+
+
+--
+-- Name: uq_org_sponsor_one_live_disbursement_per_request; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_org_sponsor_one_live_disbursement_per_request ON public.org_sponsored_project_disbursements USING btree (payment_request_id) WHERE ((payment_request_id IS NOT NULL) AND (status <> 'void'::text));
 
 
 --
@@ -11634,6 +15743,13 @@ CREATE TRIGGER trg_bills_approval_separation_of_duties BEFORE UPDATE OF approved
 --
 
 CREATE TRIGGER trg_bills_constituent_is_vendor BEFORE INSERT OR UPDATE OF constituent_id ON public.org_bills FOR EACH ROW EXECUTE FUNCTION public.org_enforce_bill_constituent_is_vendor();
+
+
+--
+-- Name: org_users trg_enforce_org_has_admin; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_enforce_org_has_admin AFTER DELETE OR UPDATE ON public.org_users FOR EACH ROW EXECUTE FUNCTION public.enforce_org_has_admin();
 
 
 --
@@ -11896,6 +16012,20 @@ CREATE TRIGGER trg_org_actuals_writer_guard BEFORE INSERT OR UPDATE OF source, o
 
 
 --
+-- Name: org_audit_log trg_org_audit_log_chain; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_audit_log_chain BEFORE INSERT ON public.org_audit_log FOR EACH ROW EXECUTE FUNCTION public.org_audit_log_chain();
+
+
+--
+-- Name: org_audit_log trg_org_audit_log_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_audit_log_immutable BEFORE DELETE OR UPDATE ON public.org_audit_log FOR EACH ROW EXECUTE FUNCTION public.org_audit_log_immutable();
+
+
+--
 -- Name: org_budget_lines trg_org_budget_lines_posting_account; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -11903,10 +16033,45 @@ CREATE TRIGGER trg_org_budget_lines_posting_account BEFORE INSERT OR UPDATE OF a
 
 
 --
+-- Name: org_contact_roles trg_org_contact_roles_check_org; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_contact_roles_check_org BEFORE INSERT OR UPDATE ON public.org_contact_roles FOR EACH ROW EXECUTE FUNCTION public.org_contact_roles_check_org();
+
+
+--
+-- Name: org_documents trg_org_documents_keep_sponsor_doc_type; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_documents_keep_sponsor_doc_type BEFORE INSERT ON public.org_documents FOR EACH ROW EXECUTE FUNCTION public.org_documents_keep_sponsor_doc_type();
+
+
+--
+-- Name: org_ledger_lines trg_org_ledger_lines_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_ledger_lines_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_ledger_lines FOR EACH ROW EXECUTE FUNCTION public.org_audit_ledger_change();
+
+
+--
 -- Name: org_ledger_lines trg_org_ledger_lines_balance; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE CONSTRAINT TRIGGER trg_org_ledger_lines_balance AFTER INSERT OR DELETE OR UPDATE ON public.org_ledger_lines DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.org_enforce_ledger_transaction_balance();
+
+
+--
+-- Name: org_ledger_transactions trg_org_ledger_transactions_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_ledger_transactions_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_ledger_transactions FOR EACH ROW EXECUTE FUNCTION public.org_audit_ledger_change();
+
+
+--
+-- Name: org_ledger_transactions trg_org_ledger_transactions_contact_same_org; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_ledger_transactions_contact_same_org BEFORE INSERT OR UPDATE OF constituent_id, org_id ON public.org_ledger_transactions FOR EACH ROW EXECUTE FUNCTION public.org_enforce_ledger_transaction_contact_same_org();
 
 
 --
@@ -11942,13 +16107,6 @@ CREATE TRIGGER trigger_org_constituents_updated_at BEFORE UPDATE ON public.org_c
 --
 
 CREATE TRIGGER trigger_org_gifts_updated_at BEFORE UPDATE ON public.org_gifts FOR EACH ROW EXECUTE FUNCTION public.update_org_gifts_updated_at();
-
-
---
--- Name: org_members trigger_update_membership_members_updated_at; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trigger_update_membership_members_updated_at BEFORE UPDATE ON public.org_members FOR EACH ROW EXECUTE FUNCTION public.update_membership_members_updated_at();
 
 
 --
@@ -12127,6 +16285,38 @@ ALTER TABLE ONLY public.local_event_attendance
 
 
 --
+-- Name: org_access_permissions org_access_permissions_given_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions
+    ADD CONSTRAINT org_access_permissions_given_by_user_id_fkey FOREIGN KEY (given_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_access_permissions org_access_permissions_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions
+    ADD CONSTRAINT org_access_permissions_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_access_permissions org_access_permissions_org_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions
+    ADD CONSTRAINT org_access_permissions_org_user_id_fkey FOREIGN KEY (org_user_id) REFERENCES public.org_users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_access_permissions org_access_permissions_revoked_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_access_permissions
+    ADD CONSTRAINT org_access_permissions_revoked_by_user_id_fkey FOREIGN KEY (revoked_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_accounts org_accounts_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12284,6 +16474,46 @@ ALTER TABLE ONLY public.org_balance_sheet_snapshots
 
 ALTER TABLE ONLY public.org_balance_sheet_snapshots
     ADD CONSTRAINT org_balance_sheet_snapshots_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_bank_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_bank_account_id_fkey FOREIGN KEY (bank_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_closed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_closed_by_fkey FOREIGN KEY (closed_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_reopened_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_bank_reconciliation_periods
+    ADD CONSTRAINT org_bank_reconciliation_periods_reopened_by_fkey FOREIGN KEY (reopened_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -12583,6 +16813,54 @@ ALTER TABLE ONLY public.org_budget_lines
 
 
 --
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines
+    ADD CONSTRAINT org_budget_scenario_lines_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.org_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_grant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines
+    ADD CONSTRAINT org_budget_scenario_lines_grant_id_fkey FOREIGN KEY (grant_id) REFERENCES public.org_grants(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines
+    ADD CONSTRAINT org_budget_scenario_lines_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.org_programs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_scenario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenario_lines
+    ADD CONSTRAINT org_budget_scenario_lines_scenario_id_fkey FOREIGN KEY (scenario_id) REFERENCES public.org_budget_scenarios(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_budget_scenarios org_budget_scenarios_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenarios
+    ADD CONSTRAINT org_budget_scenarios_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_budget_scenarios org_budget_scenarios_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_budget_scenarios
+    ADD CONSTRAINT org_budget_scenarios_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_compliance_obligations org_compliance_obligations_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12639,11 +16917,99 @@ ALTER TABLE ONLY public.org_constituents
 
 
 --
+-- Name: org_contact_email_prefs org_contact_email_prefs_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_email_prefs
+    ADD CONSTRAINT org_contact_email_prefs_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_contact_email_prefs org_contact_email_prefs_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_email_prefs
+    ADD CONSTRAINT org_contact_email_prefs_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_contact_roles org_contact_roles_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_roles
+    ADD CONSTRAINT org_contact_roles_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_contact_roles org_contact_roles_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_contact_roles
+    ADD CONSTRAINT org_contact_roles_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_balancing_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_balancing_account_id_fkey FOREIGN KEY (balancing_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_entered_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_entered_by_fkey FOREIGN KEY (entered_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_locked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_conversion_balances org_conversion_balances_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_conversion_balances
+    ADD CONSTRAINT org_conversion_balances_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.org_programs(id);
+
+
+--
 -- Name: org_document_expectations org_document_expectations_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_document_expectations
     ADD CONSTRAINT org_document_expectations_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_document_retention_rules org_document_retention_rules_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_document_retention_rules
+    ADD CONSTRAINT org_document_retention_rules_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
 
 
 --
@@ -12919,6 +17285,14 @@ ALTER TABLE ONLY public.org_fixed_assets
 
 
 --
+-- Name: org_fixed_assets org_fixed_assets_acquisition_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_fixed_assets
+    ADD CONSTRAINT org_fixed_assets_acquisition_ledger_transaction_id_fkey FOREIGN KEY (acquisition_ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
 -- Name: org_fixed_assets org_fixed_assets_asset_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13047,6 +17421,22 @@ ALTER TABLE ONLY public.org_functional_classifications
 
 
 --
+-- Name: org_gift_pledge_installments org_gift_pledge_installments_gift_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gift_pledge_installments
+    ADD CONSTRAINT org_gift_pledge_installments_gift_id_fkey FOREIGN KEY (gift_id) REFERENCES public.org_gifts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_gift_pledge_installments org_gift_pledge_installments_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gift_pledge_installments
+    ADD CONSTRAINT org_gift_pledge_installments_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_gifts org_gifts_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13063,6 +17453,22 @@ ALTER TABLE ONLY public.org_gifts
 
 
 --
+-- Name: org_gifts org_gifts_discounting_accepted_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_discounting_accepted_by_user_id_fkey FOREIGN KEY (discounting_accepted_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_gifts org_gifts_donor_letter_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_donor_letter_document_id_fkey FOREIGN KEY (donor_letter_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_gifts org_gifts_grant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13071,11 +17477,67 @@ ALTER TABLE ONLY public.org_gifts
 
 
 --
+-- Name: org_gifts org_gifts_in_kind_expense_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_in_kind_expense_account_id_fkey FOREIGN KEY (in_kind_expense_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_gifts org_gifts_in_kind_revenue_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_in_kind_revenue_account_id_fkey FOREIGN KEY (in_kind_revenue_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_gifts org_gifts_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
+-- Name: org_gifts org_gifts_pledge_status_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_pledge_status_changed_by_fkey FOREIGN KEY (pledge_status_changed_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_gifts org_gifts_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.org_programs(id);
+
+
+--
+-- Name: org_gifts org_gifts_receivable_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_receivable_account_id_fkey FOREIGN KEY (receivable_account_id) REFERENCES public.org_accounts(id);
+
+
+--
 -- Name: org_gifts org_gifts_recorded_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_gifts
     ADD CONSTRAINT org_gifts_recorded_by_user_id_fkey FOREIGN KEY (recorded_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_gifts org_gifts_reviewed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_gifts
+    ADD CONSTRAINT org_gifts_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -13092,6 +17554,46 @@ ALTER TABLE ONLY public.org_gifts
 
 ALTER TABLE ONLY public.org_gifts
     ADD CONSTRAINT org_gifts_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_coop_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_coop_program_id_fkey FOREIGN KEY (coop_program_id) REFERENCES public.org_programs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_decided_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_decided_by_user_id_fkey FOREIGN KEY (decided_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_grant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_grant_id_fkey FOREIGN KEY (grant_id) REFERENCES public.org_grants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_requested_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocation_requests
+    ADD CONSTRAINT org_grant_allocation_requests_requested_by_user_id_fkey FOREIGN KEY (requested_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -13119,6 +17621,14 @@ ALTER TABLE ONLY public.org_grant_allocations
 
 
 --
+-- Name: org_grant_allocations org_grant_allocations_scenario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grant_allocations
+    ADD CONSTRAINT org_grant_allocations_scenario_id_fkey FOREIGN KEY (scenario_id) REFERENCES public.org_budget_scenarios(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_grants org_grants_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13132,6 +17642,14 @@ ALTER TABLE ONLY public.org_grants
 
 ALTER TABLE ONLY public.org_grants
     ADD CONSTRAINT org_grants_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_grants org_grants_nicra_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_grants
+    ADD CONSTRAINT org_grants_nicra_document_id_fkey FOREIGN KEY (nicra_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
 
 
 --
@@ -13156,6 +17674,38 @@ ALTER TABLE ONLY public.org_grants
 
 ALTER TABLE ONLY public.org_import_history
     ADD CONSTRAINT org_import_history_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_grant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_grant_id_fkey FOREIGN KEY (grant_id) REFERENCES public.org_grants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_posted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_posted_by_fkey FOREIGN KEY (posted_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_txn_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_indirect_cost_recovery_entries
+    ADD CONSTRAINT org_indirect_cost_recovery_entries_txn_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
 
 
 --
@@ -13375,6 +17925,14 @@ ALTER TABLE ONLY public.org_ledger_transactions
 
 
 --
+-- Name: org_ledger_transactions org_ledger_transactions_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_ledger_transactions
+    ADD CONSTRAINT org_ledger_transactions_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_ledger_transactions org_ledger_transactions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13407,35 +17965,155 @@ ALTER TABLE ONLY public.org_ledger_transactions
 
 
 --
--- Name: org_members org_members_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_directory_optin org_membership_directory_optin_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_members
-    ADD CONSTRAINT org_members_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
-
-
---
--- Name: org_members org_members_cooperative_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.org_members
-    ADD CONSTRAINT org_members_cooperative_user_id_fkey FOREIGN KEY (cooperative_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.org_membership_directory_optin
+    ADD CONSTRAINT org_membership_directory_optin_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
 
 
 --
--- Name: org_members org_members_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_directory_optin org_membership_directory_optin_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_members
-    ADD CONSTRAINT org_members_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.org_membership_tiers(id) ON DELETE SET NULL;
+ALTER TABLE ONLY public.org_membership_directory_optin
+    ADD CONSTRAINT org_membership_directory_optin_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
 
 
 --
--- Name: org_membership_payments org_membership_payments_member_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_join_requests org_membership_join_requests_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_decided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_gift_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_gift_id_fkey FOREIGN KEY (gift_id) REFERENCES public.org_gifts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_link_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_link_id_fkey FOREIGN KEY (link_id) REFERENCES public.org_public_links(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_term_id_fkey FOREIGN KEY (term_id) REFERENCES public.org_membership_terms(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_join_requests
+    ADD CONSTRAINT org_membership_join_requests_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.org_membership_tiers(id);
+
+
+--
+-- Name: org_membership_messages org_membership_messages_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_messages org_membership_messages_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_messages org_membership_messages_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_messages org_membership_messages_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_messages
+    ADD CONSTRAINT org_membership_messages_term_id_fkey FOREIGN KEY (term_id) REFERENCES public.org_membership_terms(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_payments org_membership_payments_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_membership_payments
-    ADD CONSTRAINT org_membership_payments_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.org_members(id) ON DELETE CASCADE;
+    ADD CONSTRAINT org_membership_payments_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_payments org_membership_payments_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_payments org_membership_payments_deposit_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_deposit_account_id_fkey FOREIGN KEY (deposit_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_membership_payments org_membership_payments_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
+-- Name: org_membership_payments org_membership_payments_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_payments org_membership_payments_posted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_posted_by_fkey FOREIGN KEY (posted_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -13447,11 +18125,227 @@ ALTER TABLE ONLY public.org_membership_payments
 
 
 --
--- Name: org_membership_reminders org_membership_reminders_member_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: org_membership_payments org_membership_payments_refund_of_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.org_membership_reminders
-    ADD CONSTRAINT org_membership_reminders_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.org_members(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_refund_of_id_fkey FOREIGN KEY (refund_of_id) REFERENCES public.org_membership_payments(id);
+
+
+--
+-- Name: org_membership_payments org_membership_payments_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_payments
+    ADD CONSTRAINT org_membership_payments_term_id_fkey FOREIGN KEY (term_id) REFERENCES public.org_membership_terms(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_recognition org_membership_recognition_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
+-- Name: org_membership_recognition org_membership_recognition_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_recognition org_membership_recognition_posted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_posted_by_fkey FOREIGN KEY (posted_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_recognition org_membership_recognition_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_recognition
+    ADD CONSTRAINT org_membership_recognition_term_id_fkey FOREIGN KEY (term_id) REFERENCES public.org_membership_terms(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_seats org_membership_seats_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats
+    ADD CONSTRAINT org_membership_seats_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_seats org_membership_seats_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats
+    ADD CONSTRAINT org_membership_seats_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_seats org_membership_seats_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats
+    ADD CONSTRAINT org_membership_seats_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_seats org_membership_seats_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_seats
+    ADD CONSTRAINT org_membership_seats_term_id_fkey FOREIGN KEY (term_id) REFERENCES public.org_membership_terms(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_settings org_membership_settings_contribution_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_contribution_account_id_fkey FOREIGN KEY (contribution_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_membership_settings org_membership_settings_default_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_default_program_id_fkey FOREIGN KEY (default_program_id) REFERENCES public.org_programs(id);
+
+
+--
+-- Name: org_membership_settings org_membership_settings_deferred_dues_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_deferred_dues_account_id_fkey FOREIGN KEY (deferred_dues_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_membership_settings org_membership_settings_dues_revenue_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_dues_revenue_account_id_fkey FOREIGN KEY (dues_revenue_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_membership_settings org_membership_settings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_settings org_membership_settings_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_settings
+    ADD CONSTRAINT org_membership_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_templates org_membership_templates_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_templates
+    ADD CONSTRAINT org_membership_templates_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_templates org_membership_templates_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_templates
+    ADD CONSTRAINT org_membership_templates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_ended_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_ended_by_fkey FOREIGN KEY (ended_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.org_invoices(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_renews_term_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_renews_term_id_fkey FOREIGN KEY (renews_term_id) REFERENCES public.org_membership_terms(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_terms org_membership_terms_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_terms
+    ADD CONSTRAINT org_membership_terms_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.org_membership_tiers(id);
+
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices
+    ADD CONSTRAINT org_membership_tier_prices_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices
+    ADD CONSTRAINT org_membership_tier_prices_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_tier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tier_prices
+    ADD CONSTRAINT org_membership_tier_prices_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.org_membership_tiers(id) ON DELETE CASCADE;
 
 
 --
@@ -13460,6 +18354,38 @@ ALTER TABLE ONLY public.org_membership_reminders
 
 ALTER TABLE ONLY public.org_membership_tiers
     ADD CONSTRAINT org_membership_tiers_coop_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_membership_tiers org_membership_tiers_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tiers
+    ADD CONSTRAINT org_membership_tiers_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.org_programs(id);
+
+
+--
+-- Name: org_membership_tiers org_membership_tiers_revenue_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_membership_tiers
+    ADD CONSTRAINT org_membership_tiers_revenue_account_id_fkey FOREIGN KEY (revenue_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_payment_accounts org_payment_accounts_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_payment_accounts
+    ADD CONSTRAINT org_payment_accounts_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_payment_accounts org_payment_accounts_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_payment_accounts
+    ADD CONSTRAINT org_payment_accounts_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -13543,6 +18469,14 @@ ALTER TABLE ONLY public.org_personnel
 
 
 --
+-- Name: org_personnel org_personnel_scenario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_personnel
+    ADD CONSTRAINT org_personnel_scenario_id_fkey FOREIGN KEY (scenario_id) REFERENCES public.org_budget_scenarios(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_personnel org_personnel_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13583,11 +18517,67 @@ ALTER TABLE ONLY public.org_plaid_items
 
 
 --
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_gift_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries
+    ADD CONSTRAINT org_pledge_accretion_entries_gift_id_fkey FOREIGN KEY (gift_id) REFERENCES public.org_gifts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries
+    ADD CONSTRAINT org_pledge_accretion_entries_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_txn_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_pledge_accretion_entries
+    ADD CONSTRAINT org_pledge_accretion_entries_txn_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
 -- Name: org_pod_credentials org_pod_credentials_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_pod_credentials
     ADD CONSTRAINT org_pod_credentials_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_program_grants org_program_grants_created_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_created_by_user_id_fkey FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_program_grants org_program_grants_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_program_grants org_program_grants_org_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_org_user_id_fkey FOREIGN KEY (org_user_id) REFERENCES public.org_users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_program_grants org_program_grants_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_program_grants
+    ADD CONSTRAINT org_program_grants_program_id_fkey FOREIGN KEY (program_id) REFERENCES public.org_programs(id) ON DELETE CASCADE;
 
 
 --
@@ -13644,6 +18634,70 @@ ALTER TABLE ONLY public.org_projections
 
 ALTER TABLE ONLY public.org_projections
     ADD CONSTRAINT org_projections_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+
+
+--
+-- Name: org_public_link_uses org_public_link_uses_link_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_link_uses
+    ADD CONSTRAINT org_public_link_uses_link_id_fkey FOREIGN KEY (link_id) REFERENCES public.org_public_links(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_public_link_uses org_public_link_uses_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_link_uses
+    ADD CONSTRAINT org_public_link_uses_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_public_links org_public_links_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links
+    ADD CONSTRAINT org_public_links_constituent_id_fkey FOREIGN KEY (constituent_id) REFERENCES public.org_constituents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_public_links org_public_links_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links
+    ADD CONSTRAINT org_public_links_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_public_links org_public_links_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_links
+    ADD CONSTRAINT org_public_links_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_public_settings org_public_settings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_public_settings
+    ADD CONSTRAINT org_public_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_record_notes org_record_notes_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_record_notes
+    ADD CONSTRAINT org_record_notes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_record_notes org_record_notes_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_record_notes
+    ADD CONSTRAINT org_record_notes_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
 
 
 --
@@ -13727,6 +18781,14 @@ ALTER TABLE ONLY public.org_schedule_items
 
 
 --
+-- Name: org_schedule_items org_schedule_items_scenario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_schedule_items
+    ADD CONSTRAINT org_schedule_items_scenario_id_fkey FOREIGN KEY (scenario_id) REFERENCES public.org_budget_scenarios(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_schedules org_schedules_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13735,11 +18797,499 @@ ALTER TABLE ONLY public.org_schedules
 
 
 --
+-- Name: org_settings org_settings_default_bank_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_settings
+    ADD CONSTRAINT org_settings_default_bank_account_id_fkey FOREIGN KEY (default_bank_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_settings org_settings_default_individual_gift_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_settings
+    ADD CONSTRAINT org_settings_default_individual_gift_account_id_fkey FOREIGN KEY (default_individual_gift_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_settings org_settings_default_pledge_receivable_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_settings
+    ADD CONSTRAINT org_settings_default_pledge_receivable_account_id_fkey FOREIGN KEY (default_pledge_receivable_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_settings org_settings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_settings
     ADD CONSTRAINT org_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments
+    ADD CONSTRAINT org_sponsor_acknowledgments_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments
+    ADD CONSTRAINT org_sponsor_acknowledgments_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_acknowledgments
+    ADD CONSTRAINT org_sponsor_acknowledgments_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_agreement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments
+    ADD CONSTRAINT org_sponsor_agreement_amendments_agreement_id_fkey FOREIGN KEY (agreement_id) REFERENCES public.org_sponsor_agreements(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments
+    ADD CONSTRAINT org_sponsor_agreement_amendments_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.org_documents(id);
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments
+    ADD CONSTRAINT org_sponsor_agreement_amendments_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_amendments
+    ADD CONSTRAINT org_sponsor_agreement_amendments_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreement_templates org_sponsor_agreement_templates_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreement_templates
+    ADD CONSTRAINT org_sponsor_agreement_templates_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_generated_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_generated_document_id_fkey FOREIGN KEY (generated_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_signed_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_signed_document_id_fkey FOREIGN KEY (signed_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_template_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_agreements
+    ADD CONSTRAINT org_sponsor_agreements_template_id_fkey FOREIGN KEY (template_id) REFERENCES public.org_sponsor_agreement_templates(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_applicant_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications
+    ADD CONSTRAINT org_sponsor_applications_applicant_constituent_id_fkey FOREIGN KEY (applicant_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_lead_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications
+    ADD CONSTRAINT org_sponsor_applications_lead_constituent_id_fkey FOREIGN KEY (lead_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications
+    ADD CONSTRAINT org_sponsor_applications_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_applications
+    ADD CONSTRAINT org_sponsor_applications_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_draft_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_draft_document_id_fkey FOREIGN KEY (draft_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_funder_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_funder_constituent_id_fkey FOREIGN KEY (funder_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_signed_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_signed_document_id_fkey FOREIGN KEY (signed_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_approvals
+    ADD CONSTRAINT org_sponsor_approvals_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_destination_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_destination_constituent_id_fkey FOREIGN KEY (destination_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_closings
+    ADD CONSTRAINT org_sponsor_closings_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings
+    ADD CONSTRAINT org_sponsor_fee_postings_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings
+    ADD CONSTRAINT org_sponsor_fee_postings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_postings
+    ADD CONSTRAINT org_sponsor_fee_postings_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_amendment_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules
+    ADD CONSTRAINT org_sponsor_fee_rules_amendment_document_id_fkey FOREIGN KEY (amendment_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules
+    ADD CONSTRAINT org_sponsor_fee_rules_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_fee_rules
+    ADD CONSTRAINT org_sponsor_fee_rules_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_disbursement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_disbursement_id_fkey FOREIGN KEY (disbursement_id) REFERENCES public.org_sponsored_project_disbursements(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_payee_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_payee_constituent_id_fkey FOREIGN KEY (payee_constituent_id) REFERENCES public.org_constituents(id);
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_payment_requests
+    ADD CONSTRAINT org_sponsor_payment_requests_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_recalls
+    ADD CONSTRAINT org_sponsor_recalls_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_recalls
+    ADD CONSTRAINT org_sponsor_recalls_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_recalls
+    ADD CONSTRAINT org_sponsor_recalls_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders
+    ADD CONSTRAINT org_sponsor_report_reminders_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_report_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders
+    ADD CONSTRAINT org_sponsor_report_reminders_report_id_fkey FOREIGN KEY (report_id) REFERENCES public.org_sponsor_reports(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_report_reminders
+    ADD CONSTRAINT org_sponsor_report_reminders_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports
+    ADD CONSTRAINT org_sponsor_reports_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_funder_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports
+    ADD CONSTRAINT org_sponsor_reports_funder_constituent_id_fkey FOREIGN KEY (funder_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports
+    ADD CONSTRAINT org_sponsor_reports_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_reports
+    ADD CONSTRAINT org_sponsor_reports_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_fee_expense_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_fee_expense_account_id_fkey FOREIGN KEY (fee_expense_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_fee_income_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_fee_income_account_id_fkey FOREIGN KEY (fee_income_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_fee_income_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_fee_income_program_id_fkey FOREIGN KEY (fee_income_program_id) REFERENCES public.org_programs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_recall_expense_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_recall_expense_account_id_fkey FOREIGN KEY (recall_expense_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_recall_income_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_settings
+    ADD CONSTRAINT org_sponsor_settings_recall_income_account_id_fkey FOREIGN KEY (recall_income_account_id) REFERENCES public.org_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_generated_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements
+    ADD CONSTRAINT org_sponsor_statements_generated_document_id_fkey FOREIGN KEY (generated_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements
+    ADD CONSTRAINT org_sponsor_statements_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_sponsored_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsor_statements
+    ADD CONSTRAINT org_sponsor_statements_sponsored_project_id_fkey FOREIGN KEY (sponsored_project_id) REFERENCES public.org_sponsored_projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsored_project_disbursements org_sponsored_project_disburse_grant_agreement_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_project_disbursements
+    ADD CONSTRAINT org_sponsored_project_disburse_grant_agreement_document_id_fkey FOREIGN KEY (grant_agreement_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
 
 
 --
@@ -13759,11 +19309,27 @@ ALTER TABLE ONLY public.org_sponsored_project_disbursements
 
 
 --
+-- Name: org_sponsored_project_disbursements org_sponsored_project_disbursements_ledger_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_project_disbursements
+    ADD CONSTRAINT org_sponsored_project_disbursements_ledger_transaction_id_fkey FOREIGN KEY (ledger_transaction_id) REFERENCES public.org_ledger_transactions(id);
+
+
+--
 -- Name: org_sponsored_project_disbursements org_sponsored_project_disbursements_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_sponsored_project_disbursements
     ADD CONSTRAINT org_sponsored_project_disbursements_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsored_project_disbursements org_sponsored_project_disbursements_payee_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_project_disbursements
+    ADD CONSTRAINT org_sponsored_project_disbursements_payee_constituent_id_fkey FOREIGN KEY (payee_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
 
 
 --
@@ -13775,6 +19341,38 @@ ALTER TABLE ONLY public.org_sponsored_project_disbursements
 
 
 --
+-- Name: org_sponsored_project_disbursements org_sponsored_project_disbursements_property_gift_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_project_disbursements
+    ADD CONSTRAINT org_sponsored_project_disbursements_property_gift_id_fkey FOREIGN KEY (property_gift_id) REFERENCES public.org_gifts(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: org_sponsored_project_disbursements org_sponsored_project_disbursements_request_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_project_disbursements
+    ADD CONSTRAINT org_sponsored_project_disbursements_request_fk FOREIGN KEY (payment_request_id) REFERENCES public.org_sponsor_payment_requests(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_sponsored_projects org_sponsored_projects_disbursement_expense_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_projects
+    ADD CONSTRAINT org_sponsored_projects_disbursement_expense_account_id_fkey FOREIGN KEY (disbursement_expense_account_id) REFERENCES public.org_accounts(id);
+
+
+--
+-- Name: org_sponsored_projects org_sponsored_projects_lead_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_projects
+    ADD CONSTRAINT org_sponsored_projects_lead_constituent_id_fkey FOREIGN KEY (lead_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_sponsored_projects org_sponsored_projects_program_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13783,11 +19381,27 @@ ALTER TABLE ONLY public.org_sponsored_projects
 
 
 --
+-- Name: org_sponsored_projects org_sponsored_projects_receiving_constituent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_projects
+    ADD CONSTRAINT org_sponsored_projects_receiving_constituent_id_fkey FOREIGN KEY (receiving_constituent_id) REFERENCES public.org_constituents(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_sponsored_projects org_sponsored_projects_sponsor_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.org_sponsored_projects
     ADD CONSTRAINT org_sponsored_projects_sponsor_coop_org_id_fkey FOREIGN KEY (sponsor_org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_sponsored_projects org_sponsored_projects_w9_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_sponsored_projects
+    ADD CONSTRAINT org_sponsored_projects_w9_document_id_fkey FOREIGN KEY (w9_document_id) REFERENCES public.org_documents(id) ON DELETE SET NULL;
 
 
 --
@@ -13892,6 +19506,14 @@ ALTER TABLE ONLY public.orgs
 
 ALTER TABLE ONLY public.page_views
     ADD CONSTRAINT page_views_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: payment_provider_events payment_provider_events_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_provider_events
+    ADD CONSTRAINT payment_provider_events_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE SET NULL;
 
 
 --
@@ -14012,6 +19634,30 @@ ALTER TABLE ONLY public.pod_access_permissions
 
 ALTER TABLE ONLY public.pod_acr_outbox
     ADD CONSTRAINT pod_acr_outbox_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pod_share_challenges pod_share_challenges_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pod_share_challenges
+    ADD CONSTRAINT pod_share_challenges_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pod_share_challenges pod_share_challenges_permission_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pod_share_challenges
+    ADD CONSTRAINT pod_share_challenges_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES public.pod_access_permissions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: reviewer_access_links reviewer_access_links_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.reviewer_access_links
+    ADD CONSTRAINT reviewer_access_links_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -14335,6 +19981,39 @@ ALTER TABLE ONLY public.workshop_workspaces
 
 
 --
+-- Name: compliance_extension_proposals; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.compliance_extension_proposals ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: compliance_extension_proposals compliance_extension_proposals_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY compliance_extension_proposals_org_isolation ON public.compliance_extension_proposals USING ((org_id = (current_setting('app.current_org_id'::text, true))::integer));
+
+
+--
+-- Name: compliance_extension_proposals compliance_extension_proposals_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY compliance_extension_proposals_program_scope ON public.compliance_extension_proposals AS RESTRICTIVE USING ((public.current_program_ids() IS NULL));
+
+
+--
+-- Name: org_access_permissions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_access_permissions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_access_permissions org_access_permissions_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_access_permissions_org_isolation ON public.org_access_permissions USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_accounts; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14361,6 +20040,13 @@ CREATE POLICY org_actuals_org_isolation ON public.org_actuals USING ((org_id = (
 
 
 --
+-- Name: org_actuals org_actuals_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_actuals_program_scope ON public.org_actuals AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (org_program_id = ANY (public.current_program_ids())) OR (org_activity_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_allocation_lines; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14373,6 +20059,13 @@ ALTER TABLE public.org_allocation_lines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY org_allocation_lines_org_isolation ON public.org_allocation_lines USING ((EXISTS ( SELECT 1
    FROM public.org_allocation_schedules s
   WHERE ((s.id = org_allocation_lines.coop_allocation_schedule_id) AND (s.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
+
+
+--
+-- Name: org_allocation_lines org_allocation_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_allocation_lines_program_scope ON public.org_allocation_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14430,6 +20123,19 @@ CREATE POLICY org_balance_sheet_snapshots_org_isolation ON public.org_balance_sh
 
 
 --
+-- Name: org_bank_reconciliation_periods; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_bank_reconciliation_periods ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_bank_reconciliation_periods org_bank_reconciliation_periods_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_bank_reconciliation_periods_org_isolation ON public.org_bank_reconciliation_periods USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_bank_rules; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14440,6 +20146,13 @@ ALTER TABLE public.org_bank_rules ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_bank_rules_org_isolation ON public.org_bank_rules USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_bank_rules org_bank_rules_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_bank_rules_program_scope ON public.org_bank_rules AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (action_program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14484,6 +20197,13 @@ CREATE POLICY org_bill_credit_notes_org_isolation ON public.org_bill_credit_note
 
 
 --
+-- Name: org_bill_credit_notes org_bill_credit_notes_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_bill_credit_notes_program_scope ON public.org_bill_credit_notes AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_bill_lines; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14496,6 +20216,13 @@ ALTER TABLE public.org_bill_lines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY org_bill_lines_org_isolation ON public.org_bill_lines USING ((EXISTS ( SELECT 1
    FROM public.org_bills b
   WHERE ((b.id = org_bill_lines.bill_id) AND (b.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
+
+
+--
+-- Name: org_bill_lines org_bill_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_bill_lines_program_scope ON public.org_bill_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14551,10 +20278,58 @@ CREATE POLICY org_budget_lines_org_isolation ON public.org_budget_lines USING ((
 
 
 --
+-- Name: org_budget_lines org_budget_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_budget_lines_program_scope ON public.org_budget_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids())) OR (activity_id = ANY (public.current_program_ids()))));
+
+
+--
+-- Name: org_budget_scenario_lines; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_budget_scenario_lines ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_budget_scenario_lines_org_isolation ON public.org_budget_scenario_lines USING ((scenario_id IN ( SELECT org_budget_scenarios.id
+   FROM public.org_budget_scenarios)));
+
+
+--
+-- Name: org_budget_scenario_lines org_budget_scenario_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_budget_scenario_lines_program_scope ON public.org_budget_scenario_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
+-- Name: org_budget_scenarios; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_budget_scenarios ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_budget_scenarios org_budget_scenarios_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_budget_scenarios_org_isolation ON public.org_budget_scenarios USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_compliance_obligations; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.org_compliance_obligations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_compliance_obligations org_compliance_obligations_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_compliance_obligations_program_scope ON public.org_compliance_obligations AS RESTRICTIVE USING ((public.current_program_ids() IS NULL));
+
 
 --
 -- Name: org_constituent_interactions; Type: ROW SECURITY; Schema: public; Owner: -
@@ -14583,6 +20358,71 @@ CREATE POLICY org_constituents_org_isolation ON public.org_constituents USING ((
 
 
 --
+-- Name: org_contact_email_prefs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_contact_email_prefs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_contact_email_prefs org_contact_email_prefs_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_contact_email_prefs_org_isolation ON public.org_contact_email_prefs USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_contact_roles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_contact_roles ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_contact_roles org_contact_roles_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_contact_roles_org_isolation ON public.org_contact_roles USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_conversion_balances; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_conversion_balances ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_conversion_balances org_conversion_balances_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_conversion_balances_org_isolation ON public.org_conversion_balances USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_document_expectations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_document_expectations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_document_expectations org_document_expectations_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_document_expectations_org_isolation ON public.org_document_expectations USING (((org_id IS NULL) OR (org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer))) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_document_retention_rules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_document_retention_rules ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_document_retention_rules org_document_retention_rules_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_document_retention_rules_org_isolation ON public.org_document_retention_rules USING (((org_id IS NULL) OR (org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer))) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_documents; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14608,6 +20448,13 @@ ALTER TABLE public.org_expense_claim_lines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY org_expense_claim_lines_org_isolation ON public.org_expense_claim_lines USING ((EXISTS ( SELECT 1
    FROM public.org_expense_claims c
   WHERE ((c.id = org_expense_claim_lines.claim_id) AND (c.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
+
+
+--
+-- Name: org_expense_claim_lines org_expense_claim_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_expense_claim_lines_program_scope ON public.org_expense_claim_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14691,6 +20538,13 @@ CREATE POLICY org_fixed_assets_org_isolation ON public.org_fixed_assets USING ((
 
 
 --
+-- Name: org_fixed_assets org_fixed_assets_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_fixed_assets_program_scope ON public.org_fixed_assets AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_fringe_settings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14717,6 +20571,19 @@ CREATE POLICY org_functional_classifications_org_isolation ON public.org_functio
 
 
 --
+-- Name: org_gift_pledge_installments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_gift_pledge_installments ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_gift_pledge_installments org_gift_pledge_installments_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_gift_pledge_installments_org_isolation ON public.org_gift_pledge_installments USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_gifts; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14727,6 +20594,33 @@ ALTER TABLE public.org_gifts ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_gifts_org_isolation ON public.org_gifts USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_gifts org_gifts_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_gifts_program_scope ON public.org_gifts AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
+-- Name: org_grant_allocation_requests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_grant_allocation_requests ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_grant_allocation_requests_org_isolation ON public.org_grant_allocation_requests USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_grant_allocation_requests org_grant_allocation_requests_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_grant_allocation_requests_program_scope ON public.org_grant_allocation_requests AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14743,6 +20637,13 @@ CREATE POLICY org_grant_allocations_org_isolation ON public.org_grant_allocation
 
 
 --
+-- Name: org_grant_allocations org_grant_allocations_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_grant_allocations_program_scope ON public.org_grant_allocations AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_grants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14756,6 +20657,13 @@ CREATE POLICY org_grants_org_isolation ON public.org_grants USING ((org_id = (NU
 
 
 --
+-- Name: org_grants org_grants_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_grants_program_scope ON public.org_grants AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (primary_program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_import_history; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14766,6 +20674,19 @@ ALTER TABLE public.org_import_history ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_import_history_org_isolation ON public.org_import_history USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_indirect_cost_recovery_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_indirect_cost_recovery_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_indirect_cost_recovery_entries org_indirect_cost_recovery_entries_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_indirect_cost_recovery_entries_org_isolation ON public.org_indirect_cost_recovery_entries USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
 
 
 --
@@ -14788,6 +20709,13 @@ CREATE POLICY org_invoice_credit_notes_org_isolation ON public.org_invoice_credi
 
 
 --
+-- Name: org_invoice_credit_notes org_invoice_credit_notes_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_invoice_credit_notes_program_scope ON public.org_invoice_credit_notes AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_invoice_lines; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14800,6 +20728,13 @@ ALTER TABLE public.org_invoice_lines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY org_invoice_lines_org_isolation ON public.org_invoice_lines USING ((EXISTS ( SELECT 1
    FROM public.org_invoices i
   WHERE ((i.id = org_invoice_lines.invoice_id) AND (i.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
+
+
+--
+-- Name: org_invoice_lines org_invoice_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_invoice_lines_program_scope ON public.org_invoice_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -14857,6 +20792,13 @@ CREATE POLICY org_ledger_lines_org_isolation ON public.org_ledger_lines USING ((
 
 
 --
+-- Name: org_ledger_lines org_ledger_lines_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_ledger_lines_program_scope ON public.org_ledger_lines AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_ledger_transactions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14870,10 +20812,43 @@ CREATE POLICY org_ledger_transactions_org_isolation ON public.org_ledger_transac
 
 
 --
--- Name: org_members; Type: ROW SECURITY; Schema: public; Owner: -
+-- Name: org_membership_directory_optin; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
-ALTER TABLE public.org_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.org_membership_directory_optin ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_directory_optin org_membership_directory_optin_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_directory_optin_org_isolation ON public.org_membership_directory_optin USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_join_requests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_join_requests ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_join_requests org_membership_join_requests_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_join_requests_org_isolation ON public.org_membership_join_requests USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_messages; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_messages ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_messages org_membership_messages_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_messages_org_isolation ON public.org_membership_messages USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
 
 --
 -- Name: org_membership_payments; Type: ROW SECURITY; Schema: public; Owner: -
@@ -14882,16 +20857,102 @@ ALTER TABLE public.org_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.org_membership_payments ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: org_membership_reminders; Type: ROW SECURITY; Schema: public; Owner: -
+-- Name: org_membership_payments org_membership_payments_org_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-ALTER TABLE public.org_membership_reminders ENABLE ROW LEVEL SECURITY;
+CREATE POLICY org_membership_payments_org_isolation ON public.org_membership_payments USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_recognition; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_recognition ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_recognition org_membership_recognition_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_recognition_org_isolation ON public.org_membership_recognition USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_seats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_seats ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_seats org_membership_seats_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_seats_org_isolation ON public.org_membership_seats USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_settings org_membership_settings_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_settings_org_isolation ON public.org_membership_settings USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_templates ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_templates org_membership_templates_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_templates_org_isolation ON public.org_membership_templates USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_terms; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_terms ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_terms org_membership_terms_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_terms_org_isolation ON public.org_membership_terms USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_membership_tier_prices; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_membership_tier_prices ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_tier_prices org_membership_tier_prices_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_tier_prices_org_isolation ON public.org_membership_tier_prices USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
 
 --
 -- Name: org_membership_tiers; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.org_membership_tiers ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_membership_tiers org_membership_tiers_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_membership_tiers_program_scope ON public.org_membership_tiers AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
+
 
 --
 -- Name: org_compliance_obligations org_org_compliance_obligations_org_isolation; Type: POLICY; Schema: public; Owner: -
@@ -14908,35 +20969,23 @@ CREATE POLICY org_org_invites_org_isolation ON public.org_invites USING ((org_id
 
 
 --
--- Name: org_members org_org_members_org_isolation; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY org_org_members_org_isolation ON public.org_members USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
-
-
---
--- Name: org_membership_payments org_org_membership_payments_org_isolation; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY org_org_membership_payments_org_isolation ON public.org_membership_payments USING ((EXISTS ( SELECT 1
-   FROM public.org_members m
-  WHERE ((m.id = org_membership_payments.member_id) AND (m.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
-
-
---
--- Name: org_membership_reminders org_org_membership_reminders_org_isolation; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY org_org_membership_reminders_org_isolation ON public.org_membership_reminders USING ((EXISTS ( SELECT 1
-   FROM public.org_members m
-  WHERE ((m.id = org_membership_reminders.member_id) AND (m.org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)))));
-
-
---
 -- Name: org_membership_tiers org_org_membership_tiers_org_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY org_org_membership_tiers_org_isolation ON public.org_membership_tiers USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_payment_accounts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_payment_accounts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_payment_accounts org_payment_accounts_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_payment_accounts_org_isolation ON public.org_payment_accounts USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
 
 
 --
@@ -14959,6 +21008,13 @@ CREATE POLICY org_personnel_allocations_org_isolation ON public.org_personnel_al
 
 
 --
+-- Name: org_personnel_allocations org_personnel_allocations_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_personnel_allocations_program_scope ON public.org_personnel_allocations AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_personnel_changes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -14972,10 +21028,28 @@ CREATE POLICY org_personnel_changes_org_isolation ON public.org_personnel_change
 
 
 --
+-- Name: org_personnel_changes org_personnel_changes_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_personnel_changes_program_scope ON public.org_personnel_changes AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_personnel_allocations a
+  WHERE ((a.coop_personnel_id = org_personnel_changes.coop_personnel_id) AND (a.coop_program_id = ANY (public.current_program_ids())))))));
+
+
+--
 -- Name: org_personnel org_personnel_org_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY org_personnel_org_isolation ON public.org_personnel USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_personnel org_personnel_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_personnel_program_scope ON public.org_personnel AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_personnel_allocations a
+  WHERE ((a.coop_personnel_id = org_personnel.id) AND (a.coop_program_id = ANY (public.current_program_ids())))))));
 
 
 --
@@ -15005,6 +21079,19 @@ CREATE POLICY org_plaid_items_org_isolation ON public.org_plaid_items USING ((or
 
 
 --
+-- Name: org_pledge_accretion_entries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_pledge_accretion_entries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_pledge_accretion_entries org_pledge_accretion_entries_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_pledge_accretion_entries_org_isolation ON public.org_pledge_accretion_entries USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_pod_credentials; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15015,6 +21102,26 @@ ALTER TABLE public.org_pod_credentials ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_pod_credentials_org_isolation ON public.org_pod_credentials USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_program_grants; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_program_grants ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_program_grants org_program_grants_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_program_grants_org_isolation ON public.org_program_grants USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_program_grants org_program_grants_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_program_grants_program_scope ON public.org_program_grants AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -15044,6 +21151,74 @@ CREATE POLICY org_projections_org_isolation ON public.org_projections USING ((or
 
 
 --
+-- Name: org_projections org_projections_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_projections_program_scope ON public.org_projections AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
+
+
+--
+-- Name: org_public_link_uses; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_public_link_uses ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_public_link_uses org_public_link_uses_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_public_link_uses_org_isolation ON public.org_public_link_uses USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_public_links; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_public_links ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_public_links org_public_links_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_public_links_org_isolation ON public.org_public_links USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_public_links org_public_links_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_public_links_program_scope ON public.org_public_links AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (sponsored_project_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_public_links.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_public_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_public_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_public_settings org_public_settings_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_public_settings_org_isolation ON public.org_public_settings USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_record_notes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_record_notes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_record_notes org_record_notes_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_record_notes_org_isolation ON public.org_record_notes USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_recurring_schedules; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15070,6 +21245,13 @@ CREATE POLICY org_schedule_item_allocations_org_isolation ON public.org_schedule
 
 
 --
+-- Name: org_schedule_item_allocations org_schedule_item_allocations_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_schedule_item_allocations_program_scope ON public.org_schedule_item_allocations AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
+
+
+--
 -- Name: org_schedule_items; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15080,6 +21262,13 @@ ALTER TABLE public.org_schedule_items ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_schedule_items_org_isolation ON public.org_schedule_items USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_schedule_items org_schedule_items_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_schedule_items_program_scope ON public.org_schedule_items AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -15109,6 +21298,309 @@ CREATE POLICY org_settings_org_isolation ON public.org_settings USING ((org_id =
 
 
 --
+-- Name: org_sponsor_acknowledgments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_acknowledgments ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_acknowledgments_org_isolation ON public.org_sponsor_acknowledgments USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_acknowledgments org_sponsor_acknowledgments_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_acknowledgments_program_scope ON public.org_sponsor_acknowledgments AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_acknowledgments.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_agreement_amendments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_agreement_amendments ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_agreement_amendments_org_isolation ON public.org_sponsor_agreement_amendments USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_agreement_amendments org_sponsor_agreement_amendments_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_agreement_amendments_program_scope ON public.org_sponsor_agreement_amendments AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_agreement_amendments.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_agreement_templates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_agreement_templates ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_agreement_templates org_sponsor_agreement_templates_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_agreement_templates_org_isolation ON public.org_sponsor_agreement_templates USING (((org_id IS NULL) OR (org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer))) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_agreements; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_agreements ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_agreements_org_isolation ON public.org_sponsor_agreements USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_agreements org_sponsor_agreements_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_agreements_program_scope ON public.org_sponsor_agreements AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_agreements.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_applications; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_applications ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_applications org_sponsor_applications_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_applications_org_isolation ON public.org_sponsor_applications USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_approvals; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_approvals ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_approvals_org_isolation ON public.org_sponsor_approvals USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_approvals org_sponsor_approvals_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_approvals_program_scope ON public.org_sponsor_approvals AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_approvals.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_closings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_closings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_closings_org_isolation ON public.org_sponsor_closings USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_closings org_sponsor_closings_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_closings_program_scope ON public.org_sponsor_closings AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_closings.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_fee_postings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_fee_postings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_fee_postings_org_isolation ON public.org_sponsor_fee_postings USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_fee_postings org_sponsor_fee_postings_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_fee_postings_program_scope ON public.org_sponsor_fee_postings AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_fee_postings.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_fee_rules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_fee_rules ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_fee_rules_org_isolation ON public.org_sponsor_fee_rules USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_fee_rules org_sponsor_fee_rules_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_fee_rules_program_scope ON public.org_sponsor_fee_rules AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_fee_rules.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_payment_requests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_payment_requests ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_payment_requests_org_isolation ON public.org_sponsor_payment_requests USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_payment_requests org_sponsor_payment_requests_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_payment_requests_program_scope ON public.org_sponsor_payment_requests AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_payment_requests.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_recalls; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_recalls ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_recalls_org_isolation ON public.org_sponsor_recalls USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_recalls org_sponsor_recalls_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_recalls_program_scope ON public.org_sponsor_recalls AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_recalls.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_report_reminders; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_report_reminders ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_report_reminders_org_isolation ON public.org_sponsor_report_reminders USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_report_reminders org_sponsor_report_reminders_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_report_reminders_program_scope ON public.org_sponsor_report_reminders AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_report_reminders.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_reports; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_reports ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_reports_org_isolation ON public.org_sponsor_reports USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_reports org_sponsor_reports_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_reports_program_scope ON public.org_sponsor_reports AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_reports.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
+-- Name: org_sponsor_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_settings org_sponsor_settings_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_settings_org_isolation ON public.org_sponsor_settings USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_statements; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_sponsor_statements ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_statements_org_isolation ON public.org_sponsor_statements USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer)) WITH CHECK ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsor_statements org_sponsor_statements_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsor_statements_program_scope ON public.org_sponsor_statements AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (EXISTS ( SELECT 1
+   FROM public.org_sponsored_projects p
+  WHERE ((p.id = org_sponsor_statements.sponsored_project_id) AND (p.program_id = ANY (public.current_program_ids())))))));
+
+
+--
 -- Name: org_sponsored_project_disbursements; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15132,6 +21624,13 @@ ALTER TABLE public.org_sponsored_projects ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_sponsored_projects_org_isolation ON public.org_sponsored_projects USING ((sponsor_org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_sponsored_projects org_sponsored_projects_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_sponsored_projects_program_scope ON public.org_sponsored_projects AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -15181,6 +21680,13 @@ CREATE POLICY org_vendor_compliance_org_isolation ON public.org_vendor_complianc
 
 
 --
+-- Name: org_vendor_compliance org_vendor_compliance_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_vendor_compliance_program_scope ON public.org_vendor_compliance AS RESTRICTIVE USING ((public.current_program_ids() IS NULL));
+
+
+--
 -- Name: org_xero_program_track_map; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15191,6 +21697,13 @@ ALTER TABLE public.org_xero_program_track_map ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_xero_program_track_map_org_isolation ON public.org_xero_program_track_map USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_xero_program_track_map org_xero_program_track_map_program_scope; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_xero_program_track_map_program_scope ON public.org_xero_program_track_map AS RESTRICTIVE USING (((public.current_program_ids() IS NULL) OR (coop_program_id = ANY (public.current_program_ids()))));
 
 
 --
@@ -15259,8 +21772,2574 @@ CREATE POLICY pod_acr_outbox_org_isolation ON public.pod_acr_outbox USING ((org_
 
 
 --
+-- Name: pod_share_challenges; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.pod_share_challenges ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: pod_share_challenges pod_share_challenges_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY pod_share_challenges_org_isolation ON public.pod_share_challenges USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: -
+--
+
+GRANT USAGE ON SCHEMA public TO causal_app;
+
+
+--
+-- Name: FUNCTION accounting_entry_reminders_due(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.accounting_entry_reminders_due() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.accounting_entry_reminders_due() TO causal_app;
+
+
+--
+-- Name: FUNCTION admin_delete_org(p_org_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_delete_org(p_org_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_delete_org(p_org_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION admin_delete_user(p_user_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_delete_user(p_user_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_delete_user(p_user_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION admin_list_orgs_with_member_counts(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_list_orgs_with_member_counts() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_list_orgs_with_member_counts() TO causal_app;
+
+
+--
+-- Name: FUNCTION admin_list_orgs_with_pod_status(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.admin_list_orgs_with_pod_status() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.admin_list_orgs_with_pod_status() TO causal_app;
+
+
+--
+-- Name: FUNCTION bootstrap_demo_org_membership(p_user_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bootstrap_demo_org_membership(p_user_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bootstrap_demo_org_membership(p_user_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION claim_due_pod_acr_outbox_rows(p_limit integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.claim_due_pod_acr_outbox_rows(p_limit integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.claim_due_pod_acr_outbox_rows(p_limit integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION demo_org_reset_tables(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.demo_org_reset_tables() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.demo_org_reset_tables() TO causal_app;
+
+
+--
+-- Name: FUNCTION documents_due_for_local_purge(p_limit integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.documents_due_for_local_purge(p_limit integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.documents_due_for_local_purge(p_limit integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION enforce_org_has_admin(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.enforce_org_has_admin() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION expire_due_pod_permissions(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.expire_due_pod_permissions() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.expire_due_pod_permissions() TO causal_app;
+
+
+--
+-- Name: FUNCTION get_document_purge_status(p_document_id integer, p_org_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.get_document_purge_status(p_document_id integer, p_org_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.get_document_purge_status(p_document_id integer, p_org_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION mark_document_local_copy_purged(p_document_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.mark_document_local_copy_purged(p_document_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.mark_document_local_copy_purged(p_document_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION org_allow_ledger_source(p_source text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_allow_ledger_source(p_source text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION org_apply_sponsor_report_holds(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_apply_sponsor_report_holds() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_apply_sponsor_report_holds() TO causal_app;
+
+
+--
+-- Name: FUNCTION org_audit_ledger_change(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_audit_ledger_change() FROM PUBLIC;
+
+
+--
+-- Name: TABLE org_audit_log; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT ON TABLE public.org_audit_log TO causal_app;
+
+
+--
+-- Name: FUNCTION org_audit_verify(p_org_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_audit_verify(p_org_id integer) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION org_claim_sponsor_report_reminders(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_claim_sponsor_report_reminders() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_claim_sponsor_report_reminders() TO causal_app;
+
+
+--
+-- Name: FUNCTION org_claim_sponsor_statements(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_claim_sponsor_statements() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_claim_sponsor_statements() TO causal_app;
+
+
+--
+-- Name: FUNCTION org_enforce_ledger_lines_same_org(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_enforce_ledger_lines_same_org() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION org_generate_sponsor_quarterly_reports(p_due_days integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_generate_sponsor_quarterly_reports(p_due_days integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_generate_sponsor_quarterly_reports(p_due_days integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION org_mark_sponsor_report_reminder(p_id integer, p_status text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_mark_sponsor_report_reminder(p_id integer, p_status text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_mark_sponsor_report_reminder(p_id integer, p_status text) TO causal_app;
+
+
+--
+-- Name: FUNCTION org_membership_message_event(p_message_id text, p_kind text, p_at timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_membership_message_event(p_message_id text, p_kind text, p_at timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_membership_message_event(p_message_id text, p_kind text, p_at timestamp with time zone) TO causal_app;
+
+
+--
+-- Name: FUNCTION org_membership_workspaces(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_membership_workspaces() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_membership_workspaces() TO causal_app;
+
+
+--
+-- Name: FUNCTION org_next_recurring_occurrence(p_current date, p_frequency text, p_active_months smallint[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_next_recurring_occurrence(p_current date, p_frequency text, p_active_months smallint[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_next_recurring_occurrence(p_current date, p_frequency text, p_active_months smallint[]) TO causal_app;
+
+
+--
+-- Name: FUNCTION org_run_due_recurring_schedules(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_run_due_recurring_schedules() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_run_due_recurring_schedules() TO causal_app;
+
+
+--
+-- Name: FUNCTION org_sponsor_enable_rls(p_table text, p_with_project boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_sponsor_enable_rls(p_table text, p_with_project boolean) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION resolve_invite_by_id(p_invite_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_invite_by_id(p_invite_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_invite_by_id(p_invite_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_invite_by_token(p_token_hash text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_invite_by_token(p_token_hash text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_invite_by_token(p_token_hash text) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_member_org_id(p_user_id integer, p_slug text, p_require_admin boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_member_org_id(p_user_id integer, p_slug text, p_require_admin boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_member_org_id(p_user_id integer, p_slug text, p_require_admin boolean) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_member_org_id_and_role(p_user_id integer, p_slug text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_member_org_id_and_role(p_user_id integer, p_slug text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_member_org_id_and_role(p_user_id integer, p_slug text) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_org_pod_credential(p_org_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_org_pod_credential(p_org_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_org_pod_credential(p_org_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_pending_invites_for_email(p_email text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_pending_invites_for_email(p_email text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_pending_invites_for_email(p_email text) TO causal_app;
+
+
+--
+-- Name: TABLE org_plaid_items; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_plaid_items TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_plaid_item_by_item_id(p_item_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_plaid_item_by_item_id(p_item_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_plaid_item_by_item_id(p_item_id text) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_pod_share(p_token text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_pod_share(p_token text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_pod_share(p_token text) TO causal_app;
+
+
+--
+-- Name: FUNCTION resolve_user_org_ids(p_user_id integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.resolve_user_org_ids(p_user_id integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.resolve_user_org_ids(p_user_id integer) TO causal_app;
+
+
+--
+-- Name: FUNCTION restore_demo_org(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.restore_demo_org() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.restore_demo_org() TO causal_app;
+
+
+--
+-- Name: FUNCTION snapshot_demo_org(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.snapshot_demo_org() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.snapshot_demo_org() TO causal_app;
+
+
+--
+-- Name: FUNCTION store_org_pod_credential(p_org_id integer, p_account_email text, p_encrypted_password text, p_encryption_iv text, p_encryption_auth_tag text, p_pod_webid text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.store_org_pod_credential(p_org_id integer, p_account_email text, p_encrypted_password text, p_encryption_iv text, p_encryption_auth_tag text, p_pod_webid text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.store_org_pod_credential(p_org_id integer, p_account_email text, p_encrypted_password text, p_encryption_iv text, p_encryption_auth_tag text, p_pod_webid text) TO causal_app;
+
+
+--
+-- Name: TABLE accounting_review_entry; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.accounting_review_entry TO causal_app;
+
+
+--
+-- Name: TABLE actions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.actions TO causal_app;
+
+
+--
+-- Name: SEQUENCE actions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.actions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE allowed_emails; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.allowed_emails TO causal_app;
+
+
+--
+-- Name: TABLE bank_pledges; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.bank_pledges TO causal_app;
+
+
+--
+-- Name: SEQUENCE bank_pledges_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.bank_pledges_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE bank_pressure_actions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.bank_pressure_actions TO causal_app;
+
+
+--
+-- Name: SEQUENCE bank_pressure_actions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.bank_pressure_actions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE causal_service_credentials; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.causal_service_credentials TO causal_app;
+
+
+--
+-- Name: TABLE compliance_extension_proposals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.compliance_extension_proposals TO causal_app;
+
+
+--
+-- Name: SEQUENCE compliance_extension_proposals_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.compliance_extension_proposals_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE compliance_template_items; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.compliance_template_items TO causal_app;
+
+
+--
+-- Name: SEQUENCE compliance_template_items_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.compliance_template_items_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE contributions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contributions TO causal_app;
+
+
+--
+-- Name: SEQUENCE contributions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.contributions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE coop_members; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.coop_members TO causal_app;
+
+
+--
+-- Name: SEQUENCE coop_members_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.coop_members_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE coop_pod_credentials; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.coop_pod_credentials TO causal_app;
+
+
+--
+-- Name: TABLE cooperative_library_items; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cooperative_library_items TO causal_app;
+
+
+--
+-- Name: SEQUENCE cooperative_library_items_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.cooperative_library_items_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE cooperative_library_submissions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cooperative_library_submissions TO causal_app;
+
+
+--
+-- Name: SEQUENCE cooperative_library_submissions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.cooperative_library_submissions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE cooperative_work_library_items; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cooperative_work_library_items TO causal_app;
+
+
+--
+-- Name: SEQUENCE cooperative_work_library_items_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.cooperative_work_library_items_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE cooperative_work_requests; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cooperative_work_requests TO causal_app;
+
+
+--
+-- Name: SEQUENCE cooperative_work_requests_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.cooperative_work_requests_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE demo_visit_excluded; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.demo_visit_excluded TO causal_app;
+
+
+--
+-- Name: TABLE demo_visit_key; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.demo_visit_key TO causal_app;
+
+
+--
+-- Name: TABLE demo_visit_log; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.demo_visit_log TO causal_app;
+
+
+--
+-- Name: SEQUENCE demo_visit_log_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.demo_visit_log_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE financial_rep_pledges; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.financial_rep_pledges TO causal_app;
+
+
+--
+-- Name: SEQUENCE financial_rep_pledges_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.financial_rep_pledges_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE inbound_debug_emails; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.inbound_debug_emails TO causal_app;
+
+
+--
+-- Name: SEQUENCE inbound_debug_emails_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.inbound_debug_emails_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE local_event_attendance; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.local_event_attendance TO causal_app;
+
+
+--
+-- Name: SEQUENCE local_event_attendance_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.local_event_attendance_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_access_permissions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_access_permissions TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_access_permissions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_access_permissions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_accounts TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_accounts_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_accounts_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_actuals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_actuals TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_actuals_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_actuals_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_aliases; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_aliases TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_aliases_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_aliases_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_allocation_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_allocation_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_allocation_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_allocation_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_allocation_monthly; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_allocation_monthly TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_allocation_monthly_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_allocation_monthly_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_allocation_schedules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_allocation_schedules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_allocation_schedules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_allocation_schedules_id_seq TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_audit_log_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_audit_log_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_balance_sheet_snapshots; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_balance_sheet_snapshots TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_balance_sheet_snapshots_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_balance_sheet_snapshots_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bank_reconciliation_periods; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bank_reconciliation_periods TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bank_reconciliation_periods_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bank_reconciliation_periods_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bank_rules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bank_rules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bank_rules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bank_rules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bank_statement_line_postings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bank_statement_line_postings TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bank_statement_line_postings_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bank_statement_line_postings_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bank_statement_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bank_statement_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bank_statement_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bank_statement_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bill_credit_notes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bill_credit_notes TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bill_credit_notes_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bill_credit_notes_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bill_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bill_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bill_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bill_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bill_payments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bill_payments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bill_payments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bill_payments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_bills; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_bills TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_bills_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_bills_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_board_designations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_board_designations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_board_designations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_board_designations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_budget_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_budget_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_budget_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_budget_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_budget_scenario_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_budget_scenario_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_budget_scenario_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_budget_scenario_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_budget_scenarios; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_budget_scenarios TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_budget_scenarios_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_budget_scenarios_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_compliance_obligations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_compliance_obligations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_compliance_obligations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_compliance_obligations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_constituent_interactions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_constituent_interactions TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_constituent_interactions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_constituent_interactions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_constituents; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_constituents TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_constituents_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_constituents_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_contact_email_prefs; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_contact_email_prefs TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_contact_email_prefs_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_contact_email_prefs_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_contact_roles; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_contact_roles TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_contact_roles_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_contact_roles_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_conversion_balances; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_conversion_balances TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_conversion_balances_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_conversion_balances_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_document_expectations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_document_expectations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_document_expectations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_document_expectations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_document_retention_rules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_document_retention_rules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_document_retention_rules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_document_retention_rules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_documents; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_documents TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_documents_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_documents_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_donation_url_suggestions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_donation_url_suggestions TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_donation_url_suggestions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_donation_url_suggestions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_expense_claim_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_expense_claim_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_expense_claim_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_expense_claim_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_expense_claim_messages; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_expense_claim_messages TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_expense_claim_messages_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_expense_claim_messages_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_expense_claim_payments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_expense_claim_payments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_expense_claim_payments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_expense_claim_payments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_expense_claims; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_expense_claims TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_expense_claims_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_expense_claims_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_fiscal_year_locks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_fiscal_year_locks TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_fiscal_year_locks_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_fiscal_year_locks_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_fixed_asset_depreciation_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_fixed_asset_depreciation_entries TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_fixed_asset_depreciation_entries_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_fixed_asset_depreciation_entries_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_fixed_assets; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_fixed_assets TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_fixed_assets_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_fixed_assets_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_fringe_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_fringe_settings TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_fringe_settings_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_fringe_settings_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_functional_classifications; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_functional_classifications TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_functional_classifications_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_functional_classifications_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_gift_pledge_installments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_gift_pledge_installments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_gift_pledge_installments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_gift_pledge_installments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_gifts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_gifts TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_gifts_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_gifts_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_grant_allocation_requests; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_grant_allocation_requests TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_grant_allocation_requests_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_grant_allocation_requests_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_grant_allocations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_grant_allocations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_grant_allocations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_grant_allocations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_grants; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_grants TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_grants_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_grants_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_import_history; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_import_history TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_import_history_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_import_history_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_indirect_cost_recovery_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_indirect_cost_recovery_entries TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_indirect_cost_recovery_entries_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_indirect_cost_recovery_entries_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_invites; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_invites TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_invites_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_invites_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_invoice_credit_notes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_invoice_credit_notes TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_invoice_credit_notes_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_invoice_credit_notes_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_invoice_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_invoice_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_invoice_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_invoice_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_invoice_payments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_invoice_payments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_invoice_payments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_invoice_payments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_invoices; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_invoices TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_invoices_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_invoices_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_ledger_approval_policies; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_ledger_approval_policies TO causal_app;
+
+
+--
+-- Name: TABLE org_ledger_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.org_ledger_lines TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_ledger_lines_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_ledger_lines_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_ledger_transactions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.org_ledger_transactions TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_ledger_transactions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_ledger_transactions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_directory_optin; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_directory_optin TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_directory_optin_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_directory_optin_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_join_requests; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_join_requests TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_join_requests_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_join_requests_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_messages; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_messages TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_messages_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_messages_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_payments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_payments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_payments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_payments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_recognition; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_recognition TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_recognition_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_recognition_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_seats; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_seats TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_seats_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_seats_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_settings TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_templates; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_templates TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_templates_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_templates_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_terms; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_terms TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_terms_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_terms_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_tier_prices; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_tier_prices TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_tier_prices_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_tier_prices_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_membership_tiers; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_membership_tiers TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_membership_tiers_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_membership_tiers_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_payment_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_payment_accounts TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_payment_accounts_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_payment_accounts_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_personnel; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_personnel TO causal_app;
+
+
+--
+-- Name: TABLE org_personnel_allocations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_personnel_allocations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_personnel_allocations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_personnel_allocations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_personnel_changes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_personnel_changes TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_personnel_changes_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_personnel_changes_id_seq TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_personnel_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_personnel_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_plaid_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_plaid_accounts TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_plaid_accounts_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_plaid_accounts_id_seq TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_plaid_items_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_plaid_items_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_pledge_accretion_entries; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_pledge_accretion_entries TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_pledge_accretion_entries_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_pledge_accretion_entries_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_pod_credentials; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_pod_credentials TO causal_app;
+
+
+--
+-- Name: TABLE org_program_grants; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_program_grants TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_program_grants_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_program_grants_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_programs; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_programs TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_programs_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_programs_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_projections; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_projections TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_projections_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_projections_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_public_link_uses; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_public_link_uses TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_public_link_uses_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_public_link_uses_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_public_links; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_public_links TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_public_links_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_public_links_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_public_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_public_settings TO causal_app;
+
+
+--
+-- Name: TABLE org_record_notes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_record_notes TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_record_notes_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_record_notes_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_recurring_schedules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_recurring_schedules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_recurring_schedules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_recurring_schedules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_schedule_item_allocations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_schedule_item_allocations TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_schedule_item_allocations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_schedule_item_allocations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_schedule_items; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_schedule_items TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_schedule_items_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_schedule_items_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_schedules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_schedules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_schedules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_schedules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_settings TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_acknowledgments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_acknowledgments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_acknowledgments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_acknowledgments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_agreement_amendments; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_agreement_amendments TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_agreement_amendments_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_agreement_amendments_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_agreement_templates; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_agreement_templates TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_agreement_templates_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_agreement_templates_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_agreements; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_agreements TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_agreements_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_agreements_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_applications; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_applications TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_applications_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_applications_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_approvals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_approvals TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_approvals_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_approvals_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_closings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_closings TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_closings_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_closings_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_fee_postings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_fee_postings TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_fee_postings_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_fee_postings_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_fee_rules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_fee_rules TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_fee_rules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_fee_rules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_payment_requests; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_payment_requests TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_payment_requests_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_payment_requests_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_recalls; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_recalls TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_recalls_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_recalls_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_report_reminders; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_report_reminders TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_report_reminders_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_report_reminders_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_reports; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_reports TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_reports_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_reports_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_settings; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_settings TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsor_statements; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsor_statements TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsor_statements_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsor_statements_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsored_project_disbursements; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsored_project_disbursements TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsored_project_disbursements_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsored_project_disbursements_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_sponsored_projects; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_sponsored_projects TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_sponsored_projects_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_sponsored_projects_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_suggestions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_suggestions TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_suggestions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_suggestions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_tasks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_tasks TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_tasks_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_tasks_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_users; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_users TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_users_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_users_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_vendor_compliance; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_vendor_compliance TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_vendor_compliance_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_vendor_compliance_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE org_xero_program_track_map; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_xero_program_track_map TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_xero_program_track_map_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_xero_program_track_map_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE orgs; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.orgs TO causal_app;
+
+
+--
+-- Name: SEQUENCE orgs_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.orgs_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE page_views; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.page_views TO causal_app;
+
+
+--
+-- Name: SEQUENCE page_views_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.page_views_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE password_reset_tokens; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.password_reset_tokens TO causal_app;
+
+
+--
+-- Name: SEQUENCE password_reset_tokens_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.password_reset_tokens_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE payment_provider_events; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.payment_provider_events TO causal_app;
+
+
+--
+-- Name: SEQUENCE payment_provider_events_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.payment_provider_events_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pending_confirmations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pending_confirmations TO causal_app;
+
+
+--
+-- Name: SEQUENCE pending_confirmations_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pending_confirmations_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_access_group_members; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_access_group_members TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_access_group_members_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_access_group_members_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_access_group_rules; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_access_group_rules TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_access_group_rules_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_access_group_rules_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_access_groups; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_access_groups TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_access_groups_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_access_groups_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_access_permissions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_access_permissions TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_access_permissions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_access_permissions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_acr_outbox; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_acr_outbox TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_acr_outbox_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_acr_outbox_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE pod_share_challenges; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pod_share_challenges TO causal_app;
+
+
+--
+-- Name: SEQUENCE pod_share_challenges_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.pod_share_challenges_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE representatives; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.representatives TO causal_app;
+
+
+--
+-- Name: SEQUENCE representatives_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.representatives_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE reviewer_access_links; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.reviewer_access_links TO causal_app;
+
+
+--
+-- Name: SEQUENCE reviewer_access_links_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.reviewer_access_links_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE sessions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.sessions TO causal_app;
+
+
+--
+-- Name: SEQUENCE sessions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.sessions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE transactional_forwards; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.transactional_forwards TO causal_app;
+
+
+--
+-- Name: SEQUENCE transactional_forwards_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.transactional_forwards_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_actions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_actions TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_actions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_actions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_addresses; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_addresses TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_addresses_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_addresses_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_contributed_orgs; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_contributed_orgs TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_contributed_orgs_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_contributed_orgs_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_inbound_emails; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_inbound_emails TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_inbound_emails_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_inbound_emails_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_org_petition_signatures; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_org_petition_signatures TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_org_petition_signatures_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_org_petition_signatures_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_org_preferences; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_org_preferences TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_org_preferences_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_org_preferences_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_org_setup_presets; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_org_setup_presets TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_org_setup_presets_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_org_setup_presets_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_rep_contact_actions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_rep_contact_actions TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_rep_contact_actions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_rep_contact_actions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE user_representatives; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_representatives TO causal_app;
+
+
+--
+-- Name: SEQUENCE user_representatives_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.user_representatives_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE users; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.users TO causal_app;
+
+
+--
+-- Name: SEQUENCE users_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.users_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE volunteer_opportunities; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.volunteer_opportunities TO causal_app;
+
+
+--
+-- Name: SEQUENCE volunteer_opportunities_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.volunteer_opportunities_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE watch_contributions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.watch_contributions TO causal_app;
+
+
+--
+-- Name: SEQUENCE watch_contributions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.watch_contributions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_civic_links; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_civic_links TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_civic_links_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_civic_links_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_documents; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_documents TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_documents_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_documents_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_interventions; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_interventions TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_interventions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_interventions_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_messages; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_messages TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_messages_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_messages_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_projects; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_projects TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_projects_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_projects_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_proposals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_proposals TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_proposals_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_proposals_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_space_members; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_space_members TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_space_members_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_space_members_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_threads; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_threads TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_threads_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_threads_id_seq TO causal_app;
+
+
+--
+-- Name: TABLE workshop_workspaces; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workshop_workspaces TO causal_app;
+
+
+--
+-- Name: SEQUENCE workshop_workspaces_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.workshop_workspaces_id_seq TO causal_app;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,USAGE ON SEQUENCES TO causal_app;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: -
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,DELETE,UPDATE ON TABLES TO causal_app;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tEvUxAsPU4pcgG8xmf1wVpcNdJw7YYTSjbm2ox78dcoZTVu7q6cazR7gyPAvdAI
+\unrestrict WHjusZG8GekuLphExtFvRRdFZNToxQDersziacAurULLQzRXzfwrUtijKUGzqc6
 

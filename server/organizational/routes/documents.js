@@ -93,16 +93,6 @@ function sha256File(filePath) {
   });
 }
 
-function computeRetentionUntil({ retentionClass, retentionYears, effectiveDate, documentDate }) {
-  if (retentionClass !== 'fixed_term' || !retentionYears) return null;
-  const base = effectiveDate || documentDate;
-  if (!base) return null;
-  const d = new Date(base);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setUTCFullYear(d.getUTCFullYear() + Number(retentionYears));
-  return d.toISOString().slice(0, 10);
-}
-
 async function documentLockMessage(db, orgId, doc) {
   if (!doc.source_ref_type || !doc.source_ref_id) return null;
   const tables = { bill: 'org_bills', invoice: 'org_invoices', expense_claim: 'org_expense_claims' };
@@ -378,14 +368,11 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         let retentionClass = body.retention_class;
         let retentionYears = body.retention_years ? Number(body.retention_years) : null;
         let retentionUntil;
-        if (retentionClass) {
-          retentionUntil = expirationDate || computeRetentionUntil({ retentionClass, retentionYears, effectiveDate, documentDate });
-        } else {
-          const rule = await resolveRetention(pool, orgId, category, effectiveDate || documentDate);
-          retentionClass = rule.retention_class;
-          retentionYears = rule.retention_years;
-          retentionUntil = expirationDate || rule.retention_until;
-        }
+        const rule = await resolveRetention(pool, orgId, category, effectiveDate || documentDate,
+          retentionClass ? { retention_class: retentionClass, retention_years: retentionYears } : null);
+        retentionClass = rule.retention_class;
+        retentionYears = rule.retention_years;
+        retentionUntil = expirationDate || rule.retention_until;
 
         const relPath = path.relative(UPLOADS_ROOT, file.path);
         let db = pool;
@@ -588,12 +575,11 @@ function registerOrganizationalDocumentRoutes(app, pool) {
           }
         }
       }
-      fields.retention_until = fields.expiration_date || computeRetentionUntil({
-        retentionClass: fields.retention_class,
-        retentionYears: fields.retention_years,
-        effectiveDate: fields.effective_date,
-        documentDate: fields.document_date,
-      });
+      const rule = await resolveRetention(pool, orgId, fields.category, fields.effective_date || fields.document_date,
+        { retention_class: fields.retention_class, retention_years: fields.retention_years });
+      fields.retention_class = rule.retention_class;
+      fields.retention_years = rule.retention_years;
+      fields.retention_until = fields.expiration_date || rule.retention_until;
 
       const r = await pool.query(
         `UPDATE org_documents SET

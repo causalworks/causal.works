@@ -20,26 +20,33 @@ function addYears(dateStr, years) {
   return `${y}${dateStr.slice(4)}`;
 }
 
-async function resolveRetention(db, orgId, category, recordDate) {
+async function ruleFor(db, orgId, category) {
   const rule = await db.query(
     `SELECT retention_class, retention_years, trigger FROM org_document_retention_rules
       WHERE category = $2 AND (org_id = $1 OR org_id IS NULL) ORDER BY org_id NULLS LAST LIMIT 1`, [orgId, category]);
-  let r = rule.rows[0];
-  if (!r) {
-    const ex = await db.query(
-      `SELECT default_retention_class AS retention_class, default_retention_years AS retention_years, 'year_end' AS trigger
-         FROM org_document_expectations WHERE category = $2 AND (org_id = $1 OR org_id IS NULL) ORDER BY org_id NULLS LAST LIMIT 1`, [orgId, category]);
-    r = ex.rows[0] || FALLBACK;
-  }
-  if (r.retention_class === 'permanent') return { retention_class: 'permanent', retention_years: null, retention_until: null };
-  const years = r.retention_years || FALLBACK.retention_years;
-  const base = recordDate || new Date().toISOString().slice(0, 10);
+  if (rule.rows[0]) return rule.rows[0];
+  const ex = await db.query(
+    `SELECT default_retention_class AS retention_class, default_retention_years AS retention_years, 'year_end' AS trigger
+       FROM org_document_expectations WHERE category = $2 AND (org_id = $1 OR org_id IS NULL) ORDER BY org_id NULLS LAST LIMIT 1`, [orgId, category]);
+  return ex.rows[0] || FALLBACK;
+}
+
+async function retentionUntilFor(db, orgId, trigger, years, recordDate) {
+  const base = recordDate instanceof Date ? recordDate.toISOString().slice(0, 10) : (recordDate ? String(recordDate).slice(0, 10) : new Date().toISOString().slice(0, 10));
   let start = base;
-  if (r.trigger === 'year_end') {
+  if (trigger === 'year_end') {
     const s = await db.query('SELECT fiscal_year_end_month FROM org_settings WHERE org_id = $1', [orgId]);
     start = fiscalYearEnd(base, s.rows[0] && s.rows[0].fiscal_year_end_month);
   }
-  return { retention_class: 'fixed_term', retention_years: years, retention_until: addYears(start, years) };
+  return addYears(start, years);
+}
+
+async function resolveRetention(db, orgId, category, recordDate, override) {
+  const r = await ruleFor(db, orgId, category);
+  const cls = (override && override.retention_class) || r.retention_class;
+  if (cls === 'permanent') return { retention_class: 'permanent', retention_years: null, retention_until: null };
+  const years = (override && override.retention_years) || r.retention_years || FALLBACK.retention_years;
+  return { retention_class: 'fixed_term', retention_years: years, retention_until: await retentionUntilFor(db, orgId, r.trigger, years, recordDate) };
 }
 
 module.exports = { resolveRetention, fiscalYearEnd };

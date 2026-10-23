@@ -8,7 +8,8 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { logAudit } = require('../lib/auditLog');
-const { canWrite } = require('../middleware/requireWriteAccess');
+const { canWrite, canRead } = require('../middleware/requireWriteAccess');
+const { programScopeFor } = require('../lib/programScope');
 const { resolveRetention } = require('../lib/documentRetention');
 const { hasAccountingAccess } = require('../middleware/requireAccountingAccess');
 const { isFiscalYearLocked } = require('../lib/ledgerPosting');
@@ -177,6 +178,30 @@ function ownerRecordClause(req) {
   return hasAccountingAccess(req, 'accounting_read') ? '' : NO_OWNER_RECORD;
 }
 
+function projectDocScope(req) {
+  if (!canRead(req, 'sponsorship')) return { none: true };
+  if (req.coopOrgRole !== 'program') return { all: true };
+  const scope = programScopeFor(req);
+  return scope === null ? { all: true } : { programs: scope };
+}
+
+function projectDocCondition(req, params, column) {
+  const sc = projectDocScope(req);
+  if (sc.all) return '';
+  if (sc.none) return `${column} IS NULL`;
+  params.push(sc.programs);
+  return `(${column} IS NULL OR ${column} IN (SELECT id FROM org_sponsored_projects WHERE sponsor_org_id = $1 AND program_id = ANY($${params.length}::int[])))`;
+}
+
+async function mayOpenProjectDoc(pool, req, doc) {
+  if (!doc.sponsored_project_id) return true;
+  const sc = projectDocScope(req);
+  if (sc.all) return true;
+  if (sc.none) return false;
+  const r = await pool.query('SELECT 1 FROM org_sponsored_projects WHERE id = $1 AND sponsor_org_id = $2 AND program_id = ANY($3::int[])', [doc.sponsored_project_id, req.orgId, sc.programs]);
+  return r.rows.length > 0;
+}
+
 function registerOrganizationalDocumentRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
@@ -195,6 +220,8 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         conditions.push(`visibility <> 'admins_only'`);
       }
       if (ownerRecordClause(req)) conditions.push('source_ref_type IS NULL');
+      const projectCond = projectDocCondition(req, params, 'sponsored_project_id');
+      if (projectCond) conditions.push(projectCond);
       if (req.query.scope === 'org') {
         conditions.push('source_ref_type IS NULL AND grant_id IS NULL AND obligation_id IS NULL AND sponsored_project_id IS NULL');
       } else if (req.query.scope === 'records') {
@@ -247,11 +274,13 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req);
+      const params = [orgId];
+      const projectCond = projectDocCondition(req, params, 'sponsored_project_id');
+      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req) + (projectCond ? ` AND ${projectCond}` : '');
 
       const r = await pool.query(
         `SELECT * FROM org_documents WHERE org_id = $1 AND archived_at IS NULL ${visClause} ORDER BY expiration_date NULLS LAST, retention_until NULLS LAST`,
-        [orgId]
+        params
       );
       const docs = r.rows.map(rowToDocument);
       return res.json({
@@ -273,7 +302,9 @@ function registerOrganizationalDocumentRoutes(app, pool) {
     try {
       const orgId = req.orgId;
       const role = await getRole(pool, orgId, userId);
-      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req);
+      const binderParams = [orgId];
+      const projectCond = projectDocCondition(req, binderParams, 'sponsored_project_id');
+      const visClause = (isAdmin(role) ? '' : `AND visibility <> 'admins_only'`) + ownerRecordClause(req) + (projectCond ? ` AND ${projectCond}` : '');
 
       const expectations = await pool.query(
         `SELECT * FROM org_document_expectations WHERE org_id IS NULL OR org_id = $1 ORDER BY display_order`,
@@ -282,7 +313,7 @@ function registerOrganizationalDocumentRoutes(app, pool) {
 
       const allDocsR = await pool.query(
         `SELECT * FROM org_documents WHERE org_id = $1 AND archived_at IS NULL AND is_current = TRUE ${visClause}`,
-        [orgId]
+        binderParams
       );
       const allDocs = allDocsR.rows.map(rowToDocument);
 
@@ -453,6 +484,9 @@ function registerOrganizationalDocumentRoutes(app, pool) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
       if (doc.source_ref_type && ownerRecordClause(req)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      if (!(await mayOpenProjectDoc(pool, req, doc))) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
 

@@ -139,6 +139,13 @@ async function createRequestUnlocked(pool, { orgId, userId, projectId, input, li
   return { httpStatus: 201, body: { request: r.rows[0], budget_warning: warning } };
 }
 
+async function linkCreatorOf(pool, orgId, linkRef) {
+  const m = /^link:(\d+)$/.exec(String(linkRef || ''));
+  if (!m) return null;
+  const r = await pool.query('SELECT created_by FROM org_public_links WHERE id = $1 AND org_id = $2', [Number(m[1]), orgId]);
+  return r.rows[0] && r.rows[0].created_by != null ? Number(r.rows[0].created_by) : null;
+}
+
 async function reviewRequestUnlocked(pool, { orgId, userId, role, projectId, requestId, action, reason, override, grantAgreementDocumentId }) {
   const rq = await pool.query('SELECT * FROM org_sponsor_payment_requests WHERE id = $1 AND org_id = $2 AND sponsored_project_id = $3', [requestId, orgId, projectId]);
   const req = rq.rows[0];
@@ -160,8 +167,9 @@ async function reviewRequestUnlocked(pool, { orgId, userId, role, projectId, req
   }
   if (action !== 'approve') return refuse(400, 'bad_action', 'Choose approve, reject, ask for more information, or start review.');
 
-  if (req.created_by != null && Number(req.created_by) === Number(userId)) {
-    return refuse(403, 'self_approval', 'A different person must approve a request you entered.');
+  const requester = req.created_by != null ? Number(req.created_by) : await linkCreatorOf(pool, orgId, req.requester_link_ref);
+  if (requester != null && requester === Number(userId)) {
+    return refuse(403, 'self_approval', req.created_by == null ? 'A different person must approve a request that came through a link you made.' : 'A different person must approve a request you entered.');
   }
   const project = await loadProjectRow(pool, orgId, projectId);
   const closed = projectOpenRefusal(project);
@@ -179,7 +187,7 @@ async function reviewRequestUnlocked(pool, { orgId, userId, role, projectId, req
        (org_id, sponsored_project_id, disbursement_date, amount_cents, notes, created_by, status, payment_request_id, override_reason, override_by, override_at,
         payee_constituent_id, grant_agreement_document_id)
      VALUES ($1, $2, $3, $4, $5, $6, 'pending_approval', $7, $8, $9, $10, $11, $12) RETURNING id`,
-    [orgId, projectId, req.needed_by || new Date().toISOString().slice(0, 10), amountCents, req.purpose, req.created_by, requestId,
+    [orgId, projectId, req.needed_by || new Date().toISOString().slice(0, 10), amountCents, req.purpose, requester, requestId,
      bal.overridden ? bal.reason : null, bal.overridden ? userId : null, bal.overridden ? new Date().toISOString() : null,
      req.payee_constituent_id, agreementDoc]);
   const disbId = ins.rows[0].id;

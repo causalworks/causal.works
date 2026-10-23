@@ -7,6 +7,7 @@ const { importJWK, jwtVerify, decodeProtectedHeader } = require('jose');
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
+const { logAudit, reqMeta } = require('../lib/auditLog');
 const { enterOrgContext } = require('../lib/orgContext');
 
 const plaidClient = new PlaidApi(new Configuration({
@@ -154,6 +155,8 @@ function registerPlaidRoutes(app, pool) {
         [orgId, itemId, accessToken, institutionId, institutionName, userId]
       );
 
+      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_plaid_items', recordId: itemR.rows[0].id, metadata: { ...reqMeta(req), institution: institutionName } });
+
       const accounts = accountsResp.data.accounts.map((a) => ({
         plaid_account_id: a.account_id,
         name: a.name,
@@ -183,6 +186,7 @@ function registerPlaidRoutes(app, pool) {
          VALUES ($1,$2,$3,$4) RETURNING id`,
         [orgId, plaidItemId, plaidAccountId, orgAccountId]
       );
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'create', tableName: 'org_plaid_accounts', recordId: mapR.rows[0].id, metadata: { ...reqMeta(req), plaid_item_id: plaidItemId, org_account_id: orgAccountId } });
       const itemR = await pool.query('SELECT * FROM org_plaid_items WHERE id = $1 AND org_id = $2', [plaidItemId, orgId]);
       if (itemR.rows.length) await syncPlaidItem(pool, itemR.rows[0]).catch((e) => console.error('initial sync after mapping:', e.message));
       return res.status(201).json({ id: mapR.rows[0].id });
@@ -216,6 +220,7 @@ function registerPlaidRoutes(app, pool) {
       const itemsR = await pool.query(`SELECT * FROM org_plaid_items WHERE org_id = $1 AND status = 'active'`, [orgId]);
       let total = 0;
       for (const item of itemsR.rows) total += await syncPlaidItem(pool, item);
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'create', tableName: 'org_plaid_items', metadata: { ...reqMeta(req), sync: true, transactions_added: total } });
       return res.json({ synced: total });
     } catch (e) {
       console.error('POST plaid/sync-now:', e.response ? e.response.data : e.message);
@@ -232,6 +237,7 @@ function registerPlaidRoutes(app, pool) {
       if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
       await plaidClient.itemRemove({ access_token: r.rows[0].access_token }).catch((e) => console.error('itemRemove:', e.message));
       await pool.query(`UPDATE org_plaid_items SET status = 'revoked', access_token = '', updated_at = NOW() WHERE id = $1`, [plaidItemId]);
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_plaid_items', recordId: plaidItemId, fields: [{ fieldName: 'status', oldValue: r.rows[0].status, newValue: 'revoked' }], metadata: reqMeta(req) });
       return res.json({ id: plaidItemId, status: 'revoked' });
     } catch (e) {
       console.error('POST plaid/disconnect:', e.message);

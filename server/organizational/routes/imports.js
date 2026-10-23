@@ -5,6 +5,7 @@ const { requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
+const { logAudit, reqMeta } = require('../lib/auditLog');
 const { parseCsvRecords } = require('../lib/csvParse');
 const { invalidateOrganizationalSummaryCache } = require('../lib/OrganizationalSummaryService');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
@@ -72,6 +73,16 @@ async function logImport(pool, orgId, kind, inserted, updated, skipped, errSumma
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [orgId, kind, inserted, updated, skipped, errSummary]
   );
+}
+
+function auditImport(pool, req, action, kind, counts) {
+  return logAudit(pool, {
+    orgId: req.orgId,
+    userId: req.user.user_id ?? req.user.id,
+    action,
+    tableName: 'org_import_history',
+    metadata: { ...reqMeta(req), import_kind: kind, ...counts },
+  });
 }
 
 async function runCoaImport(client, orgId, rows) {
@@ -794,6 +805,7 @@ function registerOrganizationalImportRoutes(app, pool) {
           result.skipped,
           null
         ).catch(() => {});
+        await auditImport(pool, req, 'create', kind, { inserted: result.inserted, updated: result.updated, skipped: result.skipped });
         return res.json(jsonSummary(result.inserted, result.updated, result.skipped, []));
       } catch (e) {
         if (isFiscalYearLockedError(e)) return res.status(409).json({ error: e.message, code: 'fiscal_year_locked' });
@@ -892,6 +904,7 @@ function registerOrganizationalImportRoutes(app, pool) {
       }
 
       await logImport(pool, orgId, 'personnel', result.inserted, result.updated, result.skipped, null).catch(() => {});
+      await auditImport(pool, req, 'create', 'personnel', { inserted: result.inserted, updated: result.updated, skipped: result.skipped });
       return res.json(jsonSummary(result.inserted, result.updated, result.skipped, []));
     }
   );
@@ -966,6 +979,7 @@ function registerOrganizationalImportRoutes(app, pool) {
         );
         await client.query('COMMIT');
         await logImport(pool, orgId, 'export_delete_actuals', 0, 0, d.rowCount || 0, null).catch(() => {});
+        await auditImport(pool, req, 'delete', 'export_delete_actuals', { deleted: d.rowCount || 0, fiscal_year: fy });
         sendCSVDownload(res, `actuals_fy${fy}.csv`, csvContent);
       } catch (e) {
         if (isFiscalYearLockedError(e)) return res.status(409).json({ error: e.message, code: 'fiscal_year_locked' });
@@ -1018,6 +1032,7 @@ function registerOrganizationalImportRoutes(app, pool) {
         );
         await client.query('COMMIT');
         await logImport(pool, orgId, 'export_delete_budget_lines', 0, 0, d.rowCount || 0, null).catch(() => {});
+        await auditImport(pool, req, 'delete', 'export_delete_budget_lines', { deleted: d.rowCount || 0, fiscal_year: fy });
         sendCSVDownload(res, `budget_lines_fy${fy}.csv`, csvContent);
       } catch (e) {
         if (isFiscalYearLockedError(e)) return res.status(409).json({ error: e.message, code: 'fiscal_year_locked' });
@@ -1060,6 +1075,7 @@ function registerOrganizationalImportRoutes(app, pool) {
         const d = await client.query(`DELETE FROM org_grants WHERE org_id = $1`, [orgId]);
         await client.query('COMMIT');
         await logImport(pool, orgId, 'export_delete_grants', 0, 0, d.rowCount || 0, null).catch(() => {});
+        await auditImport(pool, req, 'delete', 'export_delete_grants', { deleted: d.rowCount || 0 });
         sendCSVDownload(res, 'grants.csv', csvContent);
       } catch (e) {
         if (isFiscalYearLockedError(e)) return res.status(409).json({ error: e.message, code: 'fiscal_year_locked' });
@@ -1109,6 +1125,7 @@ function registerOrganizationalImportRoutes(app, pool) {
         await client.query('COMMIT');
         const totalDeleted = (dProg.rowCount || 0) + (dCoa.rowCount || 0);
         await logImport(pool, orgId, 'export_delete_structure', 0, 0, totalDeleted, null).catch(() => {});
+        await auditImport(pool, req, 'delete', 'export_delete_structure', { deleted: totalDeleted, deleted_programs: dProg.rowCount || 0, deleted_accounts: dCoa.rowCount || 0 });
         res.setHeader('Content-Type', 'application/json');
         res.json({
           deleted_programs: dProg.rowCount || 0,

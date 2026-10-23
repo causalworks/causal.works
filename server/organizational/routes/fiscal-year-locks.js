@@ -94,7 +94,22 @@ function registerFiscalYearLockRoutes(app, pool) {
     const userId = req.user.user_id ?? req.user.id;
     const fy = parseFy(req, res);
     if (fy == null) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const overrideReason = String(body.override_reason ?? '').trim();
     try {
+      const checkResult = await runReconciliationChecks(pool, orgId, fy);
+      const failed = checkResult.checks.filter((c) => c.status === 'fail');
+      if (failed.length) {
+        if (overrideReason.length < MIN_REOPEN_REASON_LENGTH) {
+          return res.status(409).json({
+            error: 'Year-end checks have not passed. Fix them, or lock with a written reason (at least ' + MIN_REOPEN_REASON_LENGTH + ' characters).',
+            failed_checks: failed.map((c) => ({ id: c.id, label: c.label, detail: c.detail })),
+          });
+        }
+        if (req.coopOrgRole !== 'admin') {
+          return res.status(403).json({ error: 'Only an admin can lock a year with failing checks.', failed_checks: failed.map((c) => ({ id: c.id, label: c.label })) });
+        }
+      }
       const before = await getLockRow(pool, orgId, fy);
       await pool.query(
         `INSERT INTO org_fiscal_year_locks (org_id, fiscal_year, locked_at, locked_by_user_id, reopened_at, reopened_by_user_id, reopen_reason, updated_at)
@@ -108,7 +123,7 @@ function registerFiscalYearLockRoutes(app, pool) {
         orgId: orgId, userId, action: before ? 'update' : 'create',
         tableName: 'org_fiscal_year_locks', recordId: after.id,
         fields: diffFields(before || {}, after, ['locked_at', 'locked_by_user_id', 'reopened_at', 'reopened_by_user_id', 'reopen_reason']),
-        metadata: reqMeta(req),
+        metadata: failed.length ? { ...reqMeta(req), override_reason: overrideReason, failed_checks: failed.map((c) => c.id) } : reqMeta(req),
       });
       return res.json({ lock: rowToLockStatus(after, fy) });
     } catch (e) {

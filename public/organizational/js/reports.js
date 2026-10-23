@@ -1619,10 +1619,14 @@
     if (!window.confirm('Lock fiscal year ' + fy + '? Budget, schedule, personnel, grant, actuals, and balance sheet data for this year will become read-only until an admin reopens it.')) {
       return;
     }
-    const out = await apiJson(
-      '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/fiscal-years/' + encodeURIComponent(String(fy)) + '/lock',
-      { method: 'POST', body: JSON.stringify({}) }
-    );
+    const lockUrl = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/fiscal-years/' + encodeURIComponent(String(fy)) + '/lock';
+    let out = await apiJson(lockUrl, { method: 'POST', body: JSON.stringify({}) });
+    if (out && out.res.status === 409 && out.data && out.data.failed_checks) {
+      const list = out.data.failed_checks.map((c) => '- ' + c.label).join('\n');
+      const reason = window.prompt('These year-end checks have not passed:\n' + list + '\n\nTo lock anyway, enter a reason (at least 10 characters). It is recorded in the activity log.');
+      if (reason == null) return;
+      out = await apiJson(lockUrl, { method: 'POST', body: JSON.stringify({ override_reason: reason }) });
+    }
     if (!out || !out.res.ok) {
       window.alert((out && out.data && out.data.error) || 'Could not lock fiscal year.');
       return;

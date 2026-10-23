@@ -29,6 +29,10 @@ const READ_AREAS = {
   membership:    { who: 'finance, admins, fundraising, the Membership manager and people with access to donor details', roles: [...ADMIN_FINANCE, 'fundraising'], manager: 'manage_membership', permissions: ['donor_details', 'manage_donors'] },
   membership_summary: { who: 'finance, admins, fundraising, board members, the Membership manager and people with access to donor details', roles: [...ADMIN_FINANCE, 'fundraising', 'board'], manager: 'manage_membership', permissions: ['donor_details', 'manage_donors'] },
   sponsorship:   { who: 'finance, admins, board members, the Sponsorship manager and the project\'s program lead', roles: [...ADMIN_FINANCE, 'board', 'program'], manager: 'manage_sponsorship' },
+  financial_reports: { who: 'finance, admins, board members and people with Reports access', roles: [...ADMIN_FINANCE, 'board'], permissions: ['reports', 'accounting_read'] },
+  budget_plan:   { who: 'finance, admins, board members, program leads (their own programs), the Budget manager and people with Reports access', roles: [...ADMIN_FINANCE, 'board', 'program'], manager: 'manage_budget', permissions: ['reports', 'accounting_read'] },
+  grants_read:   { who: 'finance, admins, fundraising, board members, program leads (their own programs), the Funding manager and people with Reports access', roles: [...ADMIN_FINANCE, 'fundraising', 'board', 'program'], manager: 'manage_funding', permissions: ['reports', 'accounting_read'] },
+  activity_feed: { who: 'finance, admins, fundraising, board members, program leads, the Budget or Funding manager and people with Reports access', roles: [...ADMIN_FINANCE, 'fundraising', 'board', 'program'], manager: 'manage_budget', permissions: ['reports', 'accounting_read', 'manage_funding'] },
 };
 
 function canRead(req, area) {

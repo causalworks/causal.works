@@ -52,7 +52,7 @@ function registerSponsoredProjectsRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool), requireFiscalSponsorship(pool)];
 
-  app.get('/api/organizational/orgs/:slug/sponsored-projects', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/sponsored-projects', ...orgAuth, requireReadAccess('sponsorship'), boardSeesAllPrograms, async (req, res) => {
     try {
       const [r, orgDefaults] = await Promise.all([
         pool.query(

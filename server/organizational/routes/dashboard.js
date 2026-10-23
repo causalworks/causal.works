@@ -3,6 +3,7 @@
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
+const { requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { fetchAttentionFeed } = require('../lib/OrganizationalAttentionFeed');
 const { fetchActivityFeed } = require('../lib/OrganizationalActivityFeed');
@@ -63,7 +64,7 @@ function registerOrganizationalDashboardRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/dashboard/activity', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/dashboard/activity', ...orgAuth, requireReadAccess('activity_feed'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const since = req.query.since ? String(req.query.since) : null;
     try {

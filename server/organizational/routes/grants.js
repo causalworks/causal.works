@@ -5,7 +5,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 const { recalcGrantBudget } = require('../lib/grantRecalc');
@@ -154,7 +154,7 @@ function registerOrganizationalGrantRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
 
-  app.get('/api/organizational/orgs/:slug/grants', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/grants', ...orgAuth, requireReadAccess('grants_read'), boardSeesAllPrograms, async (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const userId = req.user.user_id ?? req.user.id;
     try {
@@ -1123,7 +1123,7 @@ function registerOrganizationalGrantRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/grants/:grantId/allocations', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/grants/:grantId/allocations', ...orgAuth, requireReadAccess('grants_read'), boardSeesAllPrograms, async (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const grantId = Number.parseInt(String(req.params.grantId || ''), 10);
     const userId = req.user.user_id ?? req.user.id;
@@ -1164,7 +1164,7 @@ function registerOrganizationalGrantRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/grants/:grantId/activity', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/grants/:grantId/activity', ...orgAuth, requireReadAccess('grants_read'), boardSeesAllPrograms, async (req, res) => {
     const grantId = Number.parseInt(String(req.params.grantId || ''), 10);
     if (!Number.isInteger(grantId) || grantId < 1) return res.status(400).json({ error: 'Invalid grant id' });
     try {
@@ -1259,7 +1259,7 @@ function registerOrganizationalGrantRoutes(app, pool) {
   // ---- Allocation change requests: a program or project lead asks, a Funding manager decides ----
   const reqBase = '/api/organizational/orgs/:slug/grants/:grantId/allocation-requests';
 
-  app.get(reqBase, ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get(reqBase, ...orgAuth, requireReadAccess('grants_read'), boardSeesAllPrograms, async (req, res) => {
     const grantId = Number.parseInt(String(req.params.grantId || ''), 10);
     if (!Number.isInteger(grantId) || grantId < 1) return res.status(400).json({ error: 'Invalid grant id' });
     try {

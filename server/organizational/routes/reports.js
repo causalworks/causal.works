@@ -5,7 +5,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { FINANCE_ROLES, FUNDRAISING_ROLES } = require('../lib/orgRoles');
-const { leadMayTouch } = require('../middleware/requireWriteAccess');
+const { leadMayTouch, requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireAccountingAccess, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { getOrganizationalExecutiveSummaryText } = require('../lib/OrganizationalSummaryService');
 const { fetchBoardReportData, fetchGrantReportData, fallbackGrantNarrative } = require('../lib/OrganizationalReportData');
@@ -262,7 +262,7 @@ function registerOrganizationalReportRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/reports/board', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/board', ...orgAuth, requireReadAccess('financial_reports'), boardSeesAllPrograms, async (req, res) => {
     const slug = String(req.params.slug || '').trim();
     const orgId = req.orgId;
     const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);

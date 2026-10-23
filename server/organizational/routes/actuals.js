@@ -4,7 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
 const { buildBudgetByProgram } = require('../lib/OrganizationalBudgetByProgram');
 const { invalidateOrganizationalSummaryCache } = require('../lib/OrganizationalSummaryService');
 
@@ -280,7 +280,7 @@ function registerOrganizationalActualsRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/reports/budget-vs-actual', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/budget-vs-actual', ...orgAuth, requireReadAccess('budget_plan'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
     const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);
@@ -537,7 +537,7 @@ function registerOrganizationalActualsRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/reports/budget-by-program', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/budget-by-program', ...orgAuth, requireReadAccess('budget_plan'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
     const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);

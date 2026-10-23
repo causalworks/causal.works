@@ -4,7 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 const { invalidateOrganizationalSummaryCache } = require('../lib/OrganizationalSummaryService');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
@@ -56,7 +56,7 @@ function registerOrganizationalBudgetLineRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
 
-  app.get('/api/organizational/orgs/:slug/budget-lines', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/budget-lines', ...orgAuth, requireReadAccess('budget_plan'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);
     if (!Number.isInteger(fy) || fy < 1900 || fy > 2200) {

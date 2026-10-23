@@ -4,7 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
+const { requireWriteAccess, requireReadAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
 const { recalcScheduleItems, removeScheduleItemLines } = require('../lib/scheduleRecalc');
 const { syncInsuranceCarryforward, removeAllCarryforwardChildren } = require('../lib/scheduleCarryforward');
 const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
@@ -82,7 +82,7 @@ function registerOrganizationalScheduleItemRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
 
-  app.get('/api/organizational/orgs/:slug/schedule-items', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/schedule-items', ...orgAuth, requireReadAccess('budget_plan'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const userId = req.user.user_id ?? req.user.id;
     const fy = Number.parseInt(String(req.query.fiscal_year || ''), 10);

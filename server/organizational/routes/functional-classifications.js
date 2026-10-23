@@ -111,7 +111,7 @@ function registerFunctionalClassificationRoutes(app, pool) {
     }
   });
 
-  app.get('/api/organizational/orgs/:slug/reports/990-part-ix', ...orgAuth, boardSeesAllPrograms, async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/990-part-ix', ...orgAuth, requireReadAccess('financial_reports'), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy     = Number.parseInt(String(req.query.fiscal_year || ''), 10);
     if (!Number.isInteger(fy)) return res.status(400).json({ error: 'fiscal_year required' });

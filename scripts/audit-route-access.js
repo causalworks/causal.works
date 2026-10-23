@@ -62,7 +62,7 @@ for (const [dir, file] of routeFiles) {
   for (let i = before; i < routes.length; i++) routes[i].file = file;
 }
 
-const ROLE_GUARDS = ['requireOrgRole', 'requireWriteAccess', 'requireReadAccess', 'requireAccountingAccess', 'requireAccountingWriter', 'requireDonorRead', 'requireContactRead', 'requireContactWrite', 'requirePlatformAdmin', 'boardSeesAllPrograms'];
+const ROLE_GUARDS = ['requireOrgRole', 'requireWriteAccess', 'requireReadAccess', 'requireAccountingAccess', 'requireAccountingWriter', 'requireDonorRead', 'requireContactRead', 'requireContactWrite', 'requirePlatformAdmin'];
 function guardsOf(handlers) {
   const mw = handlers.slice(0, -1).flat(Infinity);
   return mw.map((h) => (typeof h === 'function' ? (h.__guard || ('local:' + (h.name || 'anonymous'))) : String(h)));

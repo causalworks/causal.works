@@ -42,6 +42,7 @@ const { requirePlatformAdminPage } = require('./organizational/middleware/requir
 const { requestContextMiddleware } = require('./organizational/lib/orgContext');
 const { createInvitedSampleOrg } = require('./organizational/lib/createInvitedSampleOrg');
 const { wrapPoolWithOrgScoping } = require('./organizational/lib/scopedPool');
+const { adminValidateSecret, assertSecretsSet } = require('./secrets');
 const { assertAppRoleIsRestricted, assertOwnerRightsFunctionsBypass } = require('./organizational/lib/startupChecks');
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -133,7 +134,7 @@ function isAdminEmail(email) {
 }
 
 function makeSuggestPicklistToken(orgName, ein, expiresAt) {
-  const secret = process.env.ADMIN_VALIDATE_SECRET || process.env.SESSION_SECRET || 'change-me';
+  const secret = adminValidateSecret();
   const payload = `${String(orgName || '').trim()}|${String(ein || '').trim()}|${String(expiresAt || '').trim()}`;
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
@@ -243,6 +244,7 @@ mountIndividualRoutes(app, pool);
 
 const orgScopedPool = wrapPoolWithOrgScoping(pool);
 
+try { assertSecretsSet(); } catch (err) { console.error(err.message); process.exit(1); }
 Promise.all([assertAppRoleIsRestricted(pool), assertOwnerRightsFunctionsBypass(pool)]).catch((err) => {
   console.error(err.message);
   process.exit(1);
@@ -1592,7 +1594,7 @@ app.post('/inbound', async (req, res) => {
 
             if (orgRow && process.env.POSTMARK_API_KEY) {
               const baseUrl = process.env.BASE_URL || 'https://causal.works';
-              const secret = process.env.ADMIN_VALIDATE_SECRET || process.env.SESSION_SECRET || 'change-me';
+              const secret = adminValidateSecret();
               const token = crypto.createHmac('sha256', secret).update(String(orgRow.id)).digest('hex');
               const link = `${baseUrl}/admin/validate-org?org_id=${orgRow.id}&token=${encodeURIComponent(token)}`;
               const inboundSummary =
@@ -2040,7 +2042,7 @@ app.post('/inbound', async (req, res) => {
 });
 
 function validateOrgToken(orgId, token) {
-  const secret = process.env.ADMIN_VALIDATE_SECRET || process.env.SESSION_SECRET || 'change-me';
+  const secret = adminValidateSecret();
   const expected = crypto.createHmac('sha256', secret).update(String(orgId)).digest('hex');
   return token === expected;
 }
@@ -2851,7 +2853,7 @@ app.get('/admin', requireAdmin, async (req, res) => {
 
     const rowsPending = pendingOrgs.rows.map((o) =>
       `<tr><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.website_url || '—')}</td><td>
-        <a href="/admin/validate-org?org_id=${Number(o.id)}&token=${encodeURIComponent(crypto.createHmac('sha256', process.env.ADMIN_VALIDATE_SECRET || process.env.SESSION_SECRET || 'change-me').update(String(o.id)).digest('hex'))}">Activate</a>
+        <a href="/admin/validate-org?org_id=${Number(o.id)}&token=${encodeURIComponent(crypto.createHmac('sha256', adminValidateSecret()).update(String(o.id)).digest('hex'))}">Activate</a>
       </td></tr>`
     ).join('');
 

@@ -1,11 +1,12 @@
 'use strict';
 
 const crypto = require('crypto');
+const { xeroStateSecret } = require('../../secrets');
 
 const TTL_MS = 15 * 60 * 1000;
 
 function stateSecret() {
-  return String(process.env.XERO_STATE_SECRET || process.env.SESSION_SECRET || 'change-me');
+  return xeroStateSecret();
 }
 
 function signOAuthState(payload) {

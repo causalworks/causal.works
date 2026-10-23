@@ -1,5 +1,7 @@
 'use strict';
 
+const { adminValidateSecret } = require('../../secrets');
+
 const crypto = require('crypto');
 const { requireAuth } = require('../../auth');
 const { normalizeOrgKey, normalizeUserPrimaryRegion, ALLOWED_USER_PRIMARY_REGION } = require('../utils');
@@ -429,7 +431,7 @@ function registerOrgRoutes(app, pool) {
 
       if (!propublicaMatch && process.env.POSTMARK_API_KEY) {
         const baseUrl = process.env.BASE_URL || 'https://causal.works';
-        const secret = process.env.ADMIN_VALIDATE_SECRET || process.env.SESSION_SECRET || 'change-me';
+        const secret = adminValidateSecret();
         const token = crypto.createHmac('sha256', secret).update(String(org.id)).digest('hex');
         const link = `${baseUrl}/admin/validate-org?org_id=${org.id}&token=${encodeURIComponent(token)}`;
         try {

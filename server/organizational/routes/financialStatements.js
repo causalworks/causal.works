@@ -4,6 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
+const { netAssetsByClass, netAssetBuckets: netAssetBucketsOf, releasedFromRestrictions: releasedFromRestrictionsFor } = require('../lib/restrictedNetAssets');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
 function registerFinancialStatementRoutes(app, pool) {
@@ -66,35 +67,7 @@ function registerFinancialStatementRoutes(app, pool) {
         [orgId, fy]
       );
 
-      const netAssetsRes = await pool.query(
-        `SELECT
-           CASE WHEN l.donor_restriction_class IN ('temporarily_restricted', 'permanently_restricted')
-                THEN 'with_restrictions'
-                ELSE 'without_restrictions'
-           END AS restriction_bucket,
-           SUM(l.credit_cents - l.debit_cents) AS net_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND a.type IN ('income', 'expense', 'equity') AND a.is_posting = true
-         GROUP BY restriction_bucket`,
-        [orgId, fy]
-      );
-
-      const restrictionDetailRes = await pool.query(
-        `SELECT
-           l.donor_restriction_class,
-           SUM(l.credit_cents - l.debit_cents) AS net_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND a.type IN ('income', 'expense', 'equity') AND a.is_posting = true
-           AND l.donor_restriction_class IN ('temporarily_restricted', 'permanently_restricted')
-         GROUP BY l.donor_restriction_class`,
-        [orgId, fy]
-      );
+      const netAssetsByClassRows = await netAssetsByClass(pool, orgId, { throughFiscalYear: fy });
 
       const boardDesignatedRes = await pool.query(
         `SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0) AS balance_cents
@@ -111,16 +84,13 @@ function registerFinancialStatementRoutes(app, pool) {
       const totalAssets = assets.reduce((s, r) => s + Number(r.balance_cents), 0);
       const totalLiabilities = liabilities.reduce((s, r) => s + Number(r.balance_cents), 0);
 
-      const netAssetBuckets = { without_restrictions: 0, with_restrictions: 0 };
-      for (const r of netAssetsRes.rows) {
-        netAssetBuckets[r.restriction_bucket] = Number(r.net_cents);
-      }
+      const netAssetBuckets = netAssetBucketsOf(netAssetsByClassRows);
       const totalNetAssets = netAssetBuckets.without_restrictions + netAssetBuckets.with_restrictions;
 
-      const restrictionDetail = {};
-      for (const r of restrictionDetailRes.rows) {
-        restrictionDetail[r.donor_restriction_class] = Number(r.net_cents);
-      }
+      const restrictionDetail = {
+        temporarily_restricted: netAssetsByClassRows.temporarily_restricted,
+        permanently_restricted: netAssetsByClassRows.permanently_restricted,
+      };
 
       const fmt = String(req.query.format || 'json').toLowerCase();
       if (fmt === 'csv') {
@@ -203,8 +173,6 @@ function registerFinancialStatementRoutes(app, pool) {
       const expensesRes = await pool.query(
         `SELECT a.id AS account_id, a.code, a.name,
            SUM(l.debit_cents - l.credit_cents) AS amount_cents,
-           SUM(CASE WHEN l.donor_restriction_class IN ('temporarily_restricted', 'permanently_restricted')
-                    THEN l.debit_cents - l.credit_cents ELSE 0 END) AS restricted_amount_cents,
            COALESCE(MAX(fc.program_services_bps), 0) AS program_services_bps,
            COALESCE(MAX(fc.mgmt_general_bps), 0) AS mgmt_general_bps,
            COALESCE(MAX(fc.fundraising_bps), 0) AS fundraising_bps,
@@ -222,21 +190,7 @@ function registerFinancialStatementRoutes(app, pool) {
         [orgId, fy]
       );
 
-      const beginNetRes = await pool.query(
-        `SELECT
-           CASE WHEN l.donor_restriction_class IN ('temporarily_restricted', 'permanently_restricted')
-                THEN 'with_restrictions'
-                ELSE 'without_restrictions'
-           END AS restriction_bucket,
-           SUM(l.credit_cents - l.debit_cents) AS net_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year < $2
-           AND a.type IN ('income', 'expense', 'equity') AND a.is_posting = true
-         GROUP BY restriction_bucket`,
-        [orgId, fy]
-      );
+      const beginByClass = await netAssetsByClass(pool, orgId, { beforeFiscalYear: fy });
 
       const revenue = revenueRes.rows;
       const expenses = expensesRes.rows;
@@ -248,16 +202,13 @@ function registerFinancialStatementRoutes(app, pool) {
         .filter(r => r.restriction_bucket === 'with_restrictions')
         .reduce((s, r) => s + Number(r.amount_cents), 0);
       const totalExpenses = expenses.reduce((s, r) => s + Number(r.amount_cents), 0);
-      const releasedFromRestrictions = expenses.reduce((s, r) => s + Number(r.restricted_amount_cents), 0);
+      const releasedFromRestrictions = await releasedFromRestrictionsFor(pool, orgId, fy);
 
       const changeWithout = totalRevenueWithout + releasedFromRestrictions - totalExpenses;
       const changeWith = totalRevenueWith - releasedFromRestrictions;
       const totalChange = changeWithout + changeWith;
 
-      const beginBuckets = { without_restrictions: 0, with_restrictions: 0 };
-      for (const r of beginNetRes.rows) {
-        beginBuckets[r.restriction_bucket] = Number(r.net_cents);
-      }
+      const beginBuckets = netAssetBucketsOf(beginByClass);
       const beginTotal = beginBuckets.without_restrictions + beginBuckets.with_restrictions;
 
       const endWithout = beginBuckets.without_restrictions + changeWithout;

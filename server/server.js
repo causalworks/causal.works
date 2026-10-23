@@ -42,7 +42,7 @@ const { requirePlatformAdminPage } = require('./organizational/middleware/requir
 const { requestContextMiddleware } = require('./organizational/lib/orgContext');
 const { createInvitedSampleOrg } = require('./organizational/lib/createInvitedSampleOrg');
 const { wrapPoolWithOrgScoping } = require('./organizational/lib/scopedPool');
-const { assertAppRoleIsRestricted } = require('./organizational/lib/startupChecks');
+const { assertAppRoleIsRestricted, assertOwnerRightsFunctionsBypass } = require('./organizational/lib/startupChecks');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const { Pool } = require('pg');
@@ -243,7 +243,7 @@ mountIndividualRoutes(app, pool);
 
 const orgScopedPool = wrapPoolWithOrgScoping(pool);
 
-assertAppRoleIsRestricted(pool).catch((err) => {
+Promise.all([assertAppRoleIsRestricted(pool), assertOwnerRightsFunctionsBypass(pool)]).catch((err) => {
   console.error(err.message);
   process.exit(1);
 });

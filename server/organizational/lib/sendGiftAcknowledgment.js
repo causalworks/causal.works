@@ -12,20 +12,20 @@ function formatDate(dt) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 function buildAcknowledgmentHtml({ gift, constituent, org, info, sponsored }) {
-  const donorName = constituent.display_name ||
+  const donorName = esc(constituent.display_name ||
     [constituent.first_name, constituent.last_name].filter(Boolean).join(' ') ||
-    constituent.email;
+    constituent.email);
   const amount = formatDollars(Number(gift.amount_cents));
   const date = formatDate(gift.received_at);
-  const orgName = org.display_name;
+  const orgName = esc(org.display_name);
   const message = (info && info.acknowledgmentMessage) || 'Your support makes our work possible.';
   const signoff = (info && info.acknowledgmentSignoff) || 'With gratitude,';
   const detail = info ? detailLines(info) : (org.ein ? ['EIN ' + org.ein] : []);
   const ein = detail.length ? `<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">${detail.map(esc).join('<br>')}</p>` : '';
-  const sponsorLines = sponsored ? sponsoredReceiptLines({ sponsorName: orgName, ...sponsored }) : [];
+  const sponsorLines = sponsored ? sponsoredReceiptLines({ sponsorName: org.display_name, ...sponsored }) : [];
   const giftText = sponsored && sponsored.inKind ? 'your generous donation' : `your generous gift of <strong>${amount}</strong>`;
 
   return `

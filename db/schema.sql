@@ -3181,7 +3181,7 @@ CREATE TABLE public.coop_members (
     is_platform_demo boolean DEFAULT false NOT NULL,
     is_demo_fixture boolean DEFAULT false NOT NULL,
     created_via text,
-    CONSTRAINT coop_members_cooperative_turnarounds_check CHECK (((array_length(cooperative_turnarounds, 1) IS NULL) OR (cooperative_turnarounds <@ ARRAY['energy'::text, 'food'::text, 'inequality'::text, 'poverty'::text, 'womens_empowerment'::text]))),
+    CONSTRAINT coop_members_cooperative_turnarounds_check CHECK (((array_length(cooperative_turnarounds, 1) IS NULL) OR (cooperative_turnarounds <@ ARRAY['energy'::text, 'food'::text, 'inequality'::text, 'poverty'::text, 'empowerment'::text]))),
     CONSTRAINT coop_members_created_via_check CHECK (((created_via IS NULL) OR (created_via = 'invited_sample'::text))),
     CONSTRAINT coop_members_membership_status_check CHECK ((membership_status = ANY (ARRAY['trial'::text, 'active'::text, 'inactive'::text]))),
     CONSTRAINT coop_members_size_band_check CHECK ((size_band = ANY (ARRAY['under $250K'::text, '$250K-$500K'::text, '$500K-$1M'::text, 'over $1M'::text])))

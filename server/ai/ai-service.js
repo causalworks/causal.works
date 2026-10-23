@@ -97,7 +97,7 @@ const VALID_ACTION_TYPES = new Set([
 ]);
 
 function normalizeTurnaround(raw) {
-  if (!raw) return "Energy";
+  if (!raw) return null;
   const titleCase = raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1).toLowerCase();
   if (VALID_TURNAROUNDS.has(titleCase)) return titleCase;
   const lower = raw.trim().toLowerCase();
@@ -108,8 +108,8 @@ function normalizeTurnaround(raw) {
   for (const [alias, canonical] of Object.entries(TURNAROUND_ALIASES)) {
     if (lower.includes(alias)) return canonical;
   }
-  console.warn(`⚠️  Unknown turnaround_category "${raw}" — defaulting to Energy`);
-  return "Energy";
+  console.warn(`⚠️  Unknown turnaround_category "${raw}" — left unset`);
+  return null;
 }
 
 function normalizeActionType(raw) {
@@ -246,7 +246,7 @@ ${contentToAnalyze}`;
 
     parsed.turnaround_category = normalizeTurnaround(parsed.turnaround_category);
     parsed.secondary_turnarounds = Array.isArray(parsed.secondary_turnarounds)
-      ? parsed.secondary_turnarounds.map(normalizeTurnaround).filter(t => t !== parsed.turnaround_category)
+      ? parsed.secondary_turnarounds.map(normalizeTurnaround).filter(t => t && t !== parsed.turnaround_category)
       : [];
     parsed.e4a_parameters = normalizeParameters(parsed.e4a_parameters || []);
     parsed.action_type = normalizeActionType(parsed.action_type);
@@ -278,7 +278,7 @@ ${contentToAnalyze}`;
     return {
       org_name: suggestedOrgFromSender || "Unknown Organization",
       action_ask: "Manual review required",
-      turnaround_category: "Energy",
+      turnaround_category: null,
       secondary_turnarounds: [],
       e4a_parameters: [],
       action_type: "petition",

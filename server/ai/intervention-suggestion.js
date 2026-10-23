@@ -15,7 +15,7 @@ const TURNAROUNDS_TEXT = `
 - food — Reducing the crop burden needed to feed everyone: less food waste, less red meat, regenerative agriculture.
 - inequality — Redistributing wealth from owners to the working majority: progressive taxation, stronger unions, closing wage gaps.
 - poverty — Accelerating development in low-income countries/regions: debt relief, trade reform, infrastructure investment.
-- womens_empowerment — Improving quality of life for women: education, healthcare, reproductive access, women in leadership.
+- empowerment — Improving quality of life for women: education, healthcare, reproductive access, women in leadership.
 `;
 
 async function suggestInterventionFields({ title, description, targetContext }) {
@@ -45,7 +45,7 @@ Return a JSON object with exactly these fields:
 {
   "suggested_level": <integer 1-12>,
   "rationale": "2-3 sentences: what this intervention changes and why that places it at this level now, plus a trajectory note per TASK 1 if applicable.",
-  "suggested_turnaround_ids": ["array of 0-5 values from: energy, food, inequality, poverty, womens_empowerment"],
+  "suggested_turnaround_ids": ["array of 0-5 values from: energy, food, inequality, poverty, empowerment"],
   "effect_estimate": "1-2 sentence draft per TASK 3"
 }`;
 
@@ -58,7 +58,7 @@ Return a JSON object with exactly these fields:
     throw new Error(`AI returned invalid suggested_level: ${parsed.suggested_level}`);
   }
 
-  const VALID_TURNAROUNDS = new Set(['energy', 'food', 'inequality', 'poverty', 'womens_empowerment']);
+  const VALID_TURNAROUNDS = new Set(['energy', 'food', 'inequality', 'poverty', 'empowerment']);
   const turnaroundIds = Array.isArray(parsed.suggested_turnaround_ids)
     ? parsed.suggested_turnaround_ids.filter(t => VALID_TURNAROUNDS.has(t))
     : [];

@@ -13,7 +13,7 @@ const TURNAROUND_LABELS = {
   food: 'Food systems',
   inequality: 'Inequality',
   poverty: 'Poverty',
-  womens_empowerment: 'Women\'s empowerment'
+  empowerment: 'Women\'s empowerment'
 };
 
 const TURNAROUND_COLORS = {
@@ -21,7 +21,7 @@ const TURNAROUND_COLORS = {
   food: '#f59e0b',
   inequality: '#8b5cf6',
   poverty: '#ef4444',
-  womens_empowerment: '#ec4899'
+  empowerment: '#ec4899'
 };
 
 async function getViewerCoopOrgId(pool, userId, slug) {

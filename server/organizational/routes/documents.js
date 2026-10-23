@@ -736,4 +736,4 @@ function registerOrganizationalDocumentRoutes(app, pool) {
   });
 }
 
-module.exports = { registerOrganizationalDocumentRoutes };
+module.exports = { registerOrganizationalDocumentRoutes, projectDocCondition, ownerRecordClause };

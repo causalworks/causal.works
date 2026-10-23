@@ -4,6 +4,9 @@ const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('./fis
 const { loadProjectBalances } = require('./sponsorBalance');
 const { needsAgreement } = require('./sponsorOverview');
 const { listDuesMembers, renewalsFrom } = require('./membership');
+const { canRead } = require('../middleware/requireWriteAccess');
+const { programScopeFor } = require('./programScope');
+const { FINANCE_ROLES } = require('./orgRoles');
 
 function dayDiff(isoDate) {
   if (!isoDate) return null;
@@ -12,7 +15,17 @@ function dayDiff(isoDate) {
   return Math.ceil((t - Date.now()) / 86400000);
 }
 
-async function fetchAttentionFeed(pool, orgId, slug) {
+async function fetchAttentionFeed(pool, orgId, slug, req) {
+  const { projectDocCondition, ownerRecordClause } = require('../routes/documents');
+  const role = req.coopOrgRole;
+  const isAdminRole = role === 'admin';
+  const isFinanceRole = isAdminRole || FINANCE_ROLES.includes(role);
+  const mayReadSponsorship = canRead(req, 'sponsorship');
+  const sponsorScope = role === 'program' ? programScopeFor(req) : null;
+  const sponsorVisible = (sp) => mayReadSponsorship && (sponsorScope === null || sponsorScope.includes(Number(sp.program_id)));
+  const mayReadMembership = canRead(req, 'membership');
+  const mayReadAllClaims = ['admin', 'finance', 'staff', 'board'].includes(String(role));
+  const userId = req.user.user_id ?? req.user.id;
   const items = [];
   const base = '/organizational/o/' + encodeURIComponent(slug);
 
@@ -64,18 +77,19 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     `SELECT fiscal_sponsorship_mode FROM org_settings WHERE org_id = $1 LIMIT 1`,
     [orgId]
   );
-  if (fsR.rows[0] && fsR.rows[0].fiscal_sponsorship_mode) {
+  if (mayReadSponsorship && fsR.rows[0] && fsR.rows[0].fiscal_sponsorship_mode) {
     const spR = await pool.query(
-      `SELECT id, name, next_report_due::text AS next_report_due
+      `SELECT id, name, program_id, next_report_due::text AS next_report_due
        FROM org_sponsored_projects
        WHERE sponsor_org_id = $1 AND status = 'active' AND next_report_due IS NOT NULL`,
       [orgId]
     );
     const flagR = await pool.query(
-      `SELECT id, name, status, hold_reason, agreement_signed_at FROM org_sponsored_projects
+      `SELECT id, name, program_id, status, hold_reason, agreement_signed_at FROM org_sponsored_projects
         WHERE sponsor_org_id = $1 AND status NOT IN ('applicant', 'ended')`, [orgId]);
-    const balances = await loadProjectBalances(pool, orgId, flagR.rows.map((p) => p.id));
-    for (const sp of flagR.rows) {
+    const visibleFlagRows = flagR.rows.filter(sponsorVisible);
+    const balances = await loadProjectBalances(pool, orgId, visibleFlagRows.map((p) => p.id));
+    for (const sp of visibleFlagRows) {
       const b = balances.get(Number(sp.id));
       const negative = b && b.balance.negative;
       if (needsAgreement(sp)) {
@@ -92,7 +106,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
         href: `${base}/sponsored-projects?project=${sp.id}`,
       });
     }
-    for (const sp of spR.rows) {
+    for (const sp of spR.rows.filter(sponsorVisible)) {
       const dueIn = dayDiff(sp.next_report_due);
       if (dueIn != null && dueIn >= 0 && dueIn <= 60) {
         items.push({
@@ -110,7 +124,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     `SELECT membership_enabled FROM org_settings WHERE org_id = $1 LIMIT 1`,
     [orgId]
   );
-  if (settingsR.rows[0] && settingsR.rows[0].membership_enabled) {
+  if (mayReadMembership && settingsR.rows[0] && settingsR.rows[0].membership_enabled) {
     const rows = await listDuesMembers(pool, orgId, { active: 'true' });
     for (const m of renewalsFrom(rows, { days: 60 })) {
       if (m.days_to_expiry < 0) continue;
@@ -124,11 +138,14 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     }
   }
 
+  const docParams = [orgId];
+  const projectCond = projectDocCondition(req, docParams, 'sponsored_project_id');
   const documentsR = await pool.query(
     `SELECT id, title, expiration_date::text AS expiration_date
      FROM org_documents
-     WHERE org_id = $1 AND is_current = true AND archived_at IS NULL AND expiration_date IS NOT NULL`,
-    [orgId]
+     WHERE org_id = $1 AND is_current = true AND archived_at IS NULL AND expiration_date IS NOT NULL`
+    + (isAdminRole ? '' : ` AND visibility <> 'admins_only'`) + ownerRecordClause(req) + (projectCond ? ` AND ${projectCond}` : ''),
+    docParams
   );
   for (const d of documentsR.rows) {
     const expireIn = dayDiff(d.expiration_date);
@@ -148,8 +165,8 @@ async function fetchAttentionFeed(pool, orgId, slug) {
             COALESCE((SELECT SUM(l.amount_cents) FROM org_expense_claim_lines l WHERE l.claim_id = c.id), 0) AS amount_cents
      FROM org_expense_claims c
      LEFT JOIN users u ON u.id = c.submitted_by
-     WHERE c.org_id = $1 AND c.status = 'paid_pending_confirmation'`,
-    [orgId]
+     WHERE c.org_id = $1 AND c.status = 'paid_pending_confirmation'` + (mayReadAllClaims ? '' : ' AND c.submitted_by = $2'),
+    mayReadAllClaims ? [orgId] : [orgId, userId]
   );
   for (const c of claimsR.rows) {
     const daysSincePaid = Math.max(0, -1 * (dayDiff(c.updated_at) || 0));
@@ -166,8 +183,8 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     `SELECT c.id, c.receipt_follow_up_due::text AS receipt_follow_up_due, u.email AS submitted_by_email
      FROM org_expense_claims c
      LEFT JOIN users u ON u.id = c.submitted_by
-     WHERE c.org_id = $1 AND c.receipt_affidavit_at IS NOT NULL AND c.receipt_resolved_at IS NULL`,
-    [orgId]
+     WHERE c.org_id = $1 AND c.receipt_affidavit_at IS NOT NULL AND c.receipt_resolved_at IS NULL` + (mayReadAllClaims ? '' : ' AND c.submitted_by = $2'),
+    mayReadAllClaims ? [orgId] : [orgId, userId]
   );
   for (const c of affidavitR.rows) {
     const dueIn = dayDiff(c.receipt_follow_up_due);
@@ -182,7 +199,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
   }
 
   const hasTasksR = await pool.query(`SELECT to_regclass('public.org_tasks') AS reg`);
-  if (hasTasksR.rows[0] && hasTasksR.rows[0].reg) {
+  if (isFinanceRole && hasTasksR.rows[0] && hasTasksR.rows[0].reg) {
     const taskR = await pool.query(
       `SELECT id, title, due_date::text AS due_date, status, priority
        FROM org_tasks
@@ -213,7 +230,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
     [orgId]
   );
   const x = xeroR.rows[0] || {};
-  if (!isPlatformDemo && (!x.xero_tenant_id || !x.xero_token_data)) {
+  if (isAdminRole && !isPlatformDemo && (!x.xero_tenant_id || !x.xero_token_data)) {
     setup.push({
       type: 'setup',
       title: 'Xero not connected',
@@ -232,7 +249,7 @@ async function fetchAttentionFeed(pool, orgId, slug) {
   const lastCompletedFy = fiscalYearForDate(new Date(), fyEndMonth) - 1;
   const { endDate: lastCompletedFyEnd } = fyDateRange(lastCompletedFy, fyEndMonth);
   const daysSinceFyEnd = dayDiff(lastCompletedFyEnd) != null ? -dayDiff(lastCompletedFyEnd) : null;
-  if (daysSinceFyEnd != null && daysSinceFyEnd >= 60) {
+  if (isFinanceRole && daysSinceFyEnd != null && daysSinceFyEnd >= 60) {
     const lockR = await pool.query(
       `SELECT locked_at FROM org_fiscal_year_locks WHERE org_id = $1 AND fiscal_year = $2`,
       [orgId, lastCompletedFy]

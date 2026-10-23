@@ -42,7 +42,7 @@
  "GET /api/organizational/orgs/:slug/compliance/templates": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/:slug/constituents/names": "Names-only picker list; the role check is in the handler.",
  "GET /api/organizational/orgs/:slug/dashboard/activity": "No role guard. Any workspace user can call it; rows are limited by program scope (board, finance, admins and reports access see all programs; program leads see their own; other roles see none). Not yet tested per role (audit track A4).",
- "GET /api/organizational/orgs/:slug/dashboard/attention": "Dashboard feeds scoped to the caller's role and organization inside the handler.",
+ "GET /api/organizational/orgs/:slug/dashboard/attention": "Every workspace user may call it. Each kind of item is limited to people who may read that record: sponsored projects, dues members, other people's expense claims, admin-only documents, tasks and year-end items.",
  "GET /api/organizational/orgs/:slug/dashboard/cooperative-summary": "Dashboard feeds scoped to the caller's role and organization inside the handler.",
  "GET /api/organizational/orgs/:slug/documents": "Document visibility (org_all or admins_only) and admin checks are applied inside the handler; upload routes use a file-upload wrapper.",
  "GET /api/organizational/orgs/:slug/documents/:id/download": "Document visibility (org_all or admins_only) and admin checks are applied inside the handler; upload routes use a file-upload wrapper.",

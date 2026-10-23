@@ -75,7 +75,7 @@ test('seed: apply creates the sample set, a second run changes nothing, and remo
       assert.equal(ov.totals.attention_count, 2);
 
       const { fetchAttentionFeed } = require('../../server/organizational/lib/OrganizationalAttentionFeed');
-      const feed = await fetchAttentionFeed(pool, ws.orgId, ws.slug);
+      const feed = await fetchAttentionFeed(pool, ws.orgId, ws.slug, { coopOrgRole: 'admin', accessPermissions: [], user: { id: ws.users[0].id }, orgId: ws.orgId });
       const items = (feed.items || feed).filter((i) => i.type === 'sponsored_project');
       assert.ok(items.some((i) => /Sample project 3.*no signed agreement/.test(i.title)));
       assert.ok(items.some((i) => /Sample project 2.*on hold/.test(i.title)));

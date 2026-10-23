@@ -15,7 +15,7 @@ function registerOrganizationalDashboardRoutes(app, pool) {
     const slug = String(req.params.slug || '').trim();
     const orgId = req.orgId;
     try {
-      const out = await fetchAttentionFeed(pool, orgId, slug);
+      const out = await fetchAttentionFeed(pool, orgId, slug, req);
       if (req.coopOrgRole === 'admin' || ['finance', 'staff'].includes(req.coopOrgRole)) {
         const sw = await pool.query(
           `SELECT ou.id, u.email, ou.accounting_entry_enabled_at AS since,

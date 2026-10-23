@@ -237,7 +237,7 @@ test('compliance calendar and dashboard show the missing agreement', opts, async
     const items = await complianceItems(pool, ws.orgId, ws.slug);
     assert.ok(items.some((i) => /No signed agreement: Project A/.test(i.title)));
     const { fetchAttentionFeed } = require('../../server/organizational/lib/OrganizationalAttentionFeed');
-    const feed = await fetchAttentionFeed(pool, ws.orgId, ws.slug);
+    const feed = await fetchAttentionFeed(pool, ws.orgId, ws.slug, { coopOrgRole: 'admin', accessPermissions: [], user: { id: ws.users[0].id }, orgId: ws.orgId });
     assert.ok((feed.items || feed).some((i) => /has no signed agreement/.test(i.title)));
     void project;
   });

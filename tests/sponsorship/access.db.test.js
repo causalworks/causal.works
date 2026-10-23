@@ -78,3 +78,27 @@ test('a person who made a project link cannot approve a request that came throug
     assert.equal(res.httpStatus, 200, JSON.stringify(res.body));
   });
 });
+
+test('attention feed: sponsored projects, dues members, claims and admin-only documents show only to people who may read them', opts, async () => {
+  await h.withDb(async ({ pool }) => {
+    const ws = await h.seedWorkspace(pool);
+    await h.seedProject(pool, ws, { name: 'Feed project' });
+    await pool.query(`UPDATE org_sponsored_projects SET status = 'on_hold', hold_reason = 'Review' WHERE sponsor_org_id = $1`, [ws.orgId]);
+    await pool.query(
+      `INSERT INTO org_documents (org_id, category, title, original_filename, stored_path, mime_type, byte_size, checksum_sha256, visibility, expiration_date, is_current, uploaded_by_user_id)
+       VALUES ($1, 'other', 'Admin only paper', 'a.pdf', 'x/a.pdf', 'application/pdf', 1, 'abc', 'admins_only', current_date + 10, true, $2)`, [ws.orgId, ws.users[0].id]);
+    const { fetchAttentionFeed } = require('../../server/organizational/lib/OrganizationalAttentionFeed');
+    const as = (role, extra) => ({ coopOrgRole: role, accessPermissions: [], coopOrgProgramIds: [], user: { id: ws.users[0].id }, orgId: ws.orgId, ...(extra || {}) });
+    const titles = async (req) => ((await fetchAttentionFeed(pool, ws.orgId, ws.slug, req)).items).map((i) => i.title).join('|');
+    const admin = await titles(as('admin'));
+    assert.match(admin, /Feed project/);
+    assert.match(admin, /Admin only paper/);
+    const fundraising = await titles(as('fundraising'));
+    assert.doesNotMatch(fundraising, /Feed project/);
+    assert.doesNotMatch(fundraising, /Admin only paper/);
+    const otherLead = await titles(as('program', { coopOrgProgramIds: [ws.programs.projectB] }));
+    assert.doesNotMatch(otherLead, /Feed project/);
+    const ownLead = await titles(as('program', { coopOrgProgramIds: [ws.programs.projectA] }));
+    assert.match(ownLead, /Feed project/);
+  });
+});

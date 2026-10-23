@@ -38,4 +38,13 @@ jobs:
       - name: Route access audit
         run: npm run audit:routes
       - name: Tests
-        run: npm test
+        run: |
+          set +e
+          npm test > test-output.txt 2>&1
+          code=$?
+          tail -n 15 test-output.txt
+          if [ "$code" -ne 0 ]; then
+            summary=$(grep -E "^(not ok|\s+not ok|\s+error:|\s+code:|\s+message:)" test-output.txt | head -80 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=Failing tests::${summary}"
+          fi
+          exit $code

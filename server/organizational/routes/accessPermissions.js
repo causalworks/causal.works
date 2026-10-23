@@ -64,9 +64,11 @@ function registerAccessPermissionRoutes(app, pool) {
         `SELECT u.email FROM org_users ou JOIN users u ON u.id = ou.user_id WHERE ou.org_id = $1 AND ou.role = 'admin' ORDER BY ou.id LIMIT 3`,
         [req.orgId]);
       const givable = await givablePermissions(req);
+      const src = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [req.orgId]);
       const entry = req.coopOrgRole === 'admin' ? await adminEntryState(pool, req.coopOrgUserId) : { canEnter: false, entryOn: false, hasFinance: false };
       return res.json({
         role: req.coopOrgRole,
+        actuals_source: src.rows[0] ? src.rows[0].actuals_source : 'ledger',
         can_write_accounting: FINANCE_ROLES.includes(req.coopOrgRole) || (req.coopOrgRole === 'admin' && entry.canEnter),
         accounting_entry_switch: req.coopOrgRole === 'admin' ? { enabled: entry.entryOn, has_finance_members: entry.hasFinance } : null,
         can_read_accounting: hasAccountingAccess(req, 'accounting_read'),

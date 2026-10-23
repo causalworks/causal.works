@@ -246,6 +246,7 @@ async function apply(pool, orgId, opts) {
   // Lead links (the token is shown once)
   for (const p of [p1, p2, p3]) {
     const l = await call('POST', '/sponsored-projects/:id/lead-links', { params: { id: String(p.id) }, body: { send: false, label: 'Sample link' } });
+    await pool.query('UPDATE org_public_links SET created_by = NULL WHERE id = $1 AND org_id = $2', [l.id, orgId]);
     created.leadLinks.push({ projectId: p.id, id: l.id, url: l.url });
   }
   const linkRef = (p) => 'link:' + created.leadLinks.find((l) => l.projectId === p.id).id;

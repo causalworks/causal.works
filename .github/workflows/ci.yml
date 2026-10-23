@@ -35,6 +35,7 @@ jobs:
           psql -h localhost -U postgres -c "CREATE ROLE causal_app LOGIN PASSWORD 'ci_app_pw'"
           psql -h localhost -U postgres -c "CREATE DATABASE causal_ci"
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -d causal_ci -f db/schema.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q -d causal_ci -f db/reference-data.sql
       - name: Route access audit
         run: npm run audit:routes
       - name: Tests

@@ -2,8 +2,9 @@
 
 const { postLedgerTransaction } = require('./ledgerPosting');
 const { sponsoredGiftCoding } = require('./giftPosting');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
-async function recordGrantGiftPayment(pool, { orgId, userId, giftId, bankAccountId, paymentDate, amountCents, reference }) {
+async function recordGrantGiftPaymentUnlocked(pool, { orgId, userId, giftId, bankAccountId, paymentDate, amountCents, reference }) {
   const r = await pool.query(
     `SELECT g.*, gr.revenue_account_id, gr.primary_program_id, gr.name AS grant_name
      FROM org_gifts g
@@ -54,7 +55,7 @@ async function recordGrantGiftPayment(pool, { orgId, userId, giftId, bankAccount
   return { httpStatus: 200, body: { ledger_transaction_id: postResult.body.id } };
 }
 
-async function linkOrReclassifyGrantGiftTransaction(pool, { orgId, userId, giftId, transactionId }) {
+async function linkOrReclassifyGrantGiftTransactionUnlocked(pool, { orgId, userId, giftId, transactionId }) {
   const giftR = await pool.query(
     `SELECT g.*, gr.revenue_account_id, gr.primary_program_id, gr.name AS grant_name
      FROM org_gifts g JOIN org_grants gr ON gr.id = g.grant_id
@@ -117,5 +118,8 @@ async function linkOrReclassifyGrantGiftTransaction(pool, { orgId, userId, giftI
   );
   return { httpStatus: 200, body: { ledger_transaction_id: transactionId, reclassified: false } };
 }
+
+const recordGrantGiftPayment = (pool, o) => withLock(pool, NS.giftPosting, o.giftId, () => recordGrantGiftPaymentUnlocked(pool, o), BUSY);
+const linkOrReclassifyGrantGiftTransaction = (pool, o) => withLock(pool, NS.giftPosting, o.giftId, () => linkOrReclassifyGrantGiftTransactionUnlocked(pool, o), BUSY);
 
 module.exports = { recordGrantGiftPayment, linkOrReclassifyGrantGiftTransaction };

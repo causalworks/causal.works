@@ -15,6 +15,7 @@ const { requestContextMiddleware, enterOrgContext, enterProgramScope } = require
 const fs = require('fs');
 const path = require('path');
 const { UPLOADS_ROOT } = require('./sponsorDocuments');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
@@ -115,7 +116,7 @@ async function leadContact(pool, orgId, project) {
 
 // Builds the statement for one project and month. The row is unique per project and month: if it already has its document,
 // nothing new is made. Sending happens once, unless the earlier send failed.
-async function generateStatement(pool, { orgId, userId, projectId, month, send, sendEmail }) {
+async function generateStatementUnlocked(pool, { orgId, userId, projectId, month, send, sendEmail }) {
   if (!MONTH_RE.test(String(month || ''))) return { httpStatus: 400, body: { error: 'Choose the month (YYYY-MM).' } };
   const { start, end } = monthBounds(month);
   if (end >= new Date().toISOString().slice(0, 10)) return { httpStatus: 400, body: { error: 'A statement can be made once the month has ended.' } };
@@ -151,6 +152,11 @@ async function generateStatement(pool, { orgId, userId, projectId, month, send, 
   }
   return { httpStatus: created ? 201 : 200, body: { statement: { ...row, month: isoDate(row.month), send_status: sendStatus }, created } };
 }
+
+const generateStatement = (pool, a) => {
+  if (!Number.isInteger(Number(a.projectId))) return generateStatementUnlocked(pool, a);
+  return withLock(pool, NS.sponsorStatement, Number(a.projectId), () => generateStatementUnlocked(pool, a), BUSY);
+};
 
 async function sendStatement(pool, { orgId, project, row, month, sendEmail }) {
   const send = sendEmail || sendPlainEmail;

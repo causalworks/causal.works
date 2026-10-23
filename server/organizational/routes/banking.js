@@ -1,6 +1,7 @@
 'use strict';
 
 const { recordPledgeInstallmentReceipt } = require('../lib/pledgeReceipt');
+const { NS, withLock, BUSY } = require('../lib/advisoryLock');
 const { findExpectedGifts } = require('../lib/giftMatch');
 const { scoreCandidate } = require('../lib/bankMatchScore');
 const crypto = require('crypto');
@@ -871,7 +872,7 @@ function registerBankingRoutes(app, pool) {
     }
   });
 
-  async function matchStatementLine(orgId, userId, lineId, { matchType, targetId }) {
+  async function matchStatementLineUnlocked(orgId, userId, lineId, { matchType, targetId }) {
     const MATCH_TYPES = ['bill', 'invoice', 'outstanding_bill_payment', 'outstanding_invoice_payment', 'outstanding_transfer', 'ledger_entry', 'grant_gift', 'membership_dues', 'sponsored_project_disbursement', 'pledge_installment'];
     if (!MATCH_TYPES.includes(matchType)) {
       return { httpStatus: 400, body: { error: `match_type must be one of: ${MATCH_TYPES.join(', ')}` } };
@@ -1001,6 +1002,8 @@ function registerBankingRoutes(app, pool) {
     );
     return { httpStatus: 200, body: { id: lineId, status: 'confirmed', ledger_transaction_id: ledgerTransactionId } };
   }
+
+  const matchStatementLine = (orgId, userId, lineId, o) => withLock(pool, NS.bankLineMatch, lineId, () => matchStatementLineUnlocked(orgId, userId, lineId, o), BUSY);
 
   app.post('/api/organizational/orgs/:slug/bank-statement-lines/:id/match', ...orgAuth, financeWriter, async (req, res) => {
     const orgId = req.orgId;

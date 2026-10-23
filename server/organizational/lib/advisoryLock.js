@@ -9,6 +9,11 @@ const NS = {
   duesPayment: 360013,
   duesRecognition: 360014,
   paymentEvent: 360015,
+  giftPosting: 360016,
+  pledgeAccretion: 360017,
+  bankLineMatch: 360018,
+  membershipSeat: 360019,
+  sponsorStatement: 360020,
 };
 
 const WAIT_MS = 15000;

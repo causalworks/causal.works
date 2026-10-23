@@ -2,6 +2,7 @@
 
 const { postLedgerTransaction, buildReversingLines } = require('./ledgerPosting');
 const { logAudit } = require('./auditLog');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const SPONSORED_RESTRICTION = 'temporarily_restricted';
@@ -20,7 +21,7 @@ async function sponsoredGiftCoding(pool, orgId, sponsoredProjectId) {
   return { programId: Number(p.program_id), restrictionClass: SPONSORED_RESTRICTION, projectId: Number(p.id) };
 }
 
-async function postInKindGift(pool, opts) {
+async function postInKindGiftUnlocked(pool, opts) {
   const { orgId, userId, giftId, postingDate } = opts;
   if (!postingDate || !DATE_RE.test(postingDate)) {
     return { httpStatus: 400, body: { error: 'posting_date is required and must be YYYY-MM-DD' } };
@@ -90,7 +91,7 @@ async function postInKindGift(pool, opts) {
   return { httpStatus: 200, body: { id: giftId, posting_status: 'posted', ledger_transaction_id: result.body.id } };
 }
 
-async function postPledgeCommitment(pool, opts) {
+async function postPledgeCommitmentUnlocked(pool, opts) {
   const { orgId, userId, giftId, postingDate } = opts;
   if (!postingDate || !DATE_RE.test(postingDate)) {
     return { httpStatus: 400, body: { error: 'posting_date is required and must be YYYY-MM-DD' } };
@@ -171,7 +172,7 @@ async function postPledgeCommitment(pool, opts) {
   return { httpStatus: 200, body: { id: giftId, posting_status: 'posted', ledger_transaction_id: result.body.id } };
 }
 
-async function voidGiftPosting(pool, { orgId, userId, giftId, voidReason }) {
+async function voidGiftPostingUnlocked(pool, { orgId, userId, giftId, voidReason }) {
   if (!voidReason) return { httpStatus: 400, body: { error: 'void_reason is required' } };
   const giftR = await pool.query('SELECT * FROM org_gifts WHERE id = $1 AND org_id = $2 LIMIT 1', [giftId, orgId]);
   if (!giftR.rows.length) return { httpStatus: 404, body: { error: 'Gift not found' } };
@@ -211,5 +212,9 @@ async function voidGiftPosting(pool, { orgId, userId, giftId, voidReason }) {
 
   return { httpStatus: 200, body: { id: giftId, posting_status: 'void', reversal_transaction_id: result.body.id } };
 }
+
+const postInKindGift = (pool, o) => withLock(pool, NS.giftPosting, o.giftId, () => postInKindGiftUnlocked(pool, o), BUSY);
+const postPledgeCommitment = (pool, o) => withLock(pool, NS.giftPosting, o.giftId, () => postPledgeCommitmentUnlocked(pool, o), BUSY);
+const voidGiftPosting = (pool, o) => withLock(pool, NS.giftPosting, o.giftId, () => voidGiftPostingUnlocked(pool, o), BUSY);
 
 module.exports = { postInKindGift, postPledgeCommitment, voidGiftPosting, sponsoredGiftCoding, SPONSORED_RESTRICTION };

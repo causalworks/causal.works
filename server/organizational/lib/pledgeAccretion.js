@@ -1,6 +1,7 @@
 'use strict';
 
 const { postLedgerTransaction } = require('./ledgerPosting');
+const { NS, withLock, BUSY } = require('./advisoryLock');
 
 function lastDayOfMonthIso(year, month) {
   const day = new Date(year, month, 0).getDate();
@@ -64,7 +65,7 @@ async function computeDuePledgeAccretionPeriods(pool, orgId, throughDate) {
   return due;
 }
 
-async function runPledgeAccretion(pool, { orgId, userId, throughDate, incomeAccountId }) {
+async function runPledgeAccretionUnlocked(pool, { orgId, userId, throughDate, incomeAccountId }) {
   const due = await computeDuePledgeAccretionPeriods(pool, orgId, throughDate);
   const posted = [];
   const failed = [];
@@ -97,5 +98,7 @@ async function runPledgeAccretion(pool, { orgId, userId, throughDate, incomeAcco
   }
   return { posted, failed };
 }
+
+const runPledgeAccretion = (pool, a) => withLock(pool, NS.pledgeAccretion, a.orgId, () => runPledgeAccretionUnlocked(pool, a), { posted: [], failed: [{ error: BUSY.body.error }] });
 
 module.exports = { computeDuePledgeAccretionPeriods, runPledgeAccretion };

@@ -14,6 +14,7 @@ const S = require('../lib/membershipStatus');
 const M = require('../lib/membership');
 const J = require('../lib/membershipJoin');
 const Pay = require('../lib/membershipPayments');
+const { NS, withLock } = require('../lib/advisoryLock');
 const { addContactRoles } = require('../lib/contactRoles');
 const Msg = require('../lib/membershipMessages');
 const Rep = require('../lib/membershipReports');
@@ -898,6 +899,12 @@ function registerMembershipRoutes(app, pool) {
   // --- Seats on organization terms ---
 
   app.post(`${B}/terms/:id/seats`, ...write, async (req, res) => {
+    const termKey = intId(req.params.id);
+    if (!termKey) return fail(res, 404, 'That term was not found.');
+    return withLock(pool, NS.membershipSeat, termKey, () => addSeat(req, res), null)
+      .then((r) => { if (r === null && !res.headersSent) return fail(res, 409, 'Another change to this membership is in progress. Try again in a moment.'); });
+  });
+  async function addSeat(req, res) {
     const b = req.body || {};
     try {
       const term = await loadTerm(req, intId(req.params.id));
@@ -938,7 +945,8 @@ function registerMembershipRoutes(app, pool) {
       console.error('POST membership/terms/:id/seats:', e.message);
       return fail(res, 500, 'Could not add the seat.');
     }
-  });
+    return true;
+  }
 
   app.post(`${B}/seats/:id/end`, ...write, async (req, res) => {
     try {

@@ -149,3 +149,16 @@ test('two recognition runs for one month at once leave one ledger entry and no s
   assert.equal(results.filter((r) => r.httpStatus >= 500).length, 0);
   assert.equal(await ledgerCount(pool, s.org.id, 'membership_dues'), before + 1);
 });
+
+test('an in-kind gift posted three times at once reaches the ledger once', opts, async (t) => {
+  if (await blocked(t)) return;
+  const pool = getPool();
+  const ws = await h.seedWorkspace(pool);
+  const gift = await h.one(pool,
+    `INSERT INTO org_gifts (org_id, gift_type, payment_method, amount_cents, received_at, posting_status, in_kind_description, program_id)
+     VALUES ($1, 'donation', 'in_kind', 25000, '2026-02-01', 'unposted', 'Donated goods', $2) RETURNING id`, [ws.orgId, ws.programs.admin]);
+  const args = { orgId: ws.orgId, userId: ws.users[1].id, giftId: gift.id, postingDate: '2026-02-01', revenueAccountId: ws.accounts.contributions, expenseAccountId: ws.accounts.projectExpense };
+  const results = await Promise.all([1, 2, 3].map(() => require('../../server/organizational/lib/giftPosting').postInKindGift(pool, args)));
+  assert.deepEqual(codes(results), [200, 409, 409]);
+  assert.equal(await ledgerCount(pool, ws.orgId, 'gift_in_kind'), 1);
+});

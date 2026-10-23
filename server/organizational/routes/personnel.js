@@ -9,6 +9,7 @@ const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWrite
 const { calculatePersonnelProjections, calculateWorkerProjections, resolveFringeAccountIds } = require('../lib/personnelCalculator');
 const { recalcPersonnelBudget } = require('../lib/personnelRecalc');
 const { syncPersonnelCarryforward, cleanupPersonnelCarryforward } = require('../lib/personnelCarryforward');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 
 async function requireAdminRole(pool, orgId, userId) {
@@ -169,12 +170,18 @@ function registerOrganizationalPersonnelRoutes(app, pool) {
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
       sets.push(`updated_at = NOW()`);
 
+      const beforeFringe = (await pool.query(`SELECT * FROM org_fringe_settings WHERE org_id = $1`, [orgId])).rows[0] || {};
       const r = await pool.query(
         `INSERT INTO org_fringe_settings (org_id) VALUES ($1)
          ON CONFLICT (org_id) DO UPDATE SET ${sets.join(', ')}
          RETURNING *`,
         params
       );
+
+      await logAudit(pool, {
+        orgId, userId, action: 'update', tableName: 'org_fringe_settings', recordId: r.rows[0].id,
+        fields: diffFields(beforeFringe, r.rows[0], allowed), metadata: reqMeta(req),
+      });
 
       const fy = parseInt10(body.fiscal_year || req.query.fiscal_year);
       if (fy) {
@@ -258,6 +265,10 @@ function registerOrganizationalPersonnelRoutes(app, pool) {
       } finally {
         client.release();
       }
+      await logAudit(pool, {
+        orgId, userId, action: 'create', tableName: 'org_personnel',
+        metadata: { ...reqMeta(req), from_fiscal_year: fromFY, to_fiscal_year: toFY, copied },
+      });
       return res.json({ copied, from_fiscal_year: fromFY, to_fiscal_year: toFY });
     } catch (e) {
       if (isFiscalYearLockedError(e)) return res.status(409).json({ error: e.message, code: 'fiscal_year_locked' });
@@ -538,6 +549,8 @@ function registerOrganizationalPersonnelRoutes(app, pool) {
       }
 
       if (Array.isArray(body.allocations)) {
+        const beforeAllocs = (await pool.query(
+          `SELECT coop_program_id, percent_bps FROM org_personnel_allocations WHERE coop_personnel_id = $1 ORDER BY coop_program_id`, [id])).rows;
         await pool.query(`DELETE FROM org_personnel_allocations WHERE coop_personnel_id = $1`, [id]);
         for (const a of body.allocations) {
           const programId = parseInt10(a.coop_program_id || a.program_id);
@@ -549,6 +562,13 @@ function registerOrganizationalPersonnelRoutes(app, pool) {
             [id, orgId, programId, bps]
           );
         }
+        const afterAllocs = (await pool.query(
+          `SELECT coop_program_id, percent_bps FROM org_personnel_allocations WHERE coop_personnel_id = $1 ORDER BY coop_program_id`, [id])).rows;
+        const fmt = (rows) => rows.map((a) => `${a.coop_program_id}:${a.percent_bps}`).join(',');
+        await logAudit(pool, {
+          orgId, userId, action: 'update', tableName: 'org_personnel_allocations', recordId: id,
+          fields: diffFields({ allocations: fmt(beforeAllocs) }, { allocations: fmt(afterAllocs) }, ['allocations']), metadata: reqMeta(req),
+        });
       }
 
       const worker = rowToWorker(upd);

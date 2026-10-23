@@ -1,7 +1,14 @@
 'use strict';
 
 async function logAudit(pool, { orgId, userId, action, tableName, recordId, fields, metadata }) {
-  if (!pool || !orgId || !action || !tableName || !recordId) return;
+  if (!pool || !orgId || !action || !tableName) {
+    console.error('auditLog not written: missing', !pool ? 'pool' : !orgId ? 'orgId' : !action ? 'action' : 'tableName');
+    return;
+  }
+  if (!recordId) {
+    recordId = orgId;
+    metadata = { ...(metadata || {}), bulk: true };
+  }
 
   try {
     if (action === 'update' && fields && fields.length > 0) {

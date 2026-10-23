@@ -5,6 +5,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 
 const STATUSES = new Set(['active', 'closed']);
 
@@ -86,6 +87,7 @@ function registerBoardDesignationRoutes(app, pool) {
         [req.orgId, fields.name, fields.purpose || null, fields.board_approved_date || null,
           fields.board_resolution_ref || null, fields.status, userId]
       );
+      await logAudit(pool, { orgId: req.orgId, userId, action: 'create', tableName: 'org_board_designations', recordId: r.rows[0].id, metadata: { ...reqMeta(req), name: fields.name } });
       return res.status(201).json({ id: r.rows[0].id });
     } catch (e) {
       console.error('POST /board-designations:', e.message);
@@ -110,11 +112,13 @@ function registerBoardDesignationRoutes(app, pool) {
         p += 1;
       }
       params.push(designationId, req.orgId);
+      const before = (await pool.query(`SELECT * FROM org_board_designations WHERE id = $1 AND org_id = $2`, [designationId, req.orgId])).rows[0] || {};
       const r = await pool.query(
-        `UPDATE org_board_designations SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} RETURNING id`,
+        `UPDATE org_board_designations SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} RETURNING *`,
         params
       );
       if (!r.rows.length) return res.status(404).json({ error: 'Board designation not found' });
+      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_board_designations', recordId: designationId, fields: diffFields(before, r.rows[0], Object.keys(fields)), metadata: reqMeta(req) });
       return res.json({ id: r.rows[0].id });
     } catch (e) {
       console.error('PATCH /board-designations/:id:', e.message);

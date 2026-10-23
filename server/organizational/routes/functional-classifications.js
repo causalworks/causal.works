@@ -5,6 +5,7 @@ const { requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 
 function registerFunctionalClassificationRoutes(app, pool) {
   const auth = requireAuth(pool);
@@ -76,11 +77,15 @@ function registerFunctionalClassificationRoutes(app, pool) {
       if (acctCheck.rowCount !== ids.length)
         return res.status(400).json({ error: 'One or more accounts not found or not expense type' });
 
+      const userId = req.user.user_id ?? req.user.id;
+      const beforeRows = (await pool.query(`SELECT * FROM org_functional_classifications WHERE org_id = $1 AND fiscal_year = $2`, [orgId, fy])).rows;
+      const beforeByAccount = new Map(beforeRows.map((b) => [Number(b.account_id), b]));
+      const changes = [];
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         for (const r of body) {
-          await client.query(
+          const saved = await client.query(
             `INSERT INTO org_functional_classifications
                (org_id, account_id, fiscal_year, program_services_bps, mgmt_general_bps, fundraising_bps, notes, updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
@@ -90,11 +95,14 @@ function registerFunctionalClassificationRoutes(app, pool) {
                mgmt_general_bps     = EXCLUDED.mgmt_general_bps,
                fundraising_bps      = EXCLUDED.fundraising_bps,
                notes                = EXCLUDED.notes,
-               updated_at           = NOW()`,
+               updated_at           = NOW()
+             RETURNING *`,
             [orgId, Number(r.account_id), fy,
              Number(r.program_services_bps), Number(r.mgmt_general_bps), Number(r.fundraising_bps),
              r.notes || null]
           );
+          const prev = beforeByAccount.get(Number(r.account_id));
+          changes.push({ row: saved.rows[0], prev });
         }
         await client.query('COMMIT');
       } catch (e) {
@@ -102,6 +110,16 @@ function registerFunctionalClassificationRoutes(app, pool) {
         throw e;
       } finally {
         client.release();
+      }
+
+      const keys = ['program_services_bps', 'mgmt_general_bps', 'fundraising_bps', 'notes'];
+      for (const { row, prev } of changes) {
+        if (!prev) {
+          await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_functional_classifications', recordId: row.id, metadata: { ...reqMeta(req), account_id: row.account_id, fiscal_year: fy } });
+          continue;
+        }
+        const fields = diffFields(prev, row, keys);
+        if (fields.length) await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_functional_classifications', recordId: row.id, fields, metadata: { ...reqMeta(req), account_id: row.account_id, fiscal_year: fy } });
       }
 
       res.json({ ok: true, saved: body.length });

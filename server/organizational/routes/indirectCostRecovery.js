@@ -4,6 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
+const { logAudit, reqMeta } = require('../lib/auditLog');
 const { previewIndirectRecovery, runIndirectRecovery } = require('../lib/indirectCostRecovery');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,6 +51,7 @@ function registerIndirectCostRecoveryRoutes(app, pool) {
         orgId, userId, periodStartDate: periodStart, periodEndDate: periodEnd,
         debitAccountId, creditAccountId, programId,
       });
+      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_ledger_transactions', metadata: { ...reqMeta(req), source: 'indirect_cost_recovery', period_start_date: periodStart, period_end_date: periodEnd, posted_count: posted.length, failed_count: failed.length } });
       return res.json({ posted, failed, posted_count: posted.length, failed_count: failed.length });
     } catch (e) {
       console.error('POST /indirect-cost-recovery/run:', e.message);

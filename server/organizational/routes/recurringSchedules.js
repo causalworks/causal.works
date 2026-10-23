@@ -5,6 +5,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const FREQUENCIES = new Set(['monthly', 'quarterly', 'annual', 'custom_months']);
@@ -74,6 +75,7 @@ function registerRecurringSchedulesRoutes(app, pool) {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
         [orgId, scheduleType, p.frequency, p.activeMonths, p.nextOccurrenceDate, p.endDate, JSON.stringify(p.template), userId]
       );
+      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_recurring_schedules', recordId: r.rows[0].id, metadata: { ...reqMeta(req), schedule_type: scheduleType, frequency: p.frequency } });
       return res.status(201).json({ id: r.rows[0].id });
     } catch (e) {
       console.error('POST recurring-schedules:', e.message);
@@ -88,12 +90,16 @@ function registerRecurringSchedulesRoutes(app, pool) {
     const p = parseSchedule(req.body || {});
     if (p.error) return res.status(400).json({ error: p.error });
     try {
+      const before = (await pool.query(`SELECT * FROM org_recurring_schedules WHERE id = $1 AND org_id = $2`, [id, orgId])).rows[0] || {};
       const r = await pool.query(
         `UPDATE org_recurring_schedules SET frequency = $3, active_months = $4, next_occurrence_date = $5, end_date = $6, template = $7, updated_at = NOW()
-          WHERE id = $1 AND org_id = $2 AND active RETURNING id`,
+          WHERE id = $1 AND org_id = $2 AND active RETURNING *`,
         [id, orgId, p.frequency, p.activeMonths, p.nextOccurrenceDate, p.endDate, JSON.stringify(p.template)]
       );
       if (!r.rows.length) return res.status(404).json({ error: 'Active schedule not found' });
+      const after = { ...r.rows[0], template: JSON.stringify(r.rows[0].template), active_months: JSON.stringify(r.rows[0].active_months) };
+      const prev = { ...before, template: JSON.stringify(before.template), active_months: JSON.stringify(before.active_months) };
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_recurring_schedules', recordId: id, fields: diffFields(prev, after, ['frequency', 'active_months', 'next_occurrence_date', 'end_date', 'template']), metadata: reqMeta(req) });
       return res.json({ id });
     } catch (e) {
       console.error('PATCH recurring-schedules:', e.message);
@@ -108,6 +114,7 @@ function registerRecurringSchedulesRoutes(app, pool) {
     try {
       const r = await pool.query(`UPDATE org_recurring_schedules SET active = false, updated_at = NOW() WHERE id = $1 AND org_id = $2 RETURNING id`, [id, orgId]);
       if (!r.rows.length) return res.status(404).json({ error: 'Schedule not found' });
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_recurring_schedules', recordId: id, fields: [{ fieldName: 'active', oldValue: 'true', newValue: 'false' }], metadata: reqMeta(req) });
       return res.json({ id, active: false });
     } catch (e) {
       console.error('POST recurring-schedules/deactivate:', e.message);

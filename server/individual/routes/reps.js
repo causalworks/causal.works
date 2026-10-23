@@ -166,28 +166,6 @@ function registerRepRoutes(app, pool) {
     }
   });
 
-  app.get('/api/reps/bills-rationale', requireAuth(pool), async (req, res) => {
-    try {
-      const sql = `
-        SELECT
-          bill_id,
-          title,
-          turnarounds,
-          classification_rationale
-        FROM bills_cache
-        WHERE turnarounds IS NOT NULL
-        AND array_length(turnarounds, 1) > 0
-        ORDER BY classified_at DESC
-        LIMIT 200;
-      `;
-      const result = await pool.query(sql);
-      res.json(result.rows);
-    } catch (error) {
-      console.error('❌ GET /api/reps/bills-rationale:', error.message);
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
-
   app.get('/api/fiduciaries', requireAuth(pool), async (req, res) => {
     try {
       const { FIDUCIARIES } = require('../../data/fiduciaries');

@@ -309,49 +309,6 @@ function registerComplianceRoutes(app, pool) {
     }
   });
 
-  app.post('/api/organizational/orgs/:slug/compliance/obligations/:id/propose-for-cooperative', ...orgAuth, requireWriteAccess('compliance'), async (req, res) => {
-    const id = Number(req.params.id);
-
-    if (!Number.isInteger(id) || id < 1) {
-      return res.status(400).json({ error: 'Invalid obligation ID' });
-    }
-
-    try {
-      const checkR = await pool.query(
-        `SELECT source FROM org_compliance_obligations WHERE id = $1 AND org_id = $2 LIMIT 1`,
-        [id, req.orgId]
-      );
-      if (checkR.rows.length === 0) {
-        return res.status(404).json({ error: 'Obligation not found' });
-      }
-      if (checkR.rows[0].source !== 'org_extension') {
-        return res.status(403).json({ error: 'Only org extensions can be proposed for cooperative review' });
-      }
-
-      const existingR = await pool.query(
-        `SELECT id FROM compliance_extension_proposals
-         WHERE proposed_obligation_id = $1 AND proposal_status NOT IN ('declined', 'withdrawn')
-         LIMIT 1`,
-        [id]
-      );
-      if (existingR.rows.length > 0) {
-        return res.status(400).json({ error: 'A proposal for this obligation already exists' });
-      }
-
-      const r = await pool.query(
-        `INSERT INTO compliance_extension_proposals (org_id, proposed_obligation_id, proposal_status)
-         VALUES ($1, $2, 'submitted')
-         RETURNING *`,
-        [req.orgId, id]
-      );
-
-      return res.status(201).json({ proposal: r.rows[0] });
-    } catch (e) {
-      console.error('POST /api/organizational/orgs/:slug/compliance/obligations/:id/propose-for-cooperative:', e.message);
-      return res.status(500).json({ error: 'Could not create proposal' });
-    }
-  });
-
   app.get('/api/organizational/orgs/:slug/compliance/templates', ...orgAuth, async (req, res) => {
     try {
       const orgId = req.orgId;

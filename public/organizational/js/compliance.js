@@ -30,9 +30,6 @@
   const detailContent = document.getElementById('organizational-compliance-detail-content');
   const detailClose = document.getElementById('organizational-compliance-detail-close');
 
-  const proposalModal = document.getElementById('organizational-compliance-proposal-modal');
-  const proposalYes = document.getElementById('organizational-compliance-proposal-yes');
-  const proposalNo = document.getElementById('organizational-compliance-proposal-no');
 
   const fy990Select = document.getElementById('organizational-990-fy');
   const partIXEl = document.getElementById('organizational-990-part-ix');
@@ -46,7 +43,6 @@
   let currentSlug = '';
   let currentIsOrgAdmin = false;
   let allObligationsData = [];
-  let pendingProposalObligationId = null;
   let activeTab = 'tab-990';
 
   let _990data = [];
@@ -627,11 +623,6 @@
           </form>
         </div>`;
 
-        if (obligation.source === 'org_extension') {
-          html += `<div style="margin-top: 16px;">
-            <button type="button" class="organizational-btn organizational-compliance-propose-btn" data-obligation-id="${obligation.id}">Propose for cooperative review</button>
-          </div>`;
-        }
 
         detailContent.innerHTML = html;
         loadObligationDocuments(obligation.id);
@@ -641,12 +632,6 @@
       detailModal.hidden = false;
       detailModal.classList.add('organizational-modal-open');
 
-      const proposeBtn = detailContent.querySelector('.organizational-compliance-propose-btn');
-      if (proposeBtn) {
-        proposeBtn.addEventListener('click', function () {
-          showProposalPrompt(this.getAttribute('data-obligation-id'));
-        });
-      }
     } catch (e) {
       console.error('viewObligationDetail:', e);
       showError('Could not load obligation detail.');
@@ -790,45 +775,11 @@
       closeModal();
       await loadDashboard();
 
-      if (data.obligation) {
-        pendingProposalObligationId = data.obligation.id;
-        proposalModal.hidden = false;
-        proposalModal.classList.add('organizational-modal-open');
-      }
     } catch (e) {
       console.error('saveObligation:', e);
       showError('Could not save obligation.');
     } finally {
       saveBtn.disabled = false;
-    }
-  }
-
-  function showProposalPrompt(obligationId) {
-    pendingProposalObligationId = obligationId;
-    proposalModal.hidden = false;
-    proposalModal.classList.add('organizational-modal-open');
-  }
-
-  function closeProposalModal() {
-    if (!proposalModal) return;
-    proposalModal.classList.remove('organizational-modal-open');
-    proposalModal.hidden = true;
-    pendingProposalObligationId = null;
-  }
-
-  async function submitProposal() {
-    if (!pendingProposalObligationId) return;
-    try {
-      const res = await fetch(`/api/organizational/orgs/${encodeURIComponent(currentSlug)}/compliance/obligations/${pendingProposalObligationId}/propose-for-cooperative`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      if (!res.ok) { showError('Could not submit proposal.'); return; }
-      showError('');
-      closeProposalModal();
-    } catch (e) {
-      console.error('submitProposal:', e);
-      showError('Could not submit proposal.');
     }
   }
 
@@ -892,8 +843,6 @@
     if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
     if (form) form.addEventListener('submit', saveObligation);
     if (detailClose) detailClose.addEventListener('click', closeDetailModal);
-    if (proposalNo) proposalNo.addEventListener('click', closeProposalModal);
-    if (proposalYes) proposalYes.addEventListener('click', submitProposal);
 
     if (filterCategory) filterCategory.addEventListener('change', () => renderAllObligations(allObligationsData));
     if (filterSource) filterSource.addEventListener('change', () => renderAllObligations(allObligationsData));
@@ -901,13 +850,11 @@
 
     if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
     if (detailModal) detailModal.addEventListener('click', e => { if (e.target === detailModal) closeDetailModal(); });
-    if (proposalModal) proposalModal.addEventListener('click', e => { if (e.target === proposalModal) closeProposalModal(); });
 
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
       if (modal && modal.classList.contains('organizational-modal-open')) closeModal();
       if (detailModal && detailModal.classList.contains('organizational-modal-open')) closeDetailModal();
-      if (proposalModal && proposalModal.classList.contains('organizational-modal-open')) closeProposalModal();
     });
   }
 

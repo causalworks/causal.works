@@ -31,6 +31,14 @@ function requireAccountingAccess(pool, scope) {
   };
 }
 
+function requireReportsOrBoard(pool) {
+  const reports = requireAccountingAccess(pool, 'reports');
+  return function (req, res, next) {
+    if (req.coopOrgRole === 'board') return next();
+    return reports(req, res, next);
+  };
+}
+
 function boardSeesAllPrograms(req, res, next) {
   if (req.coopOrgRole === 'board') {
     enterProgramScope(null);
@@ -108,4 +116,5 @@ function requireAccountingWriter(pool) {
   };
 }
 
-module.exports = { requireAccountingAccess, hasAccountingAccess, boardSeesAllPrograms, hasDonorAccess, hasFunderAccess, requireContactRead, requireDonorRead, requireAccountingWriter, adminEntryState };
+module.exports = {
+  requireReportsOrBoard, requireAccountingAccess, hasAccountingAccess, boardSeesAllPrograms, hasDonorAccess, hasFunderAccess, requireContactRead, requireDonorRead, requireAccountingWriter, adminEntryState };

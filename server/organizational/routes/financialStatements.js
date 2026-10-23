@@ -3,7 +3,7 @@
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
+const { requireAccountingAccess, requireReportsOrBoard, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { netAssetsByClass, netAssetBuckets: netAssetBucketsOf, releasedFromRestrictions: releasedFromRestrictionsFor } = require('../lib/restrictedNetAssets');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
@@ -274,7 +274,7 @@ function registerFinancialStatementRoutes(app, pool) {
   });
 
   // ── Statement of Functional Expenses ──────────────────────────────────────
-  app.get('/api/organizational/orgs/:slug/reports/functional-expenses', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/functional-expenses', ...orgAuth, requireReportsOrBoard(pool), boardSeesAllPrograms, async (req, res) => {
     const orgId = req.orgId;
     const fy = req.query.fiscal_year ? Number.parseInt(String(req.query.fiscal_year), 10) : null;
     if (!fy || !Number.isInteger(fy) || fy < 1900 || fy > 2200) {

@@ -367,7 +367,7 @@
     if (loadingEl) loadingEl.hidden = true;
     if (dashEl) dashEl.hidden = false;
     const access = window.OrganizationalMyAccess ? await window.OrganizationalMyAccess(slug) : null;
-    const financeOnly = window.OrganizationalReportsIndex.all.filter(function (r) { return r.need === 'finance'; }).map(function (r) { return r.key; });
+    const reportsIndex = window.OrganizationalReportsIndex;
     const groupsEl = document.getElementById('reports-index-groups');
     if (groupsEl) window.OrganizationalReportsIndex.render(groupsEl, { slug: slug, access: access });
     if (new URLSearchParams(window.location.search).get('only') === 'grant-reports') {
@@ -379,10 +379,14 @@
         if (!keep) el.hidden = true;
       });
     }
+    const reportBlocked = function (key) {
+      const entry = reportsIndex.all.filter(function (r) { return r.key === key; })[0];
+      return !!entry && !reportsIndex.allowed(entry, access);
+    };
     const openFromUrl = function () {
       const params = new URLSearchParams(window.location.search);
       const wantReport = params.get('report');
-      if (wantReport && DETAIL_PANELS.indexOf('report-detail-' + wantReport) >= 0 && !(access && !access.can_read_reports && financeOnly.indexOf(wantReport) >= 0)) {
+      if (wantReport && DETAIL_PANELS.indexOf('report-detail-' + wantReport) >= 0 && !reportBlocked(wantReport)) {
         applyUrlFilters(params);
         showReport(wantReport, { fromUrl: true });
       } else {

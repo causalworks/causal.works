@@ -178,7 +178,6 @@ function registerFixedAssetRoutes(app, pool) {
             AND NOT EXISTS (SELECT 1 FROM org_fixed_assets o WHERE o.acquisition_ledger_transaction_id = t.id) LIMIT 1`, [assetId, req.orgId, txnId]);
       if (!ok.rows.length) return res.status(409).json({ error: 'That asset and entry cannot be linked: the entry must be posted, add cost to the asset account, and not already belong to an asset.' });
       await pool.query('UPDATE org_fixed_assets SET acquisition_ledger_transaction_id = $1 WHERE id = $2 AND org_id = $3', [txnId, assetId, req.orgId]);
-      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_fixed_assets', recordId: assetId, fields: [{ fieldName: 'acquisition_ledger_transaction_id', oldValue: null, newValue: String(txnId) }], metadata: reqMeta(req) });
       return res.json({ id: assetId, linked: true });
     } catch (e) {
       console.error('POST /fixed-assets/:id/link:', e.message);
@@ -244,7 +243,6 @@ function registerFixedAssetRoutes(app, pool) {
           fields.salvage_value_cents, fields.useful_life_months, userId,
           fields.acquisition_ledger_transaction_id || null, fields.prior_depreciation_cents || 0, fields.prior_depreciation_through || null]
       );
-      await logAudit(pool, { orgId: req.orgId, userId, action: 'create', tableName: 'org_fixed_assets', recordId: r.rows[0].id, metadata: { ...reqMeta(req), name: fields.name, cost_cents: fields.cost_cents } });
       return res.status(201).json({ id: r.rows[0].id });
     } catch (e) {
       console.error('POST /fixed-assets:', e.message);
@@ -278,13 +276,11 @@ function registerFixedAssetRoutes(app, pool) {
         p += 1;
       }
       params.push(assetId, req.orgId);
-      const before = (await pool.query(`SELECT * FROM org_fixed_assets WHERE id = $1 AND org_id = $2`, [assetId, req.orgId])).rows[0] || {};
       const r = await pool.query(
-        `UPDATE org_fixed_assets SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} AND status != 'disposed' RETURNING *`,
+        `UPDATE org_fixed_assets SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} AND status != 'disposed' RETURNING id`,
         params
       );
       if (!r.rows.length) return res.status(404).json({ error: 'Fixed asset not found, or it has been disposed' });
-      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_fixed_assets', recordId: assetId, fields: diffFields(before, r.rows[0], Object.keys(fields)), metadata: reqMeta(req) });
       return res.json({ id: r.rows[0].id });
     } catch (e) {
       console.error('PATCH /fixed-assets/:id:', e.message);
@@ -300,9 +296,8 @@ function registerFixedAssetRoutes(app, pool) {
       if (entryR.rows.length) {
         return res.status(409).json({ error: 'This asset already has posted depreciation and cannot be deleted -- dispose it instead.', code: 'depreciation_already_posted' });
       }
-      const r = await pool.query(`DELETE FROM org_fixed_assets WHERE id = $1 AND org_id = $2 RETURNING id, name`, [assetId, req.orgId]);
+      const r = await pool.query(`DELETE FROM org_fixed_assets WHERE id = $1 AND org_id = $2 RETURNING id`, [assetId, req.orgId]);
       if (!r.rows.length) return res.status(404).json({ error: 'Fixed asset not found' });
-      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'delete', tableName: 'org_fixed_assets', recordId: assetId, metadata: { ...reqMeta(req), name: r.rows[0].name } });
       return res.json({ id: assetId, deleted: true });
     } catch (e) {
       console.error('DELETE /fixed-assets/:id:', e.message);
@@ -468,7 +463,6 @@ function registerFixedAssetRoutes(app, pool) {
         `UPDATE org_fixed_assets SET status = 'disposed', disposal_date = $1, disposal_proceeds_cents = $2 WHERE id = $3 AND org_id = $4`,
         [disposalDate, proceedsCents, assetId, orgId]
       );
-      await logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_fixed_assets', recordId: assetId, fields: [{ fieldName: 'status', oldValue: asset.status || null, newValue: 'disposed' }], metadata: { ...reqMeta(req), disposal_date: disposalDate, proceeds_cents: String(proceedsCents), ledger_transaction_id: result.body.id } });
       return res.json({ id: assetId, status: 'disposed', ledger_transaction_id: result.body.id, gain_loss_cents: String(gainLossCents) });
     } catch (e) {
       console.error('POST /fixed-assets/:id/dispose:', e.message);

@@ -7,7 +7,7 @@ const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 
 const TABLE_RE = /^org_[a-z0-9_]+$/;
 const ALLOWED_ACTIONS = new Set(['create', 'update', 'delete']);
-const SHOWN_ACTIONS = "('create','update','delete','db_update','db_delete')";
+const SHOWN_ACTIONS = "('create','update','delete','db_insert','db_update','db_delete')";
 const SKIP_FIELDS = new Set(['id', 'org_id', 'transaction_id', 'created_at', 'updated_at', 'created_by', 'approved_by', 'approved_at', 'source_line_type', 'source_line_id', 'fiscal_year']);
 const ID_FIELDS = { account_id: 'account', program_id: 'program', grant_id: 'grant' };
 const MAX_EXPORT = 5000;
@@ -61,7 +61,9 @@ function registerOrganizationalAuditLogRoutes(app, pool) {
     };
     for (const r of rows) {
       const base = { id: r.id, table_name: r.table_name, record_id: r.record_id, occurred_at: r.occurred_at, user_email: r.user_email };
-      if (r.action === 'db_delete') {
+      if (r.action === 'db_insert') {
+        out.push({ ...base, action: 'create', field_name: null, old_value: null, new_value: null });
+      } else if (r.action === 'db_delete') {
         out.push({ ...base, action: 'delete', field_name: null, old_value: null, new_value: null });
       } else if (r.action === 'db_update') {
         const before = parseJson(r.old_value) || {};
@@ -94,6 +96,7 @@ function registerOrganizationalAuditLogRoutes(app, pool) {
 
     try {
       const conds = ['al.org_id = $1', `al.action IN ${SHOWN_ACTIONS}`,
+        "NOT (al.action = 'db_insert' AND al.table_name IN ('org_ledger_transactions', 'org_ledger_lines'))",
         `NOT (al.action = 'db_update' AND al.table_name IN ('org_ledger_transactions', 'org_ledger_lines') AND EXISTS (
            SELECT 1 FROM org_audit_log a2 WHERE a2.org_id = al.org_id AND a2.table_name = 'org_ledger_transactions'
               AND a2.record_id = CASE WHEN al.table_name = 'org_ledger_lines' THEN (al.new_value::jsonb ->> 'transaction_id')::bigint ELSE al.record_id END
@@ -103,8 +106,7 @@ function registerOrganizationalAuditLogRoutes(app, pool) {
 
       if (tableFilter) { conds.push(`al.table_name = $${p++}`); params.push(tableFilter); }
       if (actionFilter) {
-        conds.push(actionFilter === 'update' ? "al.action IN ('update','db_update')" : actionFilter === 'delete' ? "al.action IN ('delete','db_delete')" : 'al.action = $' + p++);
-        if (actionFilter === 'create') params.push('create');
+        conds.push(actionFilter === 'update' ? "al.action IN ('update','db_update')" : actionFilter === 'delete' ? "al.action IN ('delete','db_delete')" : "al.action IN ('create','db_insert')");
       }
       if (Number.isInteger(userFilter) && userFilter > 0) { conds.push(`al.user_id = $${p++}`); params.push(userFilter); }
       if (from) { conds.push(`al.occurred_at >= $${p++}::date`); params.push(from); }

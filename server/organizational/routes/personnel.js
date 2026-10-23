@@ -170,18 +170,12 @@ function registerOrganizationalPersonnelRoutes(app, pool) {
       if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
       sets.push(`updated_at = NOW()`);
 
-      const beforeFringe = (await pool.query(`SELECT * FROM org_fringe_settings WHERE org_id = $1`, [orgId])).rows[0] || {};
       const r = await pool.query(
         `INSERT INTO org_fringe_settings (org_id) VALUES ($1)
          ON CONFLICT (org_id) DO UPDATE SET ${sets.join(', ')}
          RETURNING *`,
         params
       );
-
-      await logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_fringe_settings', recordId: r.rows[0].id,
-        fields: diffFields(beforeFringe, r.rows[0], allowed), metadata: reqMeta(req),
-      });
 
       const fy = parseInt10(body.fiscal_year || req.query.fiscal_year);
       if (fy) {

@@ -199,10 +199,6 @@ function registerScenarioInputRoutes(app, pool) {
         }
       }
 
-      await logAudit(pool, {
-        orgId, userId, action: 'create', tableName: 'org_personnel', recordId: worker.id,
-        metadata: { ...reqMeta(req), scenario_id: scenarioId },
-      });
       return res.status(201).json({ worker: rowToWorker(worker) });
     } catch (e) {
       console.error('POST .../budget-scenarios/:id/personnel:', e.message);
@@ -263,10 +259,6 @@ function registerScenarioInputRoutes(app, pool) {
       }
 
       const updated = (await pool.query(`SELECT * FROM org_personnel WHERE id = $1`, [workerId])).rows[0];
-      await logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_personnel', recordId: workerId,
-        metadata: { ...reqMeta(req), scenario_id: scenarioId },
-      });
       return res.json({ worker: rowToWorker(updated) });
     } catch (e) {
       console.error('PATCH .../budget-scenarios/:id/personnel/:workerId:', e.message);
@@ -291,10 +283,6 @@ function registerScenarioInputRoutes(app, pool) {
       );
       if (del.rowCount === 0) return res.status(404).json({ error: 'Scenario worker not found' });
 
-      await logAudit(pool, {
-        orgId, userId, action: 'delete', tableName: 'org_personnel', recordId: workerId,
-        metadata: { ...reqMeta(req), scenario_id: scenarioId },
-      });
       return res.json({ ok: true });
     } catch (e) {
       console.error('DELETE .../budget-scenarios/:id/personnel/:workerId:', e.message);

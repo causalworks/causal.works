@@ -5,7 +5,6 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
-const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { RESTRICTION_CLASSES } = require('../lib/ledgerPosting');
 
 const DIRECTIONS = new Set(['debit', 'credit']);
@@ -216,7 +215,6 @@ function registerBankRuleRoutes(app, pool) {
           fields.direction, fields.action_account_id, fields.action_program_id, fields.action_grant_id,
           fields.action_donor_restriction_class, userId]
       );
-      await logAudit(pool, { orgId: req.orgId, userId, action: 'create', tableName: 'org_bank_rules', recordId: r.rows[0].id, metadata: { ...reqMeta(req), name: fields.name } });
       return res.status(201).json({ id: r.rows[0].id });
     } catch (e) {
       console.error('POST /bank-rules:', e.message);
@@ -241,13 +239,11 @@ function registerBankRuleRoutes(app, pool) {
         p += 1;
       }
       params.push(ruleId, req.orgId);
-      const before = (await pool.query(`SELECT * FROM org_bank_rules WHERE id = $1 AND org_id = $2`, [ruleId, req.orgId])).rows[0] || {};
       const r = await pool.query(
-        `UPDATE org_bank_rules SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} RETURNING *`,
+        `UPDATE org_bank_rules SET ${setClauses.join(', ')} WHERE id = $${p} AND org_id = $${p + 1} RETURNING id`,
         params
       );
       if (!r.rows.length) return res.status(404).json({ error: 'Bank rule not found' });
-      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_bank_rules', recordId: ruleId, fields: diffFields(before, r.rows[0], Object.keys(fields)), metadata: reqMeta(req) });
       return res.json({ id: r.rows[0].id });
     } catch (e) {
       console.error('PATCH /bank-rules/:id:', e.message);
@@ -259,9 +255,8 @@ function registerBankRuleRoutes(app, pool) {
     const ruleId = Number.parseInt(String(req.params.id), 10);
     if (!Number.isInteger(ruleId) || ruleId < 1) return res.status(400).json({ error: 'invalid rule id' });
     try {
-      const r = await pool.query(`DELETE FROM org_bank_rules WHERE id = $1 AND org_id = $2 RETURNING id, name`, [ruleId, req.orgId]);
+      const r = await pool.query(`DELETE FROM org_bank_rules WHERE id = $1 AND org_id = $2 RETURNING id`, [ruleId, req.orgId]);
       if (!r.rows.length) return res.status(404).json({ error: 'Bank rule not found' });
-      await logAudit(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, action: 'delete', tableName: 'org_bank_rules', recordId: ruleId, metadata: { ...reqMeta(req), name: r.rows[0].name } });
       return res.json({ id: ruleId, deleted: true });
     } catch (e) {
       console.error('DELETE /bank-rules/:id:', e.message);

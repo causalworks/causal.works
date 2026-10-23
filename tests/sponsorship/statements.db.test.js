@@ -112,6 +112,8 @@ test('donor letters: a large check to a project is flagged until the signed lett
     const { ws, project, r, as } = await setup(pool, asApp);
     const g = await h.one(pool, `INSERT INTO org_gifts (org_id, gift_type, amount_cents, received_at, sponsored_project_id, payment_method) VALUES ($1, 'donation', 900000, '2026-03-01', $2, 'check') RETURNING id`, [ws.orgId, project.id]);
     let res = await r.call('GET', P + '/sponsored-projects/:id/donor-letters', as(2));
+    assert.equal(res.statusCode, 403);
+    res = await r.call('GET', P + '/sponsored-projects/:id/donor-letters', as(1));
     assert.deepEqual(res.body.gifts.map((x) => [x.id, x.missing]), [[g.id, true]]);
     const tpl = await r.call('GET', P + '/sponsored-projects/:id/gifts/:giftId/donor-letter-template', as(1, { giftId: String(g.id) }));
     assert.match(String(tpl.body), /Project A/);
@@ -119,7 +121,7 @@ test('donor letters: a large check to a project is flagged until the signed lett
       VALUES ($1, 'other', 'Signed letter', 'l.pdf', 'x/l.pdf', 'application/pdf', 1, md5(random()::text), $2) RETURNING id`, [ws.orgId, project.id]);
     res = await r.call('POST', P + '/sponsored-projects/:id/gifts/:giftId/donor-letter', { ...as(1, { giftId: String(g.id) }), body: { document_id: doc.id } });
     assert.equal(res.statusCode, 200);
-    res = await r.call('GET', P + '/sponsored-projects/:id/donor-letters', as(2));
+    res = await r.call('GET', P + '/sponsored-projects/:id/donor-letters', as(1));
     assert.equal(res.body.gifts[0].missing, false);
   });
 });

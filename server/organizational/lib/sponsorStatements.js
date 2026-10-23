@@ -10,6 +10,7 @@ const { sendPlainEmail } = require('./sendPlainEmail');
 const { logAudit } = require('./auditLog');
 const { fyDateRange, getFiscalYearEndMonth } = require('./fiscalYear');
 const { isoDate } = require('./sponsorFees');
+const { csvCell } = require('./csvCell');
 const { requestContextMiddleware, enterOrgContext, enterProgramScope } = require('./orgContext');
 const fs = require('fs');
 const path = require('path');
@@ -228,17 +229,12 @@ async function yearEndSheet(pool, orgId, fiscalYear) {
   return { fiscal_year: fiscalYear, start_date: startDate, end_date: endDate, rows };
 }
 
-function csvCell(v) {
-  const s = v == null ? '' : String(v);
-  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
-
 function yearEndCsv(sheet) {
   const cols = [['project_name', 'Project'], ['opening_cents', 'Opening'], ['income_cents', 'Money received'], ['noncash_cents', 'Noncash gifts at value'],
     ['fees_cents', 'Administrative fee'], ['expenses_cents', 'Spent and paid out'], ['closing_cents', 'Closing'], ['ledger_net_cents', 'Books, program net for the year'],
     ['difference_cents', 'Difference from the books']];
   const money2 = (c) => (c == null ? '' : (Number(c) / 100).toFixed(2));
-  return [cols.map((c) => c[1]).join(',')].concat(sheet.rows.map((r) => cols.map(([k]) => csvCell(k === 'project_name' ? r[k] : money2(r[k]))).join(','))).join('\n') + '\n';
+  return [cols.map((c) => c[1]).join(',')].concat(sheet.rows.map((r) => cols.map(([k]) => (k === 'project_name' ? csvCell(r[k]) : money2(r[k]))).join(','))).join('\n') + '\n';
 }
 
 module.exports = { monthBounds, periodFigures, heldCents, generateStatement, runStatementJob, yearEndSheet, yearEndCsv, statementHtml, inOrg };

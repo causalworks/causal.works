@@ -2,6 +2,8 @@
 
 // Shared public module as plain functions: the token-bucket limiter, the signed form token (minimum time), token hashing.
 
+process.env.PUBLIC_FORM_SECRET = process.env.PUBLIC_FORM_SECRET || 'test-form-secret';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createBucketLimiter } = require('../../server/organizational/lib/rateLimit');

@@ -35,7 +35,11 @@ async function setup(pool, asApp, settings) {
   const tier = async (body) => (await staff.call('POST', B + '/tiers', asStaff('finance', { body: { name: 'Standard', price: '40', ...body } }))).body.tier;
   await staff.call('PUT', B + '/settings', asStaff('admin', { body: { join_form_enabled: true, form_fields: ['phone', 'mailing_address', 'annual_budget'], extra_gift_enabled: true, ...(settings || {}) } }));
   const ip = () => '10.0.0.' + (++ipCounter % 250);
-  const pcall = (method, path, extra) => pub.call(method, P + path, { params: { slug: org.slug }, ip: ip(), ...(extra || {}) });
+  const pcall = async (method, path, extra) => {
+    const res = await pub.call(method, P + path, { params: { slug: org.slug }, ip: ip(), ...(extra || {}) });
+    if (path === '/sign-in') await new Promise((r) => setTimeout(r, 200));
+    return res;
+  };
   const form = () => ({ form_token: issueFormToken(org.id, Date.now() - 5000) });
   const tokenFrom = (m) => (m.text.match(/#t=([A-Za-z0-9_-]+)/) || [])[1];
   const join = async (body) => {
@@ -149,6 +153,22 @@ test('staff approval, pay what you can, the eligibility tick and the extra gift 
     assert.deepEqual([Number(gift.amount_cents), gift.review_status, gift.posting_status, gift.constituent_id], [5000, 'to_confirm', 'not_applicable', ok.body.constituent_id]);
     const again = await s.staff.call('POST', B + '/join-requests/:id/approve', s.asStaff('finance', { params: { id: String(queue[0].id) } }));
     assert.equal(again.statusCode, 409);
+  });
+});
+
+test('join: the confirmation email carries no typed text, and one address gets at most three a day', opts, async () => {
+  await h.withDb(async ({ pool, asApp }) => {
+    const s = await setup(pool, asApp);
+    const t = await s.tier();
+    const body = { kind: 'individual', first_name: 'Friend.\n\nYour account was flagged. Verify at https://phish.example.test', last_name: 'X', email: 'target@example.test', tier_id: t.id };
+    for (let i = 0; i < 3; i++) await s.join(body);
+    assert.equal(s.sent.length, 3);
+    assert.doesNotMatch(s.sent[0].text, /flagged|phish/);
+    assert.match(s.sent[0].text, /^Hello,/);
+    const fourth = await s.pcall('POST', '/join', { body: { ...s.form(), ...body } });
+    assert.equal(fourth.statusCode, 202);
+    assert.ok(!('request' in fourth.body));
+    assert.equal(s.sent.length, 3);
   });
 });
 

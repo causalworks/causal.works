@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const { enterOrgContext, enterProgramScope } = require('./orgContext');
 const { decryptCredential } = require('./podCredentialCrypto');
 const { clientIp } = require('./rateLimit');
+const { publicHttpsProblem } = require('./publicHost');
 
 const SIGN_IN_MINUTES = 30;
 const HONEYPOT_FIELD = 'website';
@@ -18,10 +19,12 @@ const FORM_MAX_SECONDS = 2 * 60 * 60;
 
 function newToken() { return crypto.randomBytes(32).toString('base64url'); }
 function hashToken(token) { return crypto.createHash('sha256').update(String(token)).digest('hex'); }
-function ipHash(req) { return crypto.createHash('sha256').update('ip:' + clientIp(req)).digest('hex').slice(0, 32); }
+function ipHash(req) { return crypto.createHmac('sha256', formSecret()).update('ip:' + clientIp(req)).digest('hex').slice(0, 32); }
 
 function formSecret() {
-  return process.env.PUBLIC_FORM_SECRET || process.env.SESSION_SECRET || 'public-form-secret';
+  const secret = process.env.PUBLIC_FORM_SECRET || process.env.SESSION_SECRET;
+  if (!secret) throw new Error('Set PUBLIC_FORM_SECRET (or SESSION_SECRET) before using public forms.');
+  return secret;
 }
 
 // Workspace by slug, then enter its context so row-level security applies to every query after this.
@@ -114,6 +117,7 @@ async function verifyChallenge(pool, orgId, challengeToken, req, fetchImpl) {
   const s = r.rows[0];
   if (!s || !s.challenge_verify_url || !s.challenge_secret_enc) return true;
   if (!challengeToken) return false;
+  if (!fetchImpl && await publicHttpsProblem(s.challenge_verify_url)) return false;
   try {
     const secret = decryptCredential({ encrypted: s.challenge_secret_enc, iv: s.challenge_secret_iv, authTag: s.challenge_secret_tag });
     const body = new URLSearchParams({ secret, response: String(challengeToken), remoteip: clientIp(req) });
@@ -141,5 +145,5 @@ async function guardForm(pool, req, orgId, opts) {
 
 module.exports = {
   SIGN_IN_MINUTES, HONEYPOT_FIELD, FORM_MIN_SECONDS, newToken, hashToken, enterWorkspace, createLink, createSignInLink, checkLink,
-  recordUse, revokeLink, presentedToken, issueFormToken, checkFormToken, verifyChallenge, guardForm,
+  recordUse, revokeLink, presentedToken, formSecret, issueFormToken, checkFormToken, verifyChallenge, guardForm,
 };

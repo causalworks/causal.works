@@ -7,7 +7,7 @@
 const path = require('path');
 const multer = require('multer');
 const { publicRateLimit } = require('../lib/rateLimit');
-const { enterWorkspace, checkLink, recordUse, presentedToken, issueFormToken, guardForm } = require('../lib/publicLinks');
+const { enterWorkspace, checkLink, recordUse, presentedToken, issueFormToken, guardForm, formSecret } = require('../lib/publicLinks');
 const { loadProjectBalance } = require('../lib/sponsorBalance');
 const { createRequest, REQUEST_METHODS } = require('../lib/sponsorMoneyOut');
 const { markReceived } = require('../lib/sponsorReports');
@@ -37,6 +37,7 @@ function singleFile(req, res, next) {
 }
 
 function registerPublicRoutes(app, pool, opts) {
+  formSecret();
   const o = opts || {};
   const readLimit = publicRateLimit({ ipCapacity: 60, ipPerMinute: 30, now: o.now });
   const writeLimit = publicRateLimit({ ipCapacity: 10, ipPerMinute: 4, workspaceCapacity: 100, workspacePerMinute: 30, now: o.now });
@@ -131,13 +132,9 @@ function registerPublicRoutes(app, pool, opts) {
       if (!payeeName) return res.status(400).json({ code: 'payee_required', error: 'Enter who is being paid.' });
       const kind = b.payee_kind === 'individual' ? 'individual' : 'organization';
       const email = b.payee_email ? String(b.payee_email).trim().slice(0, 200) : null;
-      const found = await pool.query('SELECT id FROM org_constituents WHERE org_id = $1 AND lower(btrim(display_name)) = lower($2) AND kind = $3 ORDER BY id LIMIT 1', [ws.id, payeeName, kind]);
-      let payeeId = found.rows[0] ? found.rows[0].id : null;
-      if (!payeeId) {
-        const ins = await pool.query(`INSERT INTO org_constituents (org_id, display_name, kind, email) VALUES ($1, $2, $3, $4) RETURNING id`, [ws.id, payeeName, kind, email]);
-        payeeId = ins.rows[0].id;
-        await logAudit(pool, { orgId: ws.id, userId: null, action: 'create', tableName: 'org_constituents', recordId: payeeId, metadata: { via: 'project lead link', sponsored_project_id: project.id } });
-      }
+      const ins = await pool.query(`INSERT INTO org_constituents (org_id, display_name, kind, email) VALUES ($1, $2, $3, $4) RETURNING id`, [ws.id, payeeName, kind, email]);
+      const payeeId = ins.rows[0].id;
+      await logAudit(pool, { orgId: ws.id, userId: null, action: 'create', tableName: 'org_constituents', recordId: payeeId, metadata: { via: 'project lead link', sponsored_project_id: project.id } });
       let documentId = null;
       if (req.file) {
         const doc = await storeUploadedFile(pool, { orgId: ws.id, projectId: project.id, buffer: req.file.buffer, originalName: req.file.originalname, mimeType: req.file.mimetype, title: 'Invoice or receipt: ' + payeeName, docType: 'correspondence' });

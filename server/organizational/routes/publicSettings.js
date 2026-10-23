@@ -7,6 +7,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { encryptCredential } = require('../lib/podCredentialCrypto');
 const { logAudit } = require('../lib/auditLog');
+const { publicHttpsProblem } = require('../lib/publicHost');
 
 function registerPublicSettingsRoutes(app, pool) {
   const auth = requireAuth(pool);
@@ -27,6 +28,8 @@ function registerPublicSettingsRoutes(app, pool) {
     const b = req.body || {};
     const url = b.challenge_verify_url ? String(b.challenge_verify_url).trim() : null;
     if (url && !/^https:\/\/[^\s]+$/.test(url)) return res.status(400).json({ error: 'The verify address must start with https://.' });
+    const hostProblem = url ? await publicHttpsProblem(url) : null;
+    if (hostProblem) return res.status(400).json({ error: hostProblem });
     try {
       const cur = (await pool.query('SELECT * FROM org_public_settings WHERE org_id = $1', [req.orgId])).rows[0] || {};
       let enc = { encrypted: cur.challenge_secret_enc || null, iv: cur.challenge_secret_iv || null, authTag: cur.challenge_secret_tag || null };

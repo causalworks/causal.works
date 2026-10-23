@@ -8,6 +8,7 @@ const NS = {
   closingPost: 360012,
   duesPayment: 360013,
   duesRecognition: 360014,
+  paymentEvent: 360015,
 };
 
 const WAIT_MS = 15000;

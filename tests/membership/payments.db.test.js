@@ -54,7 +54,7 @@ async function setup(pool, asApp) {
     const body = { id: 'evt_' + (++n), ...event };
     return hook.call('POST', WEBHOOK, { params: { slug: org.slug, provider: 'stripe' }, body, headers: { 'x-signature': signatureHeader(JSON.stringify(body), secret || WHSEC) } });
   };
-  const resend = (body) => hook.call('POST', WEBHOOK, { params: { slug: org.slug, provider: 'stripe' }, body, headers: { 'x-signature': signatureHeader(JSON.stringify(body), WHSEC) } });
+  const resend = (body, secret) => hook.call('POST', WEBHOOK, { params: { slug: org.slug, provider: 'stripe' }, body, headers: { 'x-signature': signatureHeader(JSON.stringify(body), secret || WHSEC) } });
   const tier = async (body) => (await scall('POST', '/tiers', 'finance', { body: { name: 'Standard', price: '120', ...body } }, 201)).body.tier;
   const configure = async (extra) => {
     await scall('PUT', '/payment-account', 'finance', { body: { mode: 'test', secret_key: SECRET, webhook_secret: WHSEC } }, 200);
@@ -85,6 +85,29 @@ test('credentials: refused when they do not look right, stored encrypted, never 
     await s.scall('PUT', '/settings', 'admin', { body: { card_payments_enabled: true } }, 200);
     const toLive = await s.scall('PUT', '/settings', 'admin', { body: { payment_mode: 'live' } });
     assert.equal(toLive.statusCode, 400);
+  });
+});
+
+test('webhook: only the workspace\'s current mode is trusted; an event from the other mode is ignored', opts, async () => {
+  await h.withDb(async ({ pool, asApp }) => {
+    const s = await setup(pool, asApp);
+    await s.configure();
+    const LIVEWH = 'whsec_' + 'c'.repeat(24);
+    await s.scall('PUT', '/payment-account', 'finance', { body: { mode: 'live', secret_key: 'sk_live_' + 'd'.repeat(24), webhook_secret: LIVEWH } }, 200);
+    await s.scall('PUT', '/settings', 'admin', { body: { payment_mode: 'live' } }, 200);
+    const t = await s.tier();
+    const j = await s.holder(t);
+    const ev = { kind: 'payment_succeeded', orgId: s.org.id, termId: j.term_id, amountCents: 12000, paymentRef: 'pi_live', customerRef: 'cus_1' };
+    const testSigned = await s.send({ ...ev, livemode: false });
+    assert.equal(testSigned.statusCode, 400);
+    const wrongFlag = await s.send({ ...ev, livemode: false }, LIVEWH);
+    assert.equal(wrongFlag.body.ignored, true);
+    assert.equal((await s.record(j.constituent_id)).status, 'pending');
+    const body = { id: 'evt_both', ...ev, livemode: true };
+    const first = await s.resend(body, LIVEWH);
+    assert.equal(first.statusCode, 200, JSON.stringify(first.body));
+    assert.equal((await s.resend(body, LIVEWH)).body.duplicate, true);
+    assert.equal((await s.record(j.constituent_id)).payments.length, 1);
   });
 });
 

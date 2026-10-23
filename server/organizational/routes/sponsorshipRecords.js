@@ -6,7 +6,7 @@
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
-const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
+const { boardSeesAllPrograms, requireDonorRead } = require('../middleware/requireAccountingAccess');
 const { requireWriteAccess, requireReadAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
 const { logAudit } = require('../lib/auditLog');
 const { requireFiscalSponsor } = require('./sponsorship');
@@ -274,13 +274,13 @@ function registerSponsorshipRecordRoutes(app, pool) {
   }));
 
   // Donor letters and donated property
-  app.get(P + '/sponsored-projects/:id/donor-letters', ...read, wrap('GET .../donor-letters', async (req, res) => {
+  app.get(P + '/sponsored-projects/:id/donor-letters', ...read, requireDonorRead(pool), wrap('GET .../donor-letters', async (req, res) => {
     const project = await projectOr404(req, res);
     if (!project) return null;
     return { httpStatus: 200, body: await donorLetters(pool, req.orgId, project.id) };
   }));
 
-  app.get(P + '/sponsored-projects/:id/gifts/:giftId/donor-letter-template', ...read, wrap('GET .../donor-letter-template', async (req, res) => {
+  app.get(P + '/sponsored-projects/:id/gifts/:giftId/donor-letter-template', ...read, requireDonorRead(pool), wrap('GET .../donor-letter-template', async (req, res) => {
     const project = await projectOr404(req, res);
     if (!project) return null;
     const g = await pool.query(

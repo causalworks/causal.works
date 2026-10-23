@@ -121,6 +121,11 @@ test('lead forms: honeypot and too-fast submits are refused; a request lands on 
     assert.deepEqual([r.sponsored_project_id, r.requester_link_ref, r.created_by, r.status], [a.id, 'link:' + l.id, null, 'submitted']);
     res = await send({ ...good, amount_cents: '99999999', ...form(ws) });
     assert.equal(res.body.code, 'over_balance');
+    const staff = await h.one(pool, `INSERT INTO org_constituents (org_id, display_name, kind) VALUES ($1, 'Print shop two', 'organization') RETURNING id`, [ws.orgId]);
+    res = await send({ ...good, payee_name: 'Print shop two', ...form(ws) });
+    assert.equal(res.statusCode, 201, JSON.stringify(res.body));
+    const used = await h.one(pool, 'SELECT payee_constituent_id FROM org_sponsor_payment_requests WHERE id = $1', [res.body.id]);
+    assert.notEqual(Number(used.payee_constituent_id), Number(staff.id));
   });
 });
 

@@ -6,6 +6,7 @@
 const path = require('path');
 const Module = require('module');
 
+process.env.PUBLIC_FORM_SECRET = process.env.PUBLIC_FORM_SECRET || 'test-form-secret';
 const DB_URL = process.env.TEST_DATABASE_URL || '';
 const SKIP = DB_URL ? false : 'Set TEST_DATABASE_URL to a throwaway database built from build-specs/schema.sql (see build-specs/README.md).';
 

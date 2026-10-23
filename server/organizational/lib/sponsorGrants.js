@@ -9,6 +9,7 @@ const { projectDocumentId } = require('./sponsorMoneyOut');
 const { logAudit } = require('./auditLog');
 const { isoDate } = require('./sponsorFees');
 const { NS, withLock, BUSY } = require('./advisoryLock');
+const { csvCell } = require('./csvCell');
 
 const DESTINATIONS = { project_charity: 'The project, now its own charity', new_sponsor: 'A new fiscal sponsor', sponsor_decides: 'As the sponsor decides under the agreement' };
 
@@ -65,7 +66,7 @@ async function informationReturnSheet(pool, orgId, year) {
 }
 
 function informationReturnCsv(sheet) {
-  const q = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const q = csvCell;
   const d = (c) => (Number(c) / 100).toFixed(2);
   return ['Receiving entity,Projects,Cash released,Property released at value,Total,Releases,Information return needed']
     .concat(sheet.rows.map((r) => [q(r.entity_name), q(r.projects.join('; ')), d(r.cash_cents), d(r.property_cents), d(r.total_cents), r.releases, r.needs_information_return ? 'yes' : 'no'].join(',')))

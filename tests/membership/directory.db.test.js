@@ -41,7 +41,11 @@ async function setup(pool, asApp, asOwner) {
     if (expect) assert.equal(res.statusCode, expect, method + ' ' + p + ' ' + JSON.stringify(res.body));
     return res;
   };
-  const pc = (method, p, token, body) => pub.call(method, P + p, { params: { slug: org.slug }, headers: token ? { 'x-link-token': token } : {}, body: body || {}, ip: '10.6.6.' + (++n % 200) });
+  const pc = async (method, p, token, body) => {
+    const res = await pub.call(method, P + p, { params: { slug: org.slug }, headers: token ? { 'x-link-token': token } : {}, body: body || {}, ip: '10.6.6.' + (++n % 200) });
+    if (p === '/sign-in') await new Promise((r) => setTimeout(r, 200));
+    return res;
+  };
   const session = async (contactId) => (await createLink(pool, { orgId: org.id, purpose: 'membership_session', constituentId: contactId, minutes: 60 })).token;
   const form = () => ({ form_token: issueFormToken(org.id, Date.now() - 5000) });
   return { org, users, call, pc, session, form, sent, staff, pub };

@@ -20,6 +20,7 @@ const Dir = require('../lib/membershipDirectory');
 
 const PAGES = path.join(__dirname, '..', '..', '..', 'public', 'p');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_JOIN_EMAILS_PER_DAY = 3;
 const MAX_GIFT_CENTS = 100000000;
 
 function clip(v, n) {
@@ -150,6 +151,10 @@ function registerPublicMembershipRoutes(app, pool, opts) {
         mailing_address: fields.includes('mailing_address') ? clip(b.mailing_address, 500) : null,
         annual_budget_cents: budget,
       };
+      const recent = await pool.query(`SELECT count(*)::int AS n FROM org_membership_join_requests WHERE org_id = $1 AND lower(email) = lower($2) AND created_at > now() - interval '24 hours'`, [ws.id, email]);
+      if (recent.rows[0].n >= MAX_JOIN_EMAILS_PER_DAY) {
+        return res.status(202).json({ emailed: false, message: 'Check your email for a link to confirm your membership.' });
+      }
       const link = await createLink(pool, { orgId: ws.id, purpose: J.JOIN_CONFIRM, singleUse: true, days: 2 });
       const rq = await pool.query(
         `INSERT INTO org_membership_join_requests (org_id, kind, email, details, tier_id, price_cents, eligibility_confirmed, extra_gift_cents, link_id)
@@ -157,9 +162,9 @@ function registerPublicMembershipRoutes(app, pool, opts) {
         [ws.id, kind, email, JSON.stringify(details), tier.id, plan.price, !!(b.eligibility_confirmed === true || b.eligibility_confirmed === 'true'), gift, link.id]);
       const url = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/join#t=' + link.token;
       const sent = await mail(ws.id, email, 'confirm your membership', [
-        'Hello ' + name + ',', '', 'Thank you for joining ' + ws.display_name + '. Open this link to confirm your email address:', '', url, '',
+        'Hello,', '', 'Thank you for joining ' + ws.display_name + '. Open this link to confirm your email address:', '', url, '',
         'The link works once, for two days. If you did not ask to join, ignore this email.']);
-      return res.status(202).json({ request: rq.rows[0].id, emailed: !!sent, message: 'Check your email for a link to confirm your membership.' });
+      return res.status(202).json({ emailed: !!sent, message: 'Check your email for a link to confirm your membership.' });
     } catch (e) { return oops(res, 'POST public membership join', e); }
   });
 
@@ -204,13 +209,18 @@ function registerPublicMembershipRoutes(app, pool, opts) {
       const c = await J.contactForEmail(pool, ws.id, email);
       const isDues = c && ((await pool.query('SELECT 1 FROM org_membership_terms WHERE org_id = $1 AND constituent_id = $2 LIMIT 1', [ws.id, c.id])).rows.length > 0
         || !!(await Dir.seatMembership(pool, ws.id, c.id)));
+      res.json({ message });
       if (isDues) {
-        const link = await createSignInLink(pool, { orgId: ws.id, purpose: J.SIGN_IN, constituentId: c.id });
-        const url = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/account#t=' + link.token;
-        await mail(ws.id, email, 'your sign-in link', ['Hello ' + c.display_name + ',', '', 'Open this link to see your membership, update your details or renew:', '', url, '',
-          'The link works once, for 30 minutes. If you did not ask for it, ignore this email.']);
+        setImmediate(async () => {
+          try {
+            const link = await createSignInLink(pool, { orgId: ws.id, purpose: J.SIGN_IN, constituentId: c.id });
+            const url = baseUrl() + '/p/' + encodeURIComponent(ws.slug) + '/account#t=' + link.token;
+            await mail(ws.id, email, 'your sign-in link', ['Hello ' + c.display_name + ',', '', 'Open this link to see your membership, update your details or renew:', '', url, '',
+              'The link works once, for 30 minutes. If you did not ask for it, ignore this email.']);
+          } catch (e) { console.error('POST public membership sign-in (send):', e.message); }
+        });
       }
-      return res.json({ message });
+      return undefined;
     } catch (e) { return oops(res, 'POST public membership sign-in', e); }
   });
 

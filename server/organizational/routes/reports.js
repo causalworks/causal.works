@@ -177,7 +177,7 @@ function registerOrganizationalReportRoutes(app, pool) {
   const auth = requireAuth(pool);
   const orgAuth = [auth, requireOrganizationalAccess, requireOrgMembership(pool)];
 
-  app.get('/api/organizational/orgs/:slug/balance-sheet', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
+  app.get('/api/organizational/orgs/:slug/reports/balance-sheet', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {
     const orgId = req.orgId;
     const fy = req.query.fiscal_year ? Number.parseInt(String(req.query.fiscal_year), 10) : null;
     const asOfParam = req.query.as_of_date ? String(req.query.as_of_date).trim() : null;
@@ -237,7 +237,7 @@ function registerOrganizationalReportRoutes(app, pool) {
 
       res.json({ dates, snapshots: rows, as_of_date: asOfDate });
     } catch (e) {
-      console.error('GET /balance-sheet:', e.message);
+      console.error('GET /reports/balance-sheet:', e.message);
       res.status(500).json({ error: 'Could not load balance sheet' });
     }
   });

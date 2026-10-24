@@ -4,6 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireWriteAccess, leadMayTouch } = require('../middleware/requireWriteAccess');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 const { ACCOUNT_TEMPLATES } = require('../data/account-templates');
 const { STANDARD_COA_CATEGORIES } = require('../data/standardCoaCategories');
 const {
@@ -63,6 +64,7 @@ function registerOrganizationalOnboardingRoutes(app, pool) {
       }
 
       const completedAt = step === 'complete' ? new Date().toISOString() : null;
+      const prev = (await pool.query(`SELECT onboarding_step FROM org_settings WHERE org_id = $1`, [orgId])).rows[0];
       const r = await pool.query(
         `UPDATE org_settings
          SET onboarding_step = $2::text,
@@ -72,6 +74,8 @@ function registerOrganizationalOnboardingRoutes(app, pool) {
          RETURNING onboarding_step, onboarding_completed_at`,
         [orgId, step]
       );
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_settings', recordId: orgId,
+        fields: diffFields({ onboarding_step: prev && prev.onboarding_step }, { onboarding_step: r.rows[0].onboarding_step }, ['onboarding_step']), metadata: reqMeta(req) });
       return res.json({
         ok: true,
         onboarding_step: r.rows[0].onboarding_step,
@@ -89,10 +93,13 @@ function registerOrganizationalOnboardingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/onboarding/confirm-blank-coa', ...orgAuth, requireWriteAccess('admin'), async (req, res) => {
     try {
       const orgId = req.orgId;
+      const before = (await pool.query(`SELECT onboarding_blank_coa_chosen FROM org_settings WHERE org_id = $1`, [orgId])).rows[0];
       await pool.query(
         `UPDATE org_settings SET onboarding_blank_coa_chosen = true, updated_at = NOW() WHERE org_id = $1`,
         [orgId]
       );
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_settings', recordId: orgId,
+        fields: diffFields({ onboarding_blank_coa_chosen: before && before.onboarding_blank_coa_chosen }, { onboarding_blank_coa_chosen: true }, ['onboarding_blank_coa_chosen']), metadata: reqMeta(req) });
       return res.json({ ok: true });
     } catch (e) {
       if (e.message && /onboarding_blank_coa_chosen|does not exist/i.test(e.message)) {
@@ -145,6 +152,7 @@ function registerOrganizationalOnboardingRoutes(app, pool) {
         throw e;
       }
       await client.query('COMMIT');
+      await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'create', tableName: 'org_accounts', metadata: { ...reqMeta(req), import: 'onboarding chart of accounts', count: rows.length } });
 
       return res.status(201).json({ accounts: listRows });
     } catch (e) {

@@ -62,3 +62,60 @@ test('trigger leaves secrets out and skips unchanged updates', opts, async () =>
     assert.equal(JSON.parse(rows[1].new_value).status, 'error');
   });
 });
+
+test('org profile settings, name, roles, invites and onboarding changes are logged', opts, async () => {
+  await h.withDb(async ({ pool }) => {
+    const ws = await h.seedWorkspace(pool);
+    const orgs = h.loadRoutes('routes/orgs.js', 'registerOrganizationalOrgRoutes', pool);
+    const onboarding = h.loadRoutes('routes/onboarding.js', 'registerOrganizationalOnboardingRoutes', pool);
+    const admin = ws.users.find((u) => u.role === 'admin');
+    const other = ws.users.find((u) => u.role !== 'admin');
+    const base = { params: { slug: ws.slug }, user: admin.id, role: 'admin', orgId: ws.orgId, permissions: ['admin'] };
+
+    const before = (await pool.query(`SELECT fiscal_year_end_month FROM org_settings WHERE org_id = $1`, [ws.orgId])).rows[0].fiscal_year_end_month;
+    const month = before === 6 ? 9 : 6;
+    const patched = await orgs.call('PATCH', '/api/organizational/orgs/:slug', { ...base, body: { fiscal_year_end_month: month, entity_classification: '501(c)(3)', acknowledgment_signoff: 'Thank you' } });
+    assert.equal(patched.statusCode, 200, JSON.stringify(patched.body));
+    const settings = await logRows(pool, ws, 'org_settings');
+    const byField = Object.fromEntries(settings.filter((r) => r.action === 'update').map((r) => [r.field_name, r]));
+    assert.equal(byField.fiscal_year_end_month.new_value, String(month));
+    assert.equal(byField.fiscal_year_end_month.old_value, before == null ? null : String(before));
+    assert.equal(byField.entity_classification.new_value, '501(c)(3)');
+    assert.equal(byField.acknowledgment_signoff.new_value, 'Thank you');
+    assert.ok(!byField.ein, 'unchanged fields are not logged');
+
+    const again = await orgs.call('PATCH', '/api/organizational/orgs/:slug', { ...base, body: { fiscal_year_end_month: month } });
+    assert.equal(again.statusCode, 200);
+    assert.equal((await logRows(pool, ws, 'org_settings')).length, settings.length, 'a save with no change writes nothing');
+
+    const member = (await pool.query(`SELECT id, role FROM org_users WHERE org_id = $1 AND user_id = $2`, [ws.orgId, other.id])).rows[0];
+    const newRole = member.role === 'finance' ? 'fundraising' : 'finance';
+    const rolePatch = await orgs.call('PATCH', '/api/organizational/orgs/:slug/members/:id', { ...base, params: { slug: ws.slug, id: String(member.id) }, body: { role: newRole } });
+    assert.equal(rolePatch.statusCode, 200, JSON.stringify(rolePatch.body));
+    const roleRows = await logRows(pool, ws, 'org_users');
+    assert.deepEqual(roleRows.map((r) => [r.action, r.field_name, r.old_value, r.new_value]), [['update', 'role', member.role, newRole]]);
+
+    const removed = await orgs.call('DELETE', '/api/organizational/orgs/:slug/members/:id', { ...base, params: { slug: ws.slug, id: String(member.id) } });
+    assert.equal(removed.statusCode, 200, JSON.stringify(removed.body));
+    const afterRemove = await logRows(pool, ws, 'org_users');
+    assert.equal(afterRemove[afterRemove.length - 1].action, 'delete');
+    assert.equal(afterRemove[afterRemove.length - 1].metadata.role, newRole);
+
+    const invite = await orgs.call('POST', '/api/organizational/orgs/:slug/invites', { ...base, body: { email: 'New.Person@example.org', role: 'finance' } });
+    assert.equal(invite.statusCode, 200, JSON.stringify(invite.body));
+    const cancel = await orgs.call('DELETE', '/api/organizational/orgs/:slug/invites/:id', { ...base, params: { slug: ws.slug, id: String(invite.body.invite.id) } });
+    assert.equal(cancel.statusCode, 200);
+    const inviteRows = await logRows(pool, ws, 'org_invites');
+    assert.deepEqual(inviteRows.map((r) => r.action), ['create', 'delete']);
+    assert.equal(inviteRows[0].metadata.email, 'new.person@example.org');
+    assert.equal(inviteRows[0].metadata.role, 'finance');
+
+    const step = await onboarding.call('PATCH', '/api/organizational/orgs/:slug/onboarding-step', { ...base, body: { step: 'programs' } });
+    assert.equal(step.statusCode, 200, JSON.stringify(step.body));
+    const blank = await onboarding.call('POST', '/api/organizational/orgs/:slug/onboarding/confirm-blank-coa', base);
+    assert.equal(blank.statusCode, 200);
+    const onboardingRows = (await logRows(pool, ws, 'org_settings')).filter((r) => /^onboarding_/.test(r.field_name));
+    assert.deepEqual(onboardingRows.map((r) => r.field_name), ['onboarding_step', 'onboarding_blank_coa_chosen']);
+    assert.equal(onboardingRows[0].new_value, 'programs');
+  });
+});

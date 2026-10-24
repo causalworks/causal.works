@@ -9,6 +9,7 @@ const { provisionPodForOrg } = require('../lib/podProvision');
 const { createStarterWorkshopForOrg } = require('../lib/starterWorkshop');
 const { seedSampleOrgContent } = require('../lib/seedSampleOrgContent');
 const { enterOrgContext } = require('../lib/orgContext');
+const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
 
 const DISPLAY_NAME_MAX = 200;
 const SLUG_MAX = 128;
@@ -442,6 +443,38 @@ function registerOrganizationalOrgRoutes(app, pool) {
         client.release();
       }
 
+      const asText = (v) => (v != null && typeof v === 'object' ? JSON.stringify(v) : v);
+      const settingsBefore = {
+        ein: row.ein, fiscal_year_end_month: row.fiscal_year_end_month, org_profile_data: asText(row.cooperative_profile),
+        fiscal_sponsorship_mode: row.fiscal_sponsorship_mode, sponsorship_model: row.sponsorship_model, default_admin_rate: row.default_admin_rate,
+        entity_classification: row.entity_classification, federal_grant_recipient: row.federal_grant_recipient,
+        state_charitable_solicitation_registrations: asText(row.state_charitable_solicitation_registrations),
+        has_lobbying_activity: row.has_lobbying_activity, has_political_electoral_activity: row.has_political_electoral_activity,
+        membership_enabled: row.membership_enabled, reply_to_email: row.reply_to_email,
+        onboarding_target_fiscal_year: row.onboarding_target_fiscal_year, onboarding_conversion_date: row.onboarding_conversion_date,
+        onboarding_has_prior_data: row.onboarding_has_prior_data, session_timeout_minutes: row.session_timeout_minutes, state: row.state,
+        ...Object.fromEntries(Object.keys(DOC_FIELDS).map((k) => [k, row[k]])),
+      };
+      const settingsAfter = {
+        ein, fiscal_year_end_month: fiscalMonth, org_profile_data: asText(profile),
+        fiscal_sponsorship_mode: fiscalSponsorshipMode, sponsorship_model: sponsorshipModel, default_admin_rate: defaultAdminRate,
+        entity_classification: entityClassification, federal_grant_recipient: federalGrantRecipient,
+        state_charitable_solicitation_registrations: asText(stateRegistrations),
+        has_lobbying_activity: lobbyingActivity, has_political_electoral_activity: politicalActivity,
+        membership_enabled: membershipEnabled, reply_to_email: replyToEmail,
+        onboarding_target_fiscal_year: onboardingTargetFY, onboarding_conversion_date: onboardingConversionDate,
+        onboarding_has_prior_data: onboardingHasPriorData, session_timeout_minutes: sessionTimeoutMinutes, state,
+        ...docDetails,
+      };
+      const settingsFields = diffFields(settingsBefore, settingsAfter, Object.keys(settingsBefore));
+      if (settingsFields.length > 0) {
+        await logAudit(pool, { orgId: row.id, userId, action: 'update', tableName: 'org_settings', recordId: row.id, fields: settingsFields, metadata: reqMeta(req) });
+      }
+      const nameFields = diffFields({ display_name: row.display_name, slug: req.params.slug }, { display_name: displayName, slug: newSlug }, ['display_name', 'slug']);
+      if (nameFields.length > 0) {
+        await logAudit(pool, { orgId: row.id, userId, action: 'update', tableName: 'coop_members', recordId: row.id, fields: nameFields, metadata: reqMeta(req) });
+      }
+
       const refetch = await pool.query(
         `SELECT ${ORG_SELECT_FIELDS}
          FROM org_users m
@@ -485,6 +518,8 @@ function registerOrganizationalOrgRoutes(app, pool) {
         `UPDATE coop_members SET deleted_at = NOW(), deleted_by_user_id = $1 WHERE id = $2`,
         [userId, orgId]
       );
+
+      await logAudit(pool, { orgId, userId, action: 'delete', tableName: 'coop_members', recordId: orgId, metadata: { ...reqMeta(req), soft_delete: true, display_name: displayName } });
 
       console.log(
         `[org-delete] org_id=${orgId} slug=${req.params.slug} name=${JSON.stringify(displayName)} ` +
@@ -663,6 +698,8 @@ function registerOrganizationalOrgRoutes(app, pool) {
       await client.query('COMMIT');
 
       enterOrgContext(orgRow.id);
+      await logAudit(pool, { orgId: orgRow.id, userId, action: 'create', tableName: 'coop_members', recordId: orgRow.id, metadata: { ...reqMeta(req), display_name: orgRow.display_name } });
+      await logAudit(pool, { orgId: orgRow.id, userId, action: 'create', tableName: 'org_users', metadata: { ...reqMeta(req), user_id: userId, role: 'admin', reason: 'creator' } });
       try {
         await provisionPodForOrg(pool, orgRow.id, orgRow.slug);
       } catch (podErr) {
@@ -834,6 +871,8 @@ function registerOrganizationalOrgRoutes(app, pool) {
         [orgId, email, tokenHash, role, userId, expiresAt, role === 'program' ? programIds : []]
       );
 
+      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_invites', recordId: r.rows[0].id, metadata: { ...reqMeta(req), email, role, program_ids: role === 'program' ? programIds : [] } });
+
       const orgR = await pool.query('SELECT display_name FROM coop_members WHERE id = $1', [orgId]);
       try {
         await sendOrgInviteEmail(email, token, orgR.rows[0].display_name, role);
@@ -853,10 +892,13 @@ function registerOrganizationalOrgRoutes(app, pool) {
     const orgId = req.orgId;
 
     try {
-      await pool.query(
-        `DELETE FROM org_invites WHERE id = $1 AND org_id = $2`,
+      const gone = await pool.query(
+        `DELETE FROM org_invites WHERE id = $1 AND org_id = $2 RETURNING email, role`,
         [inviteId, orgId]
       );
+      if (gone.rows.length > 0) {
+        await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'delete', tableName: 'org_invites', recordId: inviteId, metadata: { ...reqMeta(req), email: gone.rows[0].email, role: gone.rows[0].role } });
+      }
 
       return res.json({ success: true });
     } catch (e) {
@@ -877,7 +919,7 @@ function registerOrganizationalOrgRoutes(app, pool) {
       );
       const adminCount = Number(adminCountR.rows[0].count);
       const memberRoleR = await pool.query(
-        `SELECT role FROM org_users WHERE id = $1 AND org_id = $2`,
+        `SELECT role, user_id FROM org_users WHERE id = $1 AND org_id = $2`,
         [memberId, orgId]
       );
       if (memberRoleR.rows.length > 0 && memberRoleR.rows[0].role === 'admin' && adminCount <= 1) {
@@ -892,10 +934,13 @@ function registerOrganizationalOrgRoutes(app, pool) {
         return res.status(400).json({ error: 'Cannot remove yourself' });
       }
 
-      await pool.query(
+      const removed = await pool.query(
         `DELETE FROM org_users WHERE id = $1 AND org_id = $2`,
         [memberId, orgId]
       );
+      if (removed.rowCount > 0 && memberRoleR.rows.length > 0) {
+        await logAudit(pool, { orgId, userId, action: 'delete', tableName: 'org_users', recordId: memberId, metadata: { ...reqMeta(req), user_id: memberRoleR.rows[0].user_id, role: memberRoleR.rows[0].role } });
+      }
 
       return res.json({ success: true });
     } catch (e) {
@@ -928,6 +973,9 @@ function registerOrganizationalOrgRoutes(app, pool) {
         `SELECT role FROM org_users WHERE id = $1 AND org_id = $2`,
         [memberId, orgId]
       );
+      const oldProgramIds = role === 'program' || (memberRoleR.rows[0] && memberRoleR.rows[0].role === 'program')
+        ? (await pool.query(`SELECT program_id FROM org_program_grants WHERE org_user_id = $1 ORDER BY program_id`, [memberId])).rows.map((g) => g.program_id)
+        : [];
       if (memberRoleR.rows.length > 0 && memberRoleR.rows[0].role === 'admin' && role !== 'admin' && adminCount <= 1) {
         return res.status(400).json({ error: 'Cannot demote the last admin' });
       }
@@ -969,6 +1017,18 @@ function registerOrganizationalOrgRoutes(app, pool) {
         throw err;
       } finally {
         client.release();
+      }
+
+      if (member && memberRoleR.rows.length > 0) {
+        const newProgramIds = role === 'program' ? [...programIds].sort((a, b) => a - b) : [];
+        const fields = diffFields(
+          { role: memberRoleR.rows[0].role, program_ids: oldProgramIds.join(',') },
+          { role, program_ids: newProgramIds.join(',') },
+          ['role', 'program_ids']
+        );
+        if (fields.length > 0) {
+          await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_users', recordId: memberId, fields, metadata: reqMeta(req) });
+        }
       }
 
       return res.json({ member, program_ids: role === 'program' ? programIds : [] });

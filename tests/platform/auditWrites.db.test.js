@@ -120,6 +120,46 @@ test('org profile settings, name, roles, invites and onboarding changes are logg
   });
 });
 
+test('org create and org delete are logged', opts, async () => {
+  await h.withDb(async ({ pool }) => {
+    const ws = await h.seedWorkspace(pool);
+    const podFile = require.resolve('../../server/organizational/lib/podProvision');
+    const podSaved = require.cache[podFile];
+    require.cache[podFile] = { id: podFile, filename: podFile, loaded: true, exports: { provisionPodForOrg: async () => ({ ok: true }) } };
+    let orgs;
+    try { orgs = h.loadRoutes('routes/orgs.js', 'registerOrganizationalOrgRoutes', pool); } finally {
+      if (podSaved) require.cache[podFile] = podSaved; else delete require.cache[podFile];
+    }
+    const admin = ws.users.find((u) => u.role === 'admin');
+
+    const created = await orgs.call('POST', '/api/organizational/orgs', { user: admin.id, role: 'admin', body: { display_name: 'Audit Create Test Org', fiscal_year_end_month: 12 } });
+    assert.equal(created.statusCode, 201, JSON.stringify(created.body));
+    const newOrgId = created.body.org.id;
+    const orgRows = (await pool.query(`SELECT action, record_id, user_id, metadata FROM org_audit_log WHERE org_id = $1 AND table_name = 'coop_members'`, [newOrgId])).rows;
+    assert.deepEqual(orgRows.map((r) => r.action), ['create']);
+    assert.equal(Number(orgRows[0].record_id), newOrgId);
+    assert.equal(orgRows[0].user_id, admin.id);
+    assert.equal(orgRows[0].metadata.display_name, 'Audit Create Test Org');
+    const userRows = (await pool.query(`SELECT action, metadata FROM org_audit_log WHERE org_id = $1 AND table_name = 'org_users'`, [newOrgId])).rows;
+    assert.equal(userRows.length, 1);
+    assert.equal(userRows[0].action, 'create');
+    assert.equal(userRows[0].metadata.role, 'admin');
+    assert.equal(userRows[0].metadata.reason, 'creator');
+
+    const wrong = await orgs.call('DELETE', '/api/organizational/orgs/:slug', { params: { slug: created.body.org.slug }, user: admin.id, role: 'admin', orgId: newOrgId, body: { confirm_name: 'Something else' } });
+    assert.equal(wrong.statusCode, 400);
+    const none = (await pool.query(`SELECT count(*)::int AS n FROM org_audit_log WHERE org_id = $1 AND action = 'delete' AND table_name = 'coop_members'`, [newOrgId])).rows[0].n;
+    assert.equal(none, 0, 'a refused delete writes nothing');
+
+    const deleted = await orgs.call('DELETE', '/api/organizational/orgs/:slug', { params: { slug: created.body.org.slug }, user: admin.id, role: 'admin', orgId: newOrgId, body: { confirm_name: 'Audit Create Test Org' } });
+    assert.equal(deleted.statusCode, 200, JSON.stringify(deleted.body));
+    const delRows = (await pool.query(`SELECT action, metadata FROM org_audit_log WHERE org_id = $1 AND action = 'delete' AND table_name = 'coop_members'`, [newOrgId])).rows;
+    assert.equal(delRows.length, 1);
+    assert.equal(delRows[0].metadata.soft_delete, true);
+    assert.equal(delRows[0].metadata.display_name, 'Audit Create Test Org');
+  });
+});
+
 test('a failed audit write is recorded for the platform admin page; strict mode throws', opts, async () => {
   await h.withDb(async ({ pool, client }) => {
     const ws = await h.seedWorkspace(pool);

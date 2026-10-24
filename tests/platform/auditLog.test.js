@@ -20,6 +20,7 @@ test('missing arguments are reported, not silently dropped', async () => {
   const seen = [];
   const orig = console.error; console.error = (...a) => seen.push(a.join(' '));
   try { await logAudit(pool, { orgId: 7, userId: 3, tableName: 'x', recordId: 1 }); } finally { console.error = orig; }
-  assert.strictEqual(pool.calls.length, 0);
+  assert.strictEqual(pool.calls.length, 1, 'only the failure record is written');
+  assert.match(pool.calls[0][5], /action/);
   assert.ok(seen.some((m) => m.includes('action')));
 });

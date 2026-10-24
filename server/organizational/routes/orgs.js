@@ -514,12 +514,21 @@ function registerOrganizationalOrgRoutes(app, pool) {
         return res.status(400).json({ error: 'Organization name did not match' });
       }
 
-      await pool.query(
-        `UPDATE coop_members SET deleted_at = NOW(), deleted_by_user_id = $1 WHERE id = $2`,
-        [userId, orgId]
-      );
-
-      await logAudit(pool, { orgId, userId, action: 'delete', tableName: 'coop_members', recordId: orgId, metadata: { ...reqMeta(req), soft_delete: true, display_name: displayName } });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE coop_members SET deleted_at = NOW(), deleted_by_user_id = $1 WHERE id = $2`,
+          [userId, orgId]
+        );
+        await logAudit(client, { orgId, userId, action: 'delete', tableName: 'coop_members', recordId: orgId, metadata: { ...reqMeta(req), soft_delete: true, display_name: displayName }, strict: true });
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
 
       console.log(
         `[org-delete] org_id=${orgId} slug=${req.params.slug} name=${JSON.stringify(displayName)} ` +
@@ -934,12 +943,22 @@ function registerOrganizationalOrgRoutes(app, pool) {
         return res.status(400).json({ error: 'Cannot remove yourself' });
       }
 
-      const removed = await pool.query(
-        `DELETE FROM org_users WHERE id = $1 AND org_id = $2`,
-        [memberId, orgId]
-      );
-      if (removed.rowCount > 0 && memberRoleR.rows.length > 0) {
-        await logAudit(pool, { orgId, userId, action: 'delete', tableName: 'org_users', recordId: memberId, metadata: { ...reqMeta(req), user_id: memberRoleR.rows[0].user_id, role: memberRoleR.rows[0].role } });
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const removed = await client.query(
+          `DELETE FROM org_users WHERE id = $1 AND org_id = $2`,
+          [memberId, orgId]
+        );
+        if (removed.rowCount > 0 && memberRoleR.rows.length > 0) {
+          await logAudit(client, { orgId, userId, action: 'delete', tableName: 'org_users', recordId: memberId, metadata: { ...reqMeta(req), user_id: memberRoleR.rows[0].user_id, role: memberRoleR.rows[0].role }, strict: true });
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
       }
 
       return res.json({ success: true });
@@ -1011,24 +1030,23 @@ function registerOrganizationalOrgRoutes(app, pool) {
             );
           }
         }
+        if (member && memberRoleR.rows.length > 0) {
+          const newProgramIds = role === 'program' ? [...programIds].sort((a, b) => a - b) : [];
+          const fields = diffFields(
+            { role: memberRoleR.rows[0].role, program_ids: oldProgramIds.join(',') },
+            { role, program_ids: newProgramIds.join(',') },
+            ['role', 'program_ids']
+          );
+          if (fields.length > 0) {
+            await logAudit(client, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_users', recordId: memberId, fields, metadata: reqMeta(req), strict: true });
+          }
+        }
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         throw err;
       } finally {
         client.release();
-      }
-
-      if (member && memberRoleR.rows.length > 0) {
-        const newProgramIds = role === 'program' ? [...programIds].sort((a, b) => a - b) : [];
-        const fields = diffFields(
-          { role: memberRoleR.rows[0].role, program_ids: oldProgramIds.join(',') },
-          { role, program_ids: newProgramIds.join(',') },
-          ['role', 'program_ids']
-        );
-        if (fields.length > 0) {
-          await logAudit(pool, { orgId, userId: req.user.user_id ?? req.user.id, action: 'update', tableName: 'org_users', recordId: memberId, fields, metadata: reqMeta(req) });
-        }
       }
 
       return res.json({ member, program_ids: role === 'program' ? programIds : [] });

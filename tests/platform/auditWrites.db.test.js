@@ -119,3 +119,23 @@ test('org profile settings, name, roles, invites and onboarding changes are logg
     assert.equal(onboardingRows[0].new_value, 'programs');
   });
 });
+
+test('a failed audit write is recorded for the platform admin page; strict mode throws', opts, async () => {
+  await h.withDb(async ({ pool, client }) => {
+    const ws = await h.seedWorkspace(pool);
+    const { logAudit } = require('../../server/organizational/lib/auditLog');
+    await logAudit(pool, { orgId: ws.orgId, userId: null, action: 'create', metadata: {} });
+    const rows = (await pool.query(`SELECT org_id, action, error, reviewed_at FROM platform_audit_failures WHERE org_id = $1`, [ws.orgId])).rows;
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].action, 'create');
+    assert.match(rows[0].error, /tableName/);
+    assert.equal(rows[0].reviewed_at, null);
+    await assert.rejects(() => logAudit(pool, { orgId: ws.orgId, userId: null, action: 'create', metadata: {}, strict: true }), /not written/);
+    await assert.rejects(async () => {
+      await client.query('SAVEPOINT s1');
+      try { await logAudit(pool, { orgId: ws.orgId, userId: null, action: 'bogus', tableName: 'org_settings', recordId: ws.orgId, strict: true }); }
+      finally { await client.query('ROLLBACK TO SAVEPOINT s1'); }
+    });
+    assert.equal((await pool.query(`SELECT count(*)::int AS n FROM platform_audit_failures WHERE org_id = $1`, [ws.orgId])).rows[0].n, 1, 'strict failures are thrown, not recorded');
+  });
+});

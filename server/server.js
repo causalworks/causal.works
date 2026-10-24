@@ -2225,6 +2225,37 @@ ${table(['Entry point', 'Visitors', 'Entries'], v.by_entry.map((r) => [r.entry, 
 ${table(['Referrer', 'Visitors'], v.top_referrers.map((r) => [r.referrer, r.visitors]))}`;
 }
 
+async function loadPlatformHealth() {
+  const [open, recent] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS n FROM platform_audit_failures WHERE reviewed_at IS NULL`),
+    pool.query(`SELECT id, occurred_at, org_id, action, table_name, error FROM platform_audit_failures WHERE reviewed_at IS NULL ORDER BY occurred_at DESC LIMIT 20`),
+  ]);
+  return { open_failures: open.rows[0].n, recent: recent.rows };
+}
+
+function renderPlatformHealthSection(h) {
+  if (!h) return '<p style="font-size:13px;color:#991b1b;">Platform health could not be loaded; check the server log.</p>';
+  const status = h.open_failures === 0
+    ? '<p style="font-size:14px;color:#166534;"><strong>All clear.</strong> No failed audit writes waiting for review.</p>'
+    : `<p style="font-size:14px;color:#991b1b;"><strong>Needs attention:</strong> ${h.open_failures} failed audit write(s) not yet reviewed.</p>`;
+  const failRows = h.recent.map((r) => `<tr><td style="white-space:nowrap;">${escapeHtml(new Date(r.occurred_at).toISOString().slice(0, 16).replace('T', ' '))} UTC</td><td>${escapeHtml(String(r.org_id ?? '—'))}</td><td>${escapeHtml(r.table_name || '—')}</td><td>${escapeHtml(r.action || '—')}</td><td>${escapeHtml(r.error || '')}</td></tr>`).join('');
+  const failTable = h.recent.length
+    ? `<table style="max-width:900px;"><thead><tr><th>When</th><th>Workspace id</th><th>Table</th><th>Action</th><th>Error</th></tr></thead><tbody>${failRows}</tbody></table>
+<form method="post" action="/admin/audit-failures/review" style="margin-top:8px;"><button type="submit">Mark all as reviewed</button></form>`
+    : '';
+  return `${status}${failTable}`;
+}
+
+app.post('/admin/audit-failures/review', requireAdmin, async (req, res) => {
+  try {
+    await pool.query(`UPDATE platform_audit_failures SET reviewed_at = now() WHERE reviewed_at IS NULL`);
+    return res.redirect(303, '/admin');
+  } catch (e) {
+    console.error('POST /admin/audit-failures/review:', e.message);
+    return res.status(500).send('Could not mark reviewed');
+  }
+});
+
 require('./admin/accountingReview').registerAccountingReview(app, { pool, requireAdmin });
 
 app.get('/admin/demo-visits', requireAdmin, async (req, res) => {
@@ -2928,6 +2959,14 @@ app.get('/admin', requireAdmin, async (req, res) => {
       `<tr><td>${escapeHtml(pv.user_email)}</td><td><code style="font-size:12px;">${escapeHtml(pv.path)}</code></td><td style="font-size:11px;white-space:nowrap;">${fmtLastLogin(pv.created_at)}</td></tr>`
     ).join('');
 
+    let platformHealthHtml;
+    try {
+      platformHealthHtml = renderPlatformHealthSection(await loadPlatformHealth());
+    } catch (healthErr) {
+      console.error('/admin: platform health failed:', healthErr.message);
+      platformHealthHtml = renderPlatformHealthSection(null);
+    }
+
     const nRows = (html) => (String(html).match(/<tr/g) || []).length;
     const excludeMeOnPage = req.query.exclude_me === '1';
     let demoVisitsHtml;
@@ -2971,6 +3010,9 @@ button { padding:6px 10px; border:1px solid #d1d5db; background:#fff; border-rad
 <body><header style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><span>Causal Admin</span><span style="font-size:13px;font-weight:400;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">${escapeHtml(String(req.user.email || ''))}<a href="/individual/" style="color:#fff;">Open the app</a><button type="button" style="color:#111827;" onclick="fetch('/auth/logout',{method:'POST',credentials:'same-origin'}).catch(function(){}).then(function(){location.href='/login';})">Sign out</button></span></header><main>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/admin/accounting-review">Accounting module review →</a> · <a href="/admin/accounting-review?module=funding">Funding →</a> · <a href="/admin/accounting-review?module=budget">Budget →</a> <span style="color:#6b7280;">(what is built, what is planned, ideas, questions)</span></p>
 <p style="font-size:13px;margin:0 0 14px;"><a href="/organizational/cooperative/pod-management">Solid Pod Management →</a> <span style="color:#6b7280;">(platform-admin only; pod status/sync across every org)</span></p>
+<details open><summary>Platform health</summary>
+${platformHealthHtml}
+</details>
 <details open><summary>Demo visitors</summary>
 ${demoVisitsHtml}
 </details>

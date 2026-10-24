@@ -1,8 +1,22 @@
 'use strict';
 
-async function logAudit(pool, { orgId, userId, action, tableName, recordId, fields, metadata }) {
+async function recordFailure(pool, { orgId, userId, action, tableName, recordId }, message) {
+  console.error(`AUDIT_WRITE_FAILED org=${orgId} table=${tableName} action=${action}: ${message}`);
+  if (!pool) return;
+  try {
+    await pool.query(
+      `INSERT INTO platform_audit_failures (org_id, user_id, action, table_name, record_id, error) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [orgId || null, userId || null, action || null, tableName || null, Number.isInteger(Number(recordId)) ? Number(recordId) : null, String(message).slice(0, 500)]
+    );
+  } catch (_) {}
+}
+
+// Pass strict: true (with the transaction client) to make a failed audit write fail the whole change.
+async function logAudit(pool, { orgId, userId, action, tableName, recordId, fields, metadata, strict }) {
   if (!pool || !orgId || !action || !tableName) {
-    console.error('auditLog not written: missing', !pool ? 'pool' : !orgId ? 'orgId' : !action ? 'action' : 'tableName');
+    const why = 'missing ' + (!pool ? 'pool' : !orgId ? 'orgId' : !action ? 'action' : 'tableName');
+    if (strict) throw new Error('audit entry not written: ' + why);
+    await recordFailure(pool, { orgId, userId, action, tableName, recordId }, why);
     return;
   }
   if (!recordId) {
@@ -46,7 +60,8 @@ async function logAudit(pool, { orgId, userId, action, tableName, recordId, fiel
       );
     }
   } catch (err) {
-    console.error('auditLog write failed:', err.message);
+    if (strict) throw err;
+    await recordFailure(pool, { orgId, userId, action, tableName, recordId }, err.message);
   }
 }
 

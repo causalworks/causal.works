@@ -11,6 +11,7 @@ const { getOrganizationalExecutiveSummaryText } = require('../lib/Organizational
 const { fetchBoardReportData, fetchGrantReportData, fallbackGrantNarrative } = require('../lib/OrganizationalReportData');
 const { htmlToPdfBuffer } = require('../lib/OrganizationalHtmlPdf');
 const { buildCashflowGrid } = require('../lib/cashflowForecast');
+const { receiptStatement } = require('../lib/giftBenefit');
 
 function escapeHtml(s) {
   return String(s || '')
@@ -128,8 +129,6 @@ function grantReportHtml(data, narrative) {
 </body></html>`;
 }
 
-const TAX_DISCLAIMER = 'No goods or services were provided in exchange for this contribution. ' +
-  'Your contribution is tax-deductible to the extent allowed by law.';
 
 function giftReceiptHtml(gift, constituent, org) {
   const donorName = constituent.display_name ||
@@ -164,11 +163,12 @@ function giftReceiptHtml(gift, constituent, org) {
 <tr><th>Donor</th><td>${escapeHtml(donorName)}${constituent.mailing_address ? String(constituent.mailing_address).split(/\r?\n/).map((l) => `<br>${escapeHtml(l)}`).join('') : ''}</td></tr>
 <tr><th>Amount</th><td>${escapeHtml(fmtUsd(gift.amount_cents))}</td></tr>
 <tr><th>Date received</th><td>${escapeHtml(fmtDate(gift.received_at))}</td></tr>
+${gift.benefit_value_cents > 0 ? `<tr><th>Value received by donor</th><td>${escapeHtml(fmtUsd(gift.benefit_value_cents))}${gift.benefit_description ? ' — ' + escapeHtml(gift.benefit_description) : ''}</td></tr><tr><th>Deductible amount</th><td>${escapeHtml(fmtUsd(Math.max(0, Number(gift.amount_cents) - Number(gift.benefit_value_cents))))}</td></tr>` : ''}
 <tr><th>Gift type</th><td>${escapeHtml(typeLabel)}</td></tr>
 ${gift.payment_method ? `<tr><th>Payment method</th><td>${escapeHtml(gift.payment_method)}</td></tr>` : ''}
 ${gift.campaign ? `<tr><th>Campaign / appeal</th><td>${escapeHtml(gift.campaign)}</td></tr>` : ''}
 </table>
-<div class="disclaimer">${escapeHtml(TAX_DISCLAIMER)}</div>
+<div class="disclaimer">${receiptStatement(gift).lines.map(escapeHtml).join(' ')}</div>
 <div class="footer">Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
 </body></html>`;
 }

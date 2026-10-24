@@ -930,6 +930,19 @@
           </div>
           <p id="gift-pl-pv-preview" style="font-size:var(--text-xs);color:var(--text-secondary);margin:6px 0 0;"></p>
         </div>
+        <details style="margin-bottom:8px;">
+          <summary style="font-size:var(--text-xs);color:var(--text-secondary);cursor:pointer;">Donor received something in return</summary>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:6px;">
+            <div>
+              <label class="organizational-label" style="font-size:var(--text-xs);">What they received</label>
+              <input type="text" class="organizational-input" id="gift-benefit-description" maxlength="500" placeholder="e.g. dinner for two">
+            </div>
+            <div>
+              <label class="organizational-label" style="font-size:var(--text-xs);">Estimated value ($)</label>
+              <input type="number" class="organizational-input" id="gift-benefit-value" min="0" step="0.01">
+            </div>
+          </div>
+        </details>
         <div style="margin-bottom:8px;">
           <label class="organizational-label" style="font-size:var(--text-xs);">Notes</label>
           <textarea class="organizational-textarea" id="gift-notes" rows="2" placeholder="optional"></textarea>
@@ -1267,6 +1280,11 @@
           notes:           notesEl.value.trim() || null,
           send_acknowledgment: !!(ackEl && ackEl.checked),
         };
+        const benefitValue = parseFloat(section.querySelector('#gift-benefit-value').value);
+        if (!isNaN(benefitValue) && benefitValue > 0) {
+          payload.benefit_value = benefitValue;
+          payload.benefit_description = section.querySelector('#gift-benefit-description').value.trim();
+        }
         if (isInKind || isPledge) {
           payload.program_id = programSelect && programSelect.value ? Number(programSelect.value) : null;
         }

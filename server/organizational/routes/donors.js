@@ -6,6 +6,7 @@ const { requireOrgMembership, requireOrgRole } = require('../middleware/requireO
 const { requireDonorRead, requireContactRead, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireContactWrite } = require('../middleware/requireWriteAccess');
 const { sendGiftAcknowledgment } = require('../lib/sendGiftAcknowledgment');
+const { parseBenefit } = require('../lib/giftBenefit');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { validateConstituentsRows } = require('../lib/importValidators');
 const { FINANCE_ROLES, FUNDRAISING_ROLES } = require('../lib/orgRoles');
@@ -100,6 +101,8 @@ function rowToGift(row) {
     acknowledgment_sent_at: row.acknowledgment_sent_at || null,
     receipt_sent_at: row.receipt_sent_at || null,
     notes: row.notes || null,
+    benefit_description: row.benefit_description || null,
+    benefit_value_cents: row.benefit_value_cents != null ? Number(row.benefit_value_cents) : null,
     recorded_by_user_id: row.recorded_by_user_id != null ? Number(row.recorded_by_user_id) : null,
     posting_status: row.posting_status || 'not_applicable',
     ledger_transaction_id: row.ledger_transaction_id != null ? Number(row.ledger_transaction_id) : null,
@@ -720,6 +723,8 @@ function registerOrganizationalDonorRoutes(app, pool) {
       }
 
       const amountCents = giftType === 'pledge' ? pf.discounted_present_value_cents : amountResult.value;
+      const benefit = parseBenefit(body, amountCents);
+      if (benefit.error) return res.status(400).json({ error: benefit.error });
 
       const r = await pool.query(
         `INSERT INTO org_gifts
@@ -731,8 +736,9 @@ function registerOrganizationalDonorRoutes(app, pool) {
             in_kind_revenue_account_id, in_kind_expense_account_id,
             total_pledged_cents, is_multi_year_pledge, discount_rate_bps,
             discounted_present_value_cents, receivable_account_id, pledge_years,
-            pledge_status, pledge_condition, pledge_status_changed_by, pledge_status_changed_at, pledge_status_note)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+            pledge_status, pledge_condition, pledge_status_changed_by, pledge_status_changed_at, pledge_status_note,
+            benefit_description, benefit_value_cents)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)
          RETURNING *`,
         [
           orgId, constituentId, grantId, sponsoredProjectId, softCreditId,
@@ -750,6 +756,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
           pf.discounted_present_value_cents, pf.receivable_account_id, pf.pledge_years != null ? pf.pledge_years : null,
           pf.pledge_status, pf.pledge_condition, pf.pledge_status ? userId : null, pf.pledge_status ? new Date().toISOString() : null,
           pf.pledge_status ? 'Recorded as ' + pf.pledge_status : null,
+          benefit.touched && benefit.value > 0 ? benefit.description : null, benefit.touched ? benefit.value : null,
         ]
       );
       const gift = r.rows[0];
@@ -870,6 +877,12 @@ function registerOrganizationalDonorRoutes(app, pool) {
         if (gpR.rows.length && gpR.rows[0].primary_program_id != null) pf.program_id = Number(gpR.rows[0].primary_program_id);
       }
 
+      const benefit = parseBenefit(body, finalAmountCents, row.benefit_description);
+      if (benefit.error) return res.status(400).json({ error: benefit.error });
+      const nextBenefitValue = benefit.touched ? benefit.value : (row.benefit_value_cents != null ? Number(row.benefit_value_cents) : null);
+      if (nextBenefitValue != null && nextBenefitValue > finalAmountCents) return res.status(400).json({ error: 'The value of what the donor received cannot be more than the amount paid.' });
+      const nextBenefitText = benefit.touched && benefit.description !== undefined ? benefit.description : row.benefit_description;
+
       const r = await pool.query(
         `UPDATE org_gifts SET
            constituent_id = $1, grant_id = $2, sponsored_project_id = $3, soft_credit_constituent_id = $4,
@@ -880,7 +893,8 @@ function registerOrganizationalDonorRoutes(app, pool) {
            in_kind_revenue_account_id = $17, in_kind_expense_account_id = $18,
            total_pledged_cents = $19, is_multi_year_pledge = $20, discount_rate_bps = $21,
            discounted_present_value_cents = $22, receivable_account_id = $23, pledge_years = $24,
-           pledge_status = $27, pledge_condition = $28, pledge_status_changed_by = $29, pledge_status_changed_at = $30, pledge_status_note = $31
+           pledge_status = $27, pledge_condition = $28, pledge_status_changed_by = $29, pledge_status_changed_at = $30, pledge_status_note = $31,
+           benefit_value_cents = $32, benefit_description = $33
          WHERE id = $25 AND org_id = $26
          RETURNING *`,
         [
@@ -901,6 +915,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
           pf.discounted_present_value_cents, pf.receivable_account_id, pf.pledge_years != null ? pf.pledge_years : null,
           giftId, orgId,
           pf.pledge_status, pf.pledge_condition, statusChangedBy, statusChangedAt, statusNote,
+          nextBenefitValue, nextBenefitValue ? nextBenefitText : null,
         ]
       );
       return res.json(rowToGift(r.rows[0]));

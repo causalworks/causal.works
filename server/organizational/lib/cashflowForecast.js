@@ -95,6 +95,19 @@ async function buildCashflowGrid(pool, opts) {
   let openingAsOfDate = null;
   if (cashAccountIds.length) {
     const windowStartIso = `${months[0].year}-${String(months[0].month).padStart(2, '0')}-01`;
+    const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
+    const fromLedger = !srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger';
+    if (fromLedger) {
+      const balR = await pool.query(
+        `SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS balance_cents
+         FROM org_ledger_lines l
+         JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         WHERE t.org_id = $1 AND t.status = 'posted' AND l.account_id = ANY($2::int[]) AND t.transaction_date < $3::date`,
+        [orgId, cashAccountIds, windowStartIso]
+      );
+      openingCents = Number(balR.rows[0].balance_cents);
+      openingAsOfDate = windowStartIso;
+    } else {
     const snapR = await pool.query(
       `SELECT DISTINCT ON (coop_account_id) coop_account_id, balance_cents, as_of_date
        FROM org_balance_sheet_snapshots
@@ -104,6 +117,7 @@ async function buildCashflowGrid(pool, opts) {
     );
     openingCents = snapR.rows.reduce((s, r) => s + Number(r.balance_cents), 0);
     openingAsOfDate = snapR.rows.reduce((latest, r) => (!latest || r.as_of_date > latest ? r.as_of_date : latest), null);
+    }
   }
 
   let runningCents = openingCents;

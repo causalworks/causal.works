@@ -43,7 +43,7 @@ test('over-balance request is refused with a plain message; only an admin with a
     assert.equal(res.body.overrides[0].reason, 'Grant payment confirmed for next week');
     assert.equal(res.body.balance.negative, true);
     const audit = await pool.query(`SELECT metadata FROM org_audit_log WHERE org_id = $1 AND table_name = 'org_sponsored_project_disbursements'`, [ws.orgId]);
-    assert.ok(audit.rows.some((a) => a.metadata.override_reason));
+    assert.ok(audit.rows.some((a) => a.metadata && a.metadata.override_reason));
     void project;
   });
 });

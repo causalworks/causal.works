@@ -66,7 +66,7 @@ test('joining creates a contact with the dues member role and a pending term; a 
     const again = await call('POST', '/dues-members', 'fundraising', { body: { tier_id: t.id, constituent_id: j.constituent_id } });
     assert.equal(again.statusCode, 409);
 
-    const audit = await pool.query(`SELECT table_name, action FROM org_audit_log WHERE org_id = (SELECT org_id FROM org_membership_terms WHERE id = $1) ORDER BY id`, [j.term_id]);
+    const audit = await pool.query(`SELECT table_name, action FROM org_audit_log WHERE org_id = (SELECT org_id FROM org_membership_terms WHERE id = $1) AND action NOT LIKE 'db\\_%' ORDER BY id`, [j.term_id]);
     assert.deepEqual(audit.rows.map((a) => a.table_name + ':' + a.action), ['org_membership_tiers:create', 'org_constituents:create', 'org_membership_terms:create', 'org_membership_payments:create']);
   });
 });

@@ -80,7 +80,7 @@ test('credentials: refused when they do not look right, stored encrypted, never 
     assert.doesNotMatch(JSON.stringify(got.body), /sk_test_|whsec_/);
     const raw = await h.one(pool, `SELECT row_to_json(a)::text AS t FROM org_payment_accounts a WHERE org_id = $1`, [s.org.id]);
     assert.doesNotMatch(raw.t, /sk_test_|whsec_/);
-    const log = await h.one(pool, `SELECT metadata::text AS m FROM org_audit_log WHERE org_id = $1 AND table_name = 'org_payment_accounts'`, [s.org.id]);
+    const log = await h.one(pool, `SELECT metadata::text AS m FROM org_audit_log WHERE org_id = $1 AND table_name = 'org_payment_accounts' AND metadata IS NOT NULL`, [s.org.id]);
     assert.doesNotMatch(log.m, /sk_test_|whsec_/);
     await s.scall('PUT', '/settings', 'admin', { body: { card_payments_enabled: true } }, 200);
     const toLive = await s.scall('PUT', '/settings', 'admin', { body: { payment_mode: 'live' } });

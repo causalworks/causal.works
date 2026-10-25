@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict p85UhMEc35lqTllNjUe1fHsvbysJKdatT8YCW8hMrNNJknhKsXEF7wsb6hutX0n
+\restrict JiicvGZQfmbm3Pyyj83D9AWuehC8pjD9z3LHOsTRZrAdh9fMw9pY9Qm6nF74U8p
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -846,11 +846,11 @@ BEGIN
   END LOOP;
   IF TG_OP = 'UPDATE' AND (v_old - 'updated_at') = (v_new - 'updated_at') THEN RETURN NULL; END IF;
   v_src := COALESCE(v_new, v_old);
-  v_org := (v_src->>'org_id')::integer;
+  v_org := COALESCE(v_src->>'org_id', v_src->>'sponsor_org_id')::integer;
   IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM coop_members WHERE id = v_org) THEN RETURN NULL; END IF;
   v_user := NULLIF(current_setting('app.current_user_id', true), '')::integer;
   INSERT INTO org_audit_log (org_id, user_id, action, table_name, record_id, old_value, new_value)
-  VALUES (v_org, v_user, 'db_' || lower(TG_OP), TG_TABLE_NAME, (v_src->>'id')::bigint, v_old::text, v_new::text);
+  VALUES (v_org, v_user, 'db_' || lower(TG_OP), TG_TABLE_NAME, COALESCE((v_src->>'id')::bigint, v_org), v_old::text, v_new::text);
   RETURN NULL;
 END $$;
 
@@ -16116,6 +16116,20 @@ CREATE TRIGGER trg_ledger_transactions_recompute_actuals_on_void AFTER UPDATE OF
 
 
 --
+-- Name: org_access_permissions trg_org_access_permissions_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_access_permissions_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_access_permissions FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_accounts trg_org_accounts_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_accounts_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_accounts FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
 -- Name: org_actuals trg_org_actuals_posting_account; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16144,10 +16158,38 @@ CREATE TRIGGER trg_org_audit_log_immutable BEFORE DELETE OR UPDATE ON public.org
 
 
 --
+-- Name: org_bank_reconciliation_periods trg_org_bank_reconciliation_periods_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_bank_reconciliation_periods_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bank_reconciliation_periods FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
 -- Name: org_bank_rules trg_org_bank_rules_audit; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_org_bank_rules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bank_rules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_bill_credit_notes trg_org_bill_credit_notes_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_bill_credit_notes_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bill_credit_notes FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_bill_payments trg_org_bill_payments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_bill_payments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bill_payments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_bills trg_org_bills_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_bills_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bills FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -16165,6 +16207,27 @@ CREATE TRIGGER trg_org_budget_lines_posting_account BEFORE INSERT OR UPDATE OF a
 
 
 --
+-- Name: org_compliance_obligations trg_org_compliance_obligations_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_compliance_obligations_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_compliance_obligations FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_constituents trg_org_constituents_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_constituents_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_constituents FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_contact_roles trg_org_contact_roles_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_contact_roles_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_contact_roles FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
 -- Name: org_contact_roles trg_org_contact_roles_check_org; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16172,10 +16235,52 @@ CREATE TRIGGER trg_org_contact_roles_check_org BEFORE INSERT OR UPDATE ON public
 
 
 --
+-- Name: org_conversion_balances trg_org_conversion_balances_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_conversion_balances_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_conversion_balances FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_documents trg_org_documents_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_documents_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_documents FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
 -- Name: org_documents trg_org_documents_keep_sponsor_doc_type; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_org_documents_keep_sponsor_doc_type BEFORE INSERT ON public.org_documents FOR EACH ROW EXECUTE FUNCTION public.org_documents_keep_sponsor_doc_type();
+
+
+--
+-- Name: org_expense_claim_payments trg_org_expense_claim_payments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_expense_claim_payments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_expense_claim_payments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_expense_claims trg_org_expense_claims_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_expense_claims_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_expense_claims FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_fiscal_year_locks trg_org_fiscal_year_locks_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_fiscal_year_locks_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_fiscal_year_locks FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_fixed_asset_depreciation_entries trg_org_fixed_asset_depreciation_entries_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_fixed_asset_depreciation_entries_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_fixed_asset_depreciation_entries FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -16197,6 +16302,76 @@ CREATE TRIGGER trg_org_fringe_settings_audit AFTER INSERT OR DELETE OR UPDATE ON
 --
 
 CREATE TRIGGER trg_org_functional_classifications_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_functional_classifications FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_gift_pledge_installments trg_org_gift_pledge_installments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_gift_pledge_installments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_gift_pledge_installments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_gifts trg_org_gifts_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_gifts_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_gifts FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_grant_allocation_requests trg_org_grant_allocation_requests_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_grant_allocation_requests_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_grant_allocation_requests FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_grant_allocations trg_org_grant_allocations_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_grant_allocations_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_grant_allocations FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_grants trg_org_grants_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_grants_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_grants FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_indirect_cost_recovery_entries trg_org_indirect_cost_recovery_entries_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_indirect_cost_recovery_entries_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_indirect_cost_recovery_entries FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_invites trg_org_invites_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_invites_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_invites FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('token_hash');
+
+
+--
+-- Name: org_invoice_credit_notes trg_org_invoice_credit_notes_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_invoice_credit_notes_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_invoice_credit_notes FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_invoice_payments trg_org_invoice_payments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_invoice_payments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_invoice_payments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_invoices trg_org_invoices_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_invoices_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_invoices FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -16235,6 +16410,62 @@ CREATE TRIGGER trg_org_ledger_transactions_reversal_same_org BEFORE INSERT OR UP
 
 
 --
+-- Name: org_membership_join_requests trg_org_membership_join_requests_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_join_requests_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_join_requests FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('ip_hash');
+
+
+--
+-- Name: org_membership_payments trg_org_membership_payments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_payments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_payments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_membership_recognition trg_org_membership_recognition_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_recognition_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_recognition FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_membership_seats trg_org_membership_seats_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_seats_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_seats FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_membership_terms trg_org_membership_terms_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_terms_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_terms FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_membership_tier_prices trg_org_membership_tier_prices_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_tier_prices_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_tier_prices FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_membership_tiers trg_org_membership_tiers_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_membership_tiers_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_membership_tiers FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_payment_accounts trg_org_payment_accounts_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_payment_accounts_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_payment_accounts FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('secret_enc', 'secret_iv', 'secret_tag', 'webhook_secret_enc', 'webhook_secret_iv', 'webhook_secret_tag');
+
+
+--
 -- Name: org_personnel trg_org_personnel_audit; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16256,6 +16487,41 @@ CREATE TRIGGER trg_org_plaid_items_audit AFTER INSERT OR DELETE OR UPDATE ON pub
 
 
 --
+-- Name: org_pledge_accretion_entries trg_org_pledge_accretion_entries_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_pledge_accretion_entries_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_pledge_accretion_entries FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_program_grants trg_org_program_grants_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_program_grants_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_program_grants FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_programs trg_org_programs_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_programs_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_programs FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_public_links trg_org_public_links_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_public_links_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_public_links FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('token_hash');
+
+
+--
+-- Name: org_public_settings trg_org_public_settings_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_public_settings_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_public_settings FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('challenge_secret_enc', 'challenge_secret_iv', 'challenge_secret_tag');
+
+
+--
 -- Name: org_recurring_schedules trg_org_recurring_schedules_audit; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16263,10 +16529,122 @@ CREATE TRIGGER trg_org_recurring_schedules_audit AFTER INSERT OR DELETE OR UPDAT
 
 
 --
+-- Name: org_settings trg_org_settings_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_settings_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_settings FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('xero_token_data');
+
+
+--
 -- Name: org_settings trg_org_settings_recompute_actuals_on_source_flip; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_org_settings_recompute_actuals_on_source_flip AFTER UPDATE OF actuals_source ON public.org_settings FOR EACH ROW EXECUTE FUNCTION public.org_recompute_actuals_on_source_flip();
+
+
+--
+-- Name: org_sponsor_agreement_amendments trg_org_sponsor_agreement_amendments_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_agreement_amendments_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_agreement_amendments FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_agreements trg_org_sponsor_agreements_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_agreements_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_agreements FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_applications trg_org_sponsor_applications_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_applications_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_applications FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_approvals trg_org_sponsor_approvals_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_approvals_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_approvals FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_closings trg_org_sponsor_closings_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_closings_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_closings FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_fee_postings trg_org_sponsor_fee_postings_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_fee_postings_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_fee_postings FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_fee_rules trg_org_sponsor_fee_rules_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_fee_rules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_fee_rules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_payment_requests trg_org_sponsor_payment_requests_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_payment_requests_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_payment_requests FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_recalls trg_org_sponsor_recalls_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_recalls_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_recalls FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_reports trg_org_sponsor_reports_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_reports_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_reports FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsor_statements trg_org_sponsor_statements_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsor_statements_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsor_statements FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsored_project_disbursements trg_org_sponsored_project_disbursements_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsored_project_disbursements_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsored_project_disbursements FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_sponsored_projects trg_org_sponsored_projects_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_sponsored_projects_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_sponsored_projects FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_users trg_org_users_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_users_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_users FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_vendor_compliance trg_org_vendor_compliance_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_vendor_compliance_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_vendor_compliance FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('tax_id_encrypted');
 
 
 --
@@ -24543,5 +24921,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict p85UhMEc35lqTllNjUe1fHsvbysJKdatT8YCW8hMrNNJknhKsXEF7wsb6hutX0n
+\unrestrict JiicvGZQfmbm3Pyyj83D9AWuehC8pjD9z3LHOsTRZrAdh9fMw9pY9Qm6nF74U8p
 

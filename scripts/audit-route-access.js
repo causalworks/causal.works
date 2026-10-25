@@ -96,7 +96,8 @@ const rows = routes.filter((r) => r.method !== 'USE').map((r) => {
   const handlerSrc = String(r.handlers[r.handlers.length - 1]);
   const inline = /coopOrgRole|accessPermissions|hasAccountingAccess|hasDonorAccess|canWrite\(|FINANCE_ROLES|coopOrgProgramIds|coopOrgUserId|isAdmin\(|isFinance|[rR]ole\b/.test(handlerSrc);
   const isWrite = r.method !== 'GET';
-  const postsDirectly = isWrite && postingCall.test(handlerSrc) && !/\brunTool\(/.test(handlerSrc);
+  const LEDGER_SQL = /(UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+org_ledger_(lines|transactions)\b/i;
+  const postsDirectly = isWrite && (postingCall.test(handlerSrc) || LEDGER_SQL.test(handlerSrc)) && !/\brunTool\(/.test(handlerSrc);
   return { key: r.method + ' ' + r.path, file: r.file, guards, cls: classify(guards), inline, postsDirectly };
 });
 

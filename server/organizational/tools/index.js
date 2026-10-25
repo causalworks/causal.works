@@ -13,6 +13,7 @@ require('./creditNotes');
 require('./billInvoiceDocuments');
 require('./dues');
 require('./sponsorship');
+require('./indirectCostRecovery');
 const { runTool, listTools } = require('./registry');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');

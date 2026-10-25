@@ -4,8 +4,8 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
-const { logAudit, reqMeta } = require('../lib/auditLog');
-const { previewIndirectRecovery, runIndirectRecovery } = require('../lib/indirectCostRecovery');
+const { runTool, ctxFromReq } = require('../tools');
+const { previewIndirectRecovery } = require('../lib/indirectCostRecovery');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,27 +32,9 @@ function registerIndirectCostRecoveryRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/indirect-cost-recovery/run', ...orgAuth, requireAccountingWriter(pool), async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const body = req.body || {};
-    const periodStart = body.period_start_date != null ? String(body.period_start_date) : null;
-    const periodEnd = body.period_end_date != null ? String(body.period_end_date) : null;
-    if (!periodStart || !DATE_RE.test(periodStart) || !periodEnd || !DATE_RE.test(periodEnd)) {
-      return res.status(400).json({ error: 'period_start_date and period_end_date are required and must be YYYY-MM-DD' });
-    }
-    const debitAccountId = body.debit_account_id != null ? Number.parseInt(String(body.debit_account_id), 10) : null;
-    const creditAccountId = body.credit_account_id != null ? Number.parseInt(String(body.credit_account_id), 10) : null;
-    const programId = body.program_id != null ? Number.parseInt(String(body.program_id), 10) : null;
-    if (!Number.isInteger(debitAccountId) || !Number.isInteger(creditAccountId) || !Number.isInteger(programId)) {
-      return res.status(400).json({ error: 'debit_account_id, credit_account_id, and program_id are all required' });
-    }
     try {
-      const { posted, failed } = await runIndirectRecovery(pool, {
-        orgId, userId, periodStartDate: periodStart, periodEndDate: periodEnd,
-        debitAccountId, creditAccountId, programId,
-      });
-      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_ledger_transactions', metadata: { ...reqMeta(req), source: 'indirect_cost_recovery', period_start_date: periodStart, period_end_date: periodEnd, posted_count: posted.length, failed_count: failed.length } });
-      return res.json({ posted, failed, posted_count: posted.length, failed_count: failed.length });
+      const out = await runTool('indirect_cost_recovery.run', ctxFromReq(pool, req), req.body || {});
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /indirect-cost-recovery/run:', e.message);
       return res.status(500).json({ error: 'Could not run indirect cost recovery' });

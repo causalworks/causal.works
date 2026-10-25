@@ -5,6 +5,7 @@ const { requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
+const { buildFunctionalExpenses, splitAllocation } = require('../lib/functionalExpensesStatement');
 
 function registerFunctionalClassificationRoutes(app, pool) {
   const auth = requireAuth(pool);
@@ -120,56 +121,35 @@ function registerFunctionalClassificationRoutes(app, pool) {
     try {
       const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
       const fromLedger = !srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger';
-      const totalsSql = fromLedger
-        ? `LEFT JOIN (
-             SELECT l.account_id, SUM(l.debit_cents - l.credit_cents) AS amount_cents
-             FROM org_ledger_lines l
-             JOIN org_ledger_transactions t ON t.id = l.transaction_id
-             WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year = $2
-             GROUP BY l.account_id
-           ) bl ON bl.account_id = a.id`
-        : `LEFT JOIN org_budget_lines bl
-             ON bl.account_id = a.id AND bl.fiscal_year = $2 AND bl.org_id = $1`;
-      const { rows } = await pool.query(
-        `SELECT
-           a.id           AS account_id,
-           a.code,
-           a.name,
-           COALESCE(SUM(bl.amount_cents), 0)::bigint       AS total_cents,
-           COALESCE(fc.program_services_bps, 0)            AS program_services_bps,
-           COALESCE(fc.mgmt_general_bps,     0)            AS mgmt_general_bps,
-           COALESCE(fc.fundraising_bps,       0)           AS fundraising_bps
-         FROM org_accounts a
-         ${totalsSql}
-         LEFT JOIN org_functional_classifications fc
-           ON fc.account_id = a.id
-          AND fc.org_id = $1
-          AND fc.fiscal_year  = $2
-         WHERE a.org_id = $1
-           AND a.type = 'expense'
-         GROUP BY a.id, a.code, a.name, fc.program_services_bps, fc.mgmt_general_bps, fc.fundraising_bps
-         ORDER BY a.code, a.name`,
-        [orgId, fy]
-      );
-
-      const lines = rows.map(r => {
-        const total = Number(r.total_cents);
-        const ps    = Math.round(total * Number(r.program_services_bps) / 10000);
-        const mg    = Math.round(total * Number(r.mgmt_general_bps)     / 10000);
-        const fr    = Math.round(total * Number(r.fundraising_bps)       / 10000);
-        return {
-          account_id:           r.account_id,
-          code:                 r.code,
-          name:                 r.name,
-          total_cents:          total,
-          program_services_bps: Number(r.program_services_bps),
-          mgmt_general_bps:     Number(r.mgmt_general_bps),
-          fundraising_bps:      Number(r.fundraising_bps),
-          program_services_cents: ps,
-          mgmt_general_cents:     mg,
-          fundraising_cents:      fr,
-        };
-      });
+      let lines;
+      if (fromLedger) {
+        const st = await buildFunctionalExpenses(pool, orgId, fy);
+        lines = st.rows.filter((r) => r.kind === 'line').map((r) => ({
+          account_id: r.account_id, code: r.code, name: r.label, total_cents: r.total_cents,
+          program_services_bps: r.program_services_bps, mgmt_general_bps: r.mgmt_general_bps, fundraising_bps: r.fundraising_bps,
+          program_services_cents: r.program_services_cents, mgmt_general_cents: r.mgmt_general_cents, fundraising_cents: r.fundraising_cents,
+        }));
+      } else {
+        const { rows } = await pool.query(
+          `SELECT a.id AS account_id, a.code, a.name, COALESCE(SUM(bl.amount_cents), 0)::bigint AS total_cents,
+                  COALESCE(fc.program_services_bps, 0) AS program_services_bps, COALESCE(fc.mgmt_general_bps, 0) AS mgmt_general_bps,
+                  COALESCE(fc.fundraising_bps, 0) AS fundraising_bps
+           FROM org_accounts a
+           LEFT JOIN org_budget_lines bl ON bl.account_id = a.id AND bl.fiscal_year = $2 AND bl.org_id = $1
+           LEFT JOIN org_functional_classifications fc ON fc.account_id = a.id AND fc.org_id = $1 AND fc.fiscal_year = $2
+           WHERE a.org_id = $1 AND a.type = 'expense'
+           GROUP BY a.id, a.code, a.name, fc.program_services_bps, fc.mgmt_general_bps, fc.fundraising_bps
+           ORDER BY a.code, a.name`, [orgId, fy]);
+        lines = rows.map((r) => {
+          const total = Number(r.total_cents);
+          const parts = splitAllocation(total, Number(r.mgmt_general_bps), Number(r.fundraising_bps));
+          return {
+            account_id: r.account_id, code: r.code, name: r.name, total_cents: total,
+            program_services_bps: Number(r.program_services_bps), mgmt_general_bps: Number(r.mgmt_general_bps), fundraising_bps: Number(r.fundraising_bps),
+            program_services_cents: parts.program_services, mgmt_general_cents: parts.mgmt_general, fundraising_cents: parts.fundraising,
+          };
+        });
+      }
 
       const totals = lines.reduce((acc, l) => {
         acc.total_cents              += l.total_cents;

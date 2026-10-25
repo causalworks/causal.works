@@ -599,7 +599,7 @@
       html += '<tr>'
         + '<td>' + escapeHtml(r.name || r.code || '') + '</td>'
         + '<td style="color:var(--text-secondary);">' + escapeHtml(r.code || '') + '</td>'
-        + '<td style="font-variant-numeric:tabular-nums;">' + fmtDollars(r.balance_cents) + '</td>'
+        + '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(r.balance_cents) + '</td>'
         + '<td style="color:var(--text-secondary);">' + escapeHtml(BS_RESTRICTION_LABEL[r.restriction_class] || '') + '</td>'
         + '</tr>';
     });
@@ -607,8 +607,16 @@
       if (totalsByType[t] === 0 && !sorted.some(function (r) { return r.type === t; })) return;
       html += '<tr style="font-weight:600; border-top:1px solid var(--border);">'
         + '<td colspan="2">Total ' + BS_TYPE_LABEL[t] + '</td>'
-        + '<td style="font-variant-numeric:tabular-nums;">' + fmtDollars(totalsByType[t]) + '</td><td></td></tr>';
+        + '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(totalsByType[t]) + '</td><td></td></tr>';
     });
+    if (sorted.some(function (r) { return r.type === 'liability'; }) || sorted.some(function (r) { return r.type === 'equity'; })) {
+      var rightSide = totalsByType.liability + totalsByType.equity;
+      var diff = totalsByType.asset - rightSide;
+      html += '<tr style="font-weight:700; border-top:2px solid var(--border);">'
+        + '<td colspan="2">Total liabilities and ' + BS_TYPE_LABEL.equity.toLowerCase() + '</td>'
+        + '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(rightSide) + '</td><td></td></tr>';
+      if (diff !== 0) html += '<tr><td colspan="4" style="color:var(--text-secondary);padding:8px 14px;">Check: assets differ from liabilities plus ' + escapeHtml(BS_TYPE_LABEL.equity.toLowerCase()) + ' by ' + fmtDollars(diff) + '.</td></tr>';
+    }
 
     tbody.innerHTML = html;
   }
@@ -1558,13 +1566,16 @@
     if (avgGiftEl)      avgGiftEl.textContent       = fmtDollars(d.avg_gift_cents || 0);
     if (totalDonorsEl)  totalDonorsEl.textContent   = d.total_donors || 0;
 
-    const typeLabels = { grant: 'Grant', donation: 'Donation', pledge: 'Pledge', membership_dues: 'Dues' };
+    const typeLabels = { grant: 'Grant', donation: 'Donation', pledge: 'Pledge', membership_dues: 'Dues', other: 'Other' };
     const byType = d.gifts_by_type || {};
-    byTypeEl.innerHTML = Object.entries(typeLabels)
-      .filter(function (e) { return byType[e[0]] > 0; })
+    const typeRows = Object.entries(typeLabels)
+      .filter(function (e) { return byType[e[0]] !== 0 && byType[e[0]] != null; })
       .map(function (e) {
         return '<tr><td>' + e[1] + '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(byType[e[0]]) + '</td></tr>';
-      }).join('') || '<tr class="organizational-table-empty"><td colspan="2">No gifts recorded yet.</td></tr>';
+      }).join('');
+    byTypeEl.innerHTML = typeRows
+      ? typeRows + '<tr style="font-weight:600;border-top:1px solid var(--border);"><td>Total</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(d.total_gifts_cents || 0) + '</td></tr>'
+      : '<tr class="organizational-table-empty"><td colspan="2">No gifts recorded yet.</td></tr>';
 
     const top = Array.isArray(d.top_constituents) ? d.top_constituents : [];
     if (topDonorsEl) {

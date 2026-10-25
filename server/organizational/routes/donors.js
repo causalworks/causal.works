@@ -1297,6 +1297,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
           donation: Number(t.donation_cents),
           pledge: Number(t.pledge_cents),
           membership_dues: Number(t.membership_dues_cents),
+          other: Number(t.total_gifts_cents) - Number(t.grant_cents) - Number(t.donation_cents) - Number(t.pledge_cents) - Number(t.membership_dues_cents),
         },
         top_constituents: topR.rows.map(r => ({
           id: r.id,

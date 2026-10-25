@@ -61,6 +61,9 @@ async function buildFunctionalExpenses(pool, orgId, fy) {
   });
 
   const missingById = new Map(accounts.map((a) => [a.account_id, a.missing_classification]));
+  const bpsById = new Map(accounts.map((a) => [a.account_id, {
+    program_services_bps: Number(a.program_services_bps), mgmt_general_bps: Number(a.mgmt_general_bps), fundraising_bps: Number(a.fundraising_bps),
+  }]));
   const rows = built.total.rows.map((r, i) => {
     const out = { ...r, total_cents: r.amount_cents };
     COLUMNS.forEach((c) => { out[c + '_cents'] = built[c].rows[i].amount_cents; });
@@ -69,10 +72,12 @@ async function buildFunctionalExpenses(pool, orgId, fy) {
       if (sum !== out.total_cents) throw new Error('Statement of Functional Expenses row does not cross-foot: ' + r.label);
     }
     out.missing_classification = r.account_id ? !!missingById.get(r.account_id) : false;
+    const bps = r.account_id ? bpsById.get(r.account_id) : null;
+    if (bps) Object.assign(out, bps);
     return out;
   });
 
   return { rows, warnings };
 }
 
-module.exports = { buildFunctionalExpenses };
+module.exports = { buildFunctionalExpenses, splitAllocation: split };

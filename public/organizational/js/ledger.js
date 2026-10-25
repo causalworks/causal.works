@@ -674,6 +674,16 @@
       + '</div>';
   }
 
+  function syncDesignationSelect(row) {
+    const acct = row.querySelector('.ledger-line-account');
+    const des = row.querySelector('.ledger-line-board-designation');
+    if (!acct || !des) return;
+    const a = accountsCache.find((x) => String(x.id) === String(acct.value));
+    const ok = !!a && a.type === 'equity';
+    des.disabled = !ok;
+    if (!ok) des.value = '';
+  }
+
   function journalLineRowHtml() {
     return '<div data-post-line style="padding:3px 0;">'
       + '<div style="display:grid;grid-template-columns:' + JOURNAL_GRID + ';gap:12px;align-items:center;">'
@@ -859,6 +869,7 @@
     if (addLineBtn) addLineBtn.addEventListener('click', () => {
       linesWrap.insertAdjacentHTML('beforeend', entryType === 'journal' ? journalLineRowHtml() : simpleLineRowHtml());
       searchable(linesWrap);
+      linesWrap.querySelectorAll('[data-post-line]').forEach(syncDesignationSelect);
       refreshLinesTotal();
     });
     if (linesWrap) {
@@ -866,6 +877,10 @@
         const rm = e.target.closest('.ledger-remove-line');
         if (rm && linesWrap.children.length > minLines) { rm.closest('[data-post-line]').remove(); refreshLinesTotal(); }
       });
+      linesWrap.addEventListener('change', (e) => {
+        if (e.target.classList && e.target.classList.contains('ledger-line-account')) syncDesignationSelect(e.target.closest('[data-post-line]'));
+      });
+      linesWrap.querySelectorAll('[data-post-line]').forEach(syncDesignationSelect);
       linesWrap.addEventListener('input', (e) => {
         if (/ledger-line-(debit|credit|amount)/.test(e.target.className)) refreshLinesTotal();
       });
@@ -1020,6 +1035,7 @@
         row.querySelector('.ledger-line-memo').value = l.memo || '';
       }
     });
+    rows.forEach(syncDesignationSelect);
     refreshLinesTotal();
   }
 

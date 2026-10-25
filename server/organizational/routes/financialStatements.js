@@ -5,6 +5,8 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireReportsOrBoard, boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { netAssetsByClass, netAssetBuckets: netAssetBucketsOf, releasedFromRestrictions: releasedFromRestrictionsFor } = require('../lib/restrictedNetAssets');
+const { buildFinancialPosition } = require('../lib/financialPositionStatement');
+const { StatementIntegrityError } = require('../lib/statementTree');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
 function registerFinancialStatementRoutes(app, pool) {
@@ -39,79 +41,14 @@ function registerFinancialStatementRoutes(app, pool) {
         return res.json({ not_available: true, reason: 'xero', fiscal_year: fy });
       }
 
-      const assetsRes = await pool.query(
-        `SELECT a.id AS account_id, a.code, a.name, a.type,
-           SUM(l.debit_cents - l.credit_cents) AS balance_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND a.type = 'asset' AND a.is_posting = true
-         GROUP BY a.id, a.code, a.name, a.type
-         HAVING SUM(l.debit_cents - l.credit_cents) <> 0
-         ORDER BY a.code`,
-        [orgId, fy]
-      );
-
-      const liabRes = await pool.query(
-        `SELECT a.id AS account_id, a.code, a.name, a.type,
-           SUM(l.credit_cents - l.debit_cents) AS balance_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND a.type = 'liability' AND a.is_posting = true
-         GROUP BY a.id, a.code, a.name, a.type
-         HAVING SUM(l.credit_cents - l.debit_cents) <> 0
-         ORDER BY a.code`,
-        [orgId, fy]
-      );
-
-      const netAssetsByClassRows = await netAssetsByClass(pool, orgId, { throughFiscalYear: fy });
-
-      const boardDesignatedRes = await pool.query(
-        `SELECT COALESCE(SUM(CASE WHEN a.type = 'asset' THEN l.debit_cents - l.credit_cents
-                                  ELSE l.credit_cents - l.debit_cents END), 0) AS balance_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         JOIN org_accounts a ON a.id = l.account_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND l.board_designation_id IS NOT NULL
-           AND a.type IN ('asset', 'equity', 'income', 'expense')`,
-        [orgId, fy]
-      );
-      const boardDesignatedCents = Number(boardDesignatedRes.rows[0].balance_cents);
-
-      const assets = assetsRes.rows;
-      const liabilities = liabRes.rows;
-      const totalAssets = assets.reduce((s, r) => s + Number(r.balance_cents), 0);
-      const totalLiabilities = liabilities.reduce((s, r) => s + Number(r.balance_cents), 0);
-
-      const netAssetBuckets = netAssetBucketsOf(netAssetsByClassRows);
-      const totalNetAssets = netAssetBuckets.without_restrictions + netAssetBuckets.with_restrictions;
-
-      const restrictionDetail = {
-        temporarily_restricted: netAssetsByClassRows.temporarily_restricted,
-        permanently_restricted: netAssetsByClassRows.permanently_restricted,
-      };
+      const st = await buildFinancialPosition(pool, orgId, fy);
 
       const fmt = String(req.query.format || 'json').toLowerCase();
       if (fmt === 'csv') {
         const rows = [
           ['Section', 'Code', 'Account', 'Balance ($)'].join(','),
-          ...assets.map(r => [fmtCsv('Assets'), fmtCsv(r.code), fmtCsv(r.name), (Number(r.balance_cents) / 100).toFixed(2)].join(',')),
-          ['Total Assets', '', '', (totalAssets / 100).toFixed(2)].join(','),
-          ...liabilities.map(r => [fmtCsv('Liabilities'), fmtCsv(r.code), fmtCsv(r.name), (Number(r.balance_cents) / 100).toFixed(2)].join(',')),
-          ['Total Liabilities', '', '', (totalLiabilities / 100).toFixed(2)].join(','),
-          ...(boardDesignatedCents
-            ? [
-                ['Net Assets - Without donor restrictions - Board-designated', '', '', (boardDesignatedCents / 100).toFixed(2)].join(','),
-                ['Net Assets - Without donor restrictions - Undesignated', '', '', ((netAssetBuckets.without_restrictions - boardDesignatedCents) / 100).toFixed(2)].join(','),
-              ]
-            : [['Net Assets - Without donor restrictions', '', '', (netAssetBuckets.without_restrictions / 100).toFixed(2)].join(',')]),
-          ['Net Assets - With donor restrictions', '', '', (netAssetBuckets.with_restrictions / 100).toFixed(2)].join(','),
-          ['Total Net Assets', '', '', (totalNetAssets / 100).toFixed(2)].join(','),
-          ['Total Liabilities and Net Assets', '', '', ((totalLiabilities + totalNetAssets) / 100).toFixed(2)].join(','),
+          ...st.rows.filter((r) => r.amount_cents != null).map((r) =>
+            [fmtCsv(r.kind === 'line' ? '' : r.kind === 'grand' ? 'Total' : 'Subtotal'), fmtCsv(r.code || ''), fmtCsv(r.label), (r.amount_cents / 100).toFixed(2)].join(',')),
         ].join('\r\n');
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="financial-position-${fy}.csv"`);
@@ -123,25 +60,28 @@ function registerFinancialStatementRoutes(app, pool) {
         fiscal_year: fy,
         start_date: fyRange.startDate,
         end_date: fyRange.endDate,
-        assets,
-        liabilities,
-        total_assets_cents: totalAssets,
-        total_liabilities_cents: totalLiabilities,
+        rows: st.rows,
+        warnings: st.warnings,
+        total_assets_cents: st.totals.assets,
+        total_liabilities_cents: st.totals.liabilities,
         net_assets: {
-          without_restrictions_cents: netAssetBuckets.without_restrictions,
-          board_designated_cents: boardDesignatedCents,
-          undesignated_cents: netAssetBuckets.without_restrictions - boardDesignatedCents,
-          with_restrictions_cents: netAssetBuckets.with_restrictions,
-          total_cents: totalNetAssets,
+          without_restrictions_cents: st.net_assets.without_restrictions,
+          board_designated_cents: st.net_assets.board_designated,
+          undesignated_cents: st.net_assets.undesignated,
+          with_restrictions_cents: st.net_assets.with_restrictions,
+          total_cents: st.totals.net_assets,
         },
         restriction_detail: {
-          temporarily_restricted_cents: restrictionDetail.temporarily_restricted || 0,
-          permanently_restricted_cents: restrictionDetail.permanently_restricted || 0,
+          temporarily_restricted_cents: st.restriction_detail.temporarily_restricted,
+          permanently_restricted_cents: st.restriction_detail.permanently_restricted,
         },
-        total_liabilities_and_net_assets_cents: totalLiabilities + totalNetAssets,
+        total_liabilities_and_net_assets_cents: st.totals.liabilities_and_net_assets,
       });
     } catch (e) {
       console.error('GET /reports/financial-position:', e.message);
+      if (e instanceof StatementIntegrityError) {
+        return res.status(500).json({ error: 'This statement did not pass its own checks and was not produced.', failures: e.failures.map((f) => f.message) });
+      }
       res.status(500).json({ error: 'Could not compute Statement of Financial Position' });
     }
   });

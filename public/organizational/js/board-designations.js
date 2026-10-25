@@ -1,11 +1,4 @@
-/* board-designations.js — Accounting build-order item #7: board-imposed internal earmarks of
- * net assets without donor restriction (operating reserve, building fund, quasi-endowment).
- * Not a separate GAAP net-asset class -- ASU 2016-14 requires only a liquidity/appropriation
- * disclosure. Balance is derived (SUM of tagged org_ledger_lines), same architecture as a
- * donor-restricted grant's per-fund balance -- no balance column to keep in sync. Money moves
- * in/out via ordinary manual transactions on the Transactions tab, tagged with a designation
- * via the dropdown added there (see ledger.js).
- */
+/* board-designations.js — board designations list and the designate/release transfer form. */
 (function () {
   'use strict';
 
@@ -17,6 +10,7 @@
 
   let currentSlug = '';
   let designationsCache = [];
+  let equityAccounts = [];
 
   const STATUS_LABELS = { active: 'Active', closed: 'Closed' };
 
@@ -47,6 +41,9 @@
       + '<td>' + fmtMoney(Number(d.balance_cents)) + '</td>'
       + '<td>' + esc(STATUS_LABELS[d.status] || d.status) + '</td>'
       + '<td>'
+        + (d.status === 'active'
+          ? '<button type="button" class="organizational-btn organizational-btn-outline boarddesig-move-btn" data-id="' + d.id + '" style="font-size:0.75rem;">Designate or release</button> '
+          : '')
         + '<button type="button" class="organizational-btn organizational-btn-outline boarddesig-edit-btn" data-id="' + d.id + '" style="font-size:0.75rem;">Edit</button> '
         + (d.status === 'active'
           ? '<button type="button" class="organizational-btn organizational-btn-outline boarddesig-close-btn" data-id="' + d.id + '" style="font-size:0.75rem;">Close</button>'
@@ -60,6 +57,12 @@
     const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/board-designations');
     designationsCache = (out && out.data && out.data.designations) || [];
     renderDesignations();
+  }
+
+  async function loadEquityAccounts() {
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/accounts');
+    const all = (out && out.data && (out.data.accounts || out.data)) || [];
+    equityAccounts = (Array.isArray(all) ? all : []).filter((a) => a.type === 'equity' && a.is_posting);
   }
 
   const formEl = document.getElementById('organizational-boarddesig-form');
@@ -104,6 +107,51 @@
     });
   }
 
+  function accountOptions(selectedId) {
+    return equityAccounts.map((a) => '<option value="' + a.id + '"' + (Number(a.id) === Number(selectedId) ? ' selected' : '') + '>' + esc((a.code ? a.code + ' ' : '') + a.name) + '</option>').join('');
+  }
+
+  function renderMoveForm(d) {
+    if (!formEl) return;
+    const undesignated = equityAccounts.find((a) => /without donor restrictions/i.test(a.name));
+    const designated = equityAccounts.find((a) => /board-designated/i.test(a.name));
+    formEl.innerHTML = (
+      '<h4 style="margin:0 0 12px;">Designate or release: ' + esc(d.name) + '</h4>'
+      + '<div class="organizational-form-row"><label>Action<select id="boarddesig-m-dir"><option value="designate">Designate (move to this designation)</option><option value="release">Release (move back to undesignated)</option></select></label></div>'
+      + '<div class="organizational-form-row"><label>Amount<input type="number" id="boarddesig-m-amt" min="0.01" step="0.01"></label></div>'
+      + '<div class="organizational-form-row"><label>Date<input type="date" id="boarddesig-m-date" value="' + new Date().toISOString().slice(0, 10) + '"></label></div>'
+      + '<div class="organizational-form-row"><label>Undesignated net assets account<select id="boarddesig-m-from">' + accountOptions(undesignated && undesignated.id) + '</select></label></div>'
+      + '<div class="organizational-form-row"><label>Designated net assets account<select id="boarddesig-m-to">' + accountOptions(designated && designated.id) + '</select></label></div>'
+      + '<div class="organizational-form-row"><label>Memo<input type="text" id="boarddesig-m-memo" placeholder="e.g. board resolution reference"></label></div>'
+      + '<div class="organizational-panel-error" id="boarddesig-m-error" hidden></div>'
+      + '<div style="display:flex;gap:8px;margin-top:8px;">'
+        + '<button type="button" class="organizational-btn organizational-btn-primary" id="boarddesig-m-save">Post</button>'
+        + '<button type="button" class="organizational-btn organizational-btn-outline" id="boarddesig-m-cancel">Cancel</button>'
+      + '</div>'
+    );
+    formEl.hidden = false;
+    document.getElementById('boarddesig-m-cancel').addEventListener('click', () => { formEl.hidden = true; });
+    document.getElementById('boarddesig-m-save').addEventListener('click', async () => {
+      const errEl = document.getElementById('boarddesig-m-error');
+      errEl.hidden = true;
+      const dollars = Number(document.getElementById('boarddesig-m-amt').value);
+      const body = {
+        direction: document.getElementById('boarddesig-m-dir').value,
+        amount_cents: Math.round(dollars * 100),
+        transaction_date: document.getElementById('boarddesig-m-date').value,
+        undesignated_account_id: Number(document.getElementById('boarddesig-m-from').value),
+        designated_account_id: Number(document.getElementById('boarddesig-m-to').value),
+        memo: document.getElementById('boarddesig-m-memo').value.trim(),
+      };
+      if (!(body.amount_cents > 0)) { errEl.textContent = 'Enter an amount.'; errEl.hidden = false; return; }
+      const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/board-designations/' + d.id + '/transfer', { method: 'POST', body: JSON.stringify(body) });
+      if (!out) return;
+      if (!out.res.ok) { errEl.textContent = (out.data && out.data.error) || 'Could not post.'; errEl.hidden = false; return; }
+      formEl.hidden = true;
+      await loadDesignations();
+    });
+  }
+
   if (addBtn) addBtn.addEventListener('click', () => renderForm(null));
 
   if (tbody) {
@@ -112,6 +160,12 @@
       if (editBtn) {
         const d = designationsCache.find((x) => Number(x.id) === Number(editBtn.getAttribute('data-id')));
         if (d) renderForm(d);
+        return;
+      }
+      const moveBtn = e.target.closest('.boarddesig-move-btn');
+      if (moveBtn) {
+        const d = designationsCache.find((x) => Number(x.id) === Number(moveBtn.getAttribute('data-id')));
+        if (d) renderMoveForm(d);
         return;
       }
       const closeBtn = e.target.closest('.boarddesig-close-btn');
@@ -133,7 +187,7 @@
 
   async function initBoardDesignations(slug) {
     currentSlug = slug;
-    await loadDesignations();
+    await Promise.all([loadDesignations(), loadEquityAccounts()]);
   }
 
   window.OrganizationalAccounting.boardDesignations = { init: initBoardDesignations };

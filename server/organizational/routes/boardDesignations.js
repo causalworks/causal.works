@@ -5,6 +5,9 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
+const { postLedgerTransaction } = require('../lib/ledgerPosting');
+const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
+const { netAssetsByClass, netAssetBuckets } = require('../lib/restrictedNetAssets');
 
 const STATUSES = new Set(['active', 'closed']);
 
@@ -58,12 +61,9 @@ function registerBoardDesignationRoutes(app, pool) {
     try {
       const r = await pool.query(
         `SELECT d.*,
-                COALESCE((SELECT SUM(CASE WHEN a.type = 'asset' THEN l.debit_cents - l.credit_cents
-                                         ELSE l.credit_cents - l.debit_cents END) FROM org_ledger_lines l
+                COALESCE((SELECT SUM(l.credit_cents - l.debit_cents) FROM org_ledger_lines l
                           JOIN org_ledger_transactions t ON t.id = l.transaction_id
-                          JOIN org_accounts a ON a.id = l.account_id
-                          WHERE l.board_designation_id = d.id AND t.status = 'posted'
-                            AND a.type IN ('asset', 'equity', 'income', 'expense')), 0) AS balance_cents
+                          WHERE l.board_designation_id = d.id AND t.status = 'posted'), 0) AS balance_cents
          FROM org_board_designations d
          WHERE d.org_id = $1
          ORDER BY d.status ASC, d.name ASC`,
@@ -122,6 +122,68 @@ function registerBoardDesignationRoutes(app, pool) {
     } catch (e) {
       console.error('PATCH /board-designations/:id:', e.message);
       return res.status(500).json({ error: 'Could not update board designation' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/board-designations/:id/transfer', ...orgAuth, financeWriter, async (req, res) => {
+    const designationId = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isInteger(designationId) || designationId < 1) return res.status(400).json({ error: 'invalid designation id' });
+    const b = req.body || {};
+    const direction = String(b.direction || '');
+    const amountCents = Number.parseInt(String(b.amount_cents), 10);
+    const fromId = Number.parseInt(String(b.undesignated_account_id), 10);
+    const toId = Number.parseInt(String(b.designated_account_id), 10);
+    const date = String(b.transaction_date || '');
+    if (!['designate', 'release'].includes(direction)) return res.status(400).json({ error: 'direction must be designate or release' });
+    if (!Number.isInteger(amountCents) || amountCents < 1) return res.status(400).json({ error: 'amount_cents must be a positive integer' });
+    if (!Number.isInteger(fromId) || !Number.isInteger(toId) || fromId === toId) return res.status(400).json({ error: 'Choose one undesignated and one designated net assets account' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'transaction_date must be YYYY-MM-DD' });
+
+    try {
+      const d = await pool.query('SELECT id, name FROM org_board_designations WHERE id = $1 AND org_id = $2', [designationId, req.orgId]);
+      if (!d.rows.length) return res.status(404).json({ error: 'Board designation not found' });
+      const accts = await pool.query(
+        `SELECT id FROM org_accounts WHERE org_id = $1 AND id = ANY($2::int[]) AND type = 'equity' AND is_posting = true`, [req.orgId, [fromId, toId]]);
+      if (accts.rows.length !== 2) return res.status(400).json({ error: 'Both accounts must be net assets (equity) accounts you can post to' });
+      const prog = await pool.query(`SELECT id FROM org_programs WHERE org_id = $1 AND active = true ORDER BY is_default DESC, id LIMIT 1`, [req.orgId]);
+      if (!prog.rows.length) return res.status(400).json({ error: 'The workspace has no program to post this entry to' });
+
+      const fy = fiscalYearForDate(date, await getFiscalYearEndMonth(pool, req.orgId));
+      const designated = await pool.query(
+        `SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0)::bigint AS cents
+         FROM org_ledger_lines l JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2 AND l.board_designation_id IS NOT NULL`, [req.orgId, fy]);
+      const mine = await pool.query(
+        `SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0)::bigint AS cents
+         FROM org_ledger_lines l JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2 AND l.board_designation_id = $3`, [req.orgId, fy, designationId]);
+      if (direction === 'release' && amountCents > Number(mine.rows[0].cents)) {
+        return res.status(422).json({ error: 'The release is larger than this designation\'s balance', code: 'release_exceeds_balance' });
+      }
+      if (direction === 'designate') {
+        const buckets = netAssetBuckets(await netAssetsByClass(pool, req.orgId, { throughFiscalYear: fy }));
+        const available = buckets.without_restrictions - Number(designated.rows[0].cents);
+        if (amountCents > available) {
+          return res.status(422).json({ error: 'The amount is larger than the undesignated net assets without donor restrictions available', code: 'designation_exceeds_available', available_cents: available });
+        }
+      }
+
+      const userId = req.user.user_id ?? req.user.id;
+      const programId = prog.rows[0].id;
+      const designate = direction === 'designate';
+      const out = await postLedgerTransaction(pool, {
+        orgId: req.orgId, userId, transactionDate: date,
+        memo: String(b.memo || '').trim() || ((designate ? 'Designate net assets: ' : 'Release designated net assets: ') + d.rows[0].name),
+        source: 'manual', entryType: 'transfer', internalApproval: null,
+        lines: [
+          { account_id: fromId, program_id: programId, ...(designate ? { debit_cents: amountCents } : { credit_cents: amountCents }) },
+          { account_id: toId, program_id: programId, board_designation_id: designationId, ...(designate ? { credit_cents: amountCents } : { debit_cents: amountCents }) },
+        ],
+      });
+      return res.status(out.httpStatus).json(out.body);
+    } catch (e) {
+      console.error('POST /board-designations/:id/transfer:', e.message);
+      return res.status(500).json({ error: 'Could not post the transfer' });
     }
   });
 }

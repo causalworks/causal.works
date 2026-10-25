@@ -40,6 +40,9 @@ function translateLedgerWriteError(e) {
       },
     };
   }
+  if (e.code === 'CA010') {
+    return { status: 422, body: { error: e.message, code: 'designation_not_on_equity', message: 'A board designation can only be placed on a net assets line.' } };
+  }
   if (e.code === 'CA005') {
     return {
       status: 422,

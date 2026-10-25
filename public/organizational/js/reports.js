@@ -1684,7 +1684,10 @@
 
     var out = await apiJson(base, { method: 'GET' });
     if (!out || !out.res.ok) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="3">Could not load statement.</td></tr>';
+      var failures = out && out.data && out.data.failures;
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="3">' + (failures && failures.length
+        ? escapeHtml(out.data.error) + '<br>' + failures.map(escapeHtml).join('<br>')
+        : 'Could not load statement.') + '</td></tr>';
       return;
     }
     if (out.data.not_available) {
@@ -1714,40 +1717,26 @@
     if (!tbody || !sfpCache) return;
     var d = sfpCache.d;
     var fy = sfpCache.fy;
+    var num = 'text-align:right;font-variant-numeric:tabular-nums;';
     var html = '';
-
-    function sectionHeader(label) {
-      return '<tr style="background:var(--surface-active);"><td colspan="3" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(label) + '</td></tr>';
-    }
-    function totalRow(label, cents) {
-      return '<tr style="font-weight:600;border-top:1px solid var(--border);"><td colspan="2">' + escapeHtml(label) + '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(cents) + '</td></tr>';
-    }
-    function accountRow(code, name, cents, href) {
-      return '<tr><td>' + escapeHtml(name) + '</td><td style="color:var(--text-secondary);">' + escapeHtml(rdCode(code) || '') + '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + amountLink(fmtStmt(cents), href) + '</td></tr>';
-    }
-    function acctHref(r) { return ledgerHref(r.account_id, d.start_date, d.end_date, fy); }
-
-    html += sectionHeader('Assets');
-    sortedIn(sfpSorter, (d.assets || []).filter(function(r) { return hideZero(Number(r.balance_cents) !== 0); })).forEach(function(r) { html += accountRow(r.code, r.name, r.balance_cents, acctHref(r)); });
-    html += totalRow('Total assets', d.total_assets_cents);
-
-    html += sectionHeader('Liabilities');
-    sortedIn(sfpSorter, (d.liabilities || []).filter(function(r) { return hideZero(Number(r.balance_cents) !== 0); })).forEach(function(r) { html += accountRow(r.code, r.name, r.balance_cents, acctHref(r)); });
-    html += totalRow('Total liabilities', d.total_liabilities_cents);
-
-    html += sectionHeader('Net Assets');
-    var na = d.net_assets || {};
-    if (na.board_designated_cents) {
-      html += accountRow('', 'Without donor restrictions: board-designated', na.board_designated_cents);
-      html += accountRow('', 'Without donor restrictions: undesignated', na.undesignated_cents || 0);
-    } else {
-      html += accountRow('', 'Without donor restrictions', na.without_restrictions_cents || 0);
-    }
-    html += accountRow('', 'With donor restrictions', na.with_restrictions_cents || 0);
-    html += totalRow('Total net assets', na.total_cents || 0);
-
-    html += '<tr style="font-weight:700;border-top:2px solid var(--border);"><td colspan="2">Total liabilities and net assets</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(d.total_liabilities_and_net_assets_cents) + '</td></tr>';
-
+    (d.rows || []).forEach(function(r) {
+      var pad = r.indent > 1 ? 'padding-left:' + (14 + (r.indent - 1) * 14) + 'px;' : '';
+      if (r.kind === 'header' && r.indent === 0) {
+        html += '<tr style="background:var(--surface-active);"><td colspan="3" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(r.label) + '</td></tr>';
+      } else if (r.kind === 'header') {
+        html += '<tr><td colspan="3" style="font-weight:600;' + pad + '">' + escapeHtml(r.label) + '</td></tr>';
+      } else if (r.kind === 'line') {
+        var href = r.account_id ? ledgerHref(r.account_id, d.start_date, d.end_date, fy) : '';
+        html += '<tr><td style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="color:var(--text-secondary);">' + escapeHtml(rdCode(r.code) || '') + '</td><td style="' + num + '">' + amountLink(fmtStmt(r.amount_cents), href) + '</td></tr>';
+      } else {
+        var border = r.kind === 'grand' ? '2px' : '1px';
+        var weight = r.kind === 'grand' ? '700' : '600';
+        html += '<tr style="font-weight:' + weight + ';border-top:' + border + ' solid var(--border);"><td colspan="2" style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="' + num + '">' + fmtStmt(r.amount_cents) + '</td></tr>';
+      }
+    });
+    (d.warnings || []).forEach(function(w) {
+      html += '<tr><td colspan="3" style="color:var(--text-secondary);padding:8px 14px;">Check: ' + escapeHtml(w) + '</td></tr>';
+    });
     tbody.innerHTML = html;
     syncCodeHeader('organizational-sfp-tbody');
   }

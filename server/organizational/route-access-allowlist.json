@@ -28,6 +28,7 @@
  "GET /api/organizational/orgs/:slug/actuals": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/:slug/actuals-source": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/:slug/actuals/last-sync": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
+ "GET /api/organizational/orgs/:slug/assistant": "Shows the workspace assistant mode, the caller's own mode and the seat end date to every workspace user; no financial data.",
  "GET /api/organizational/orgs/:slug/budget-scenarios": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/:slug/budget-scenarios/:id/compare": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
  "GET /api/organizational/orgs/:slug/budget-scenarios/:id/grant-allocations": "Read access to plan, budget and reference data for every workspace user, program-scoped by row-level security; pay data is gated separately (personnel_pay).",
@@ -134,5 +135,6 @@
  "POST /api/public/:slug/payments/:provider/webhook": "Payment provider webhook: accepted only when the signature matches the workspace's stored webhook secret; only the workspace's current test or live account is tried, and an event from the other mode is ignored; each event id is handled once, one at a time, so a replayed or simultaneous event changes nothing. Rate limited.",
  "POST /api/public/email/postmark/webhook": "Email provider delivery and open reports for membership messages. Accepted only with the shared token header set on the server; updates delivery and open times by provider message id and returns no data. Rate limited.",
  "POST /api/share/:token/request-code": "Public share link: access is the unguessable token plus a one-time emailed code.",
- "POST /api/share/:token/verify": "Public share link: access is the unguessable token plus a one-time emailed code."
+ "POST /api/share/:token/verify": "Public share link: access is the unguessable token plus a one-time emailed code.",
+ "PUT /api/organizational/orgs/:slug/assistant/my-mode": "Changes only the caller's own assistant mode (user-level preference)."
 }

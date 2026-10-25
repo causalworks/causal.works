@@ -5,9 +5,9 @@
 async function storeProposal(ctx, tool, input) {
   const p = ctx.proposal || {};
   const r = await ctx.pool.query(
-    `INSERT INTO org_tool_proposals (org_id, tool_name, proposer_kind, proposer_user_id, model, prompt_version, input, reason, evidence, warnings)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [ctx.orgId, tool, ctx.actor, ctx.userId || null, p.model || null, p.promptVersion || null, JSON.stringify(input || {}),
+    `INSERT INTO org_tool_proposals (org_id, tool_name, proposer_kind, proposer_user_id, proposer_seat_id, model, prompt_version, input, reason, evidence, warnings)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+    [ctx.orgId, tool, ctx.actor, ctx.userId || null, ctx.seatId || null, p.model || null, p.promptVersion || null, JSON.stringify(input || {}),
       p.reason || null, p.evidence ? JSON.stringify(p.evidence) : null, p.warnings ? JSON.stringify(p.warnings) : null]);
   return r.rows[0].id;
 }

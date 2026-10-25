@@ -1,9 +1,9 @@
--- Includes migrations through 376
+-- Includes migrations through 377
 --
 -- PostgreSQL database dump
 --
 
-\restrict pl6WPKen7RZHQ4XZJsUUVUtClK3M5zatJIPc75Gpoq1tD5xa2A8atb31jqxWo4F
+\restrict Ute7EzaJbv1ifVCZQev04z1irw0txGufmCPuKIQnCXOaPmzR3bhEVO5Xe1Cq5UR
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -4099,6 +4099,55 @@ CREATE SEQUENCE public.org_allocation_schedules_id_seq
 --
 
 ALTER SEQUENCE public.org_allocation_schedules_id_seq OWNED BY public.org_allocation_schedules.id;
+
+
+--
+-- Name: org_assistant_seats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_assistant_seats (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    reason text NOT NULL,
+    granted_by integer,
+    starts_at timestamp with time zone DEFAULT now() NOT NULL,
+    ends_at timestamp with time zone NOT NULL,
+    renewed_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    revoked_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_assistant_seats_check CHECK ((ends_at > starts_at)),
+    CONSTRAINT org_assistant_seats_reason_check CHECK ((length(btrim(reason)) >= 5))
+);
+
+ALTER TABLE ONLY public.org_assistant_seats FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_assistant_seats; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_assistant_seats IS 'The assistant''s own identity in a workspace: may propose, may not post; ends on a date and can be revoked.';
+
+
+--
+-- Name: org_assistant_seats_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_assistant_seats_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_assistant_seats_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_assistant_seats_id_seq OWNED BY public.org_assistant_seats.id;
 
 
 --
@@ -8246,7 +8295,9 @@ CREATE TABLE public.org_settings (
     acknowledgment_message text,
     acknowledgment_signoff text,
     report_display jsonb,
+    assistant_mode text DEFAULT 'off'::text NOT NULL,
     CONSTRAINT org_settings_actuals_source_check CHECK ((actuals_source = ANY (ARRAY['xero'::text, 'ledger'::text]))),
+    CONSTRAINT org_settings_assistant_mode_check CHECK ((assistant_mode = ANY (ARRAY['off'::text, 'background'::text, 'assistant'::text]))),
     CONSTRAINT org_settings_bill_next_number_check CHECK ((bill_next_number >= 1)),
     CONSTRAINT org_settings_capitalization_threshold_cents_check CHECK ((capitalization_threshold_cents >= 0)),
     CONSTRAINT org_settings_default_admin_rate_check CHECK (((default_admin_rate >= (0)::numeric) AND (default_admin_rate <= (100)::numeric))),
@@ -9210,6 +9261,7 @@ CREATE TABLE public.org_tool_proposals (
     result_status integer,
     expires_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    proposer_seat_id integer,
     CONSTRAINT org_tool_proposals_proposer_kind_check CHECK ((proposer_kind = ANY (ARRAY['assistant'::text, 'job'::text]))),
     CONSTRAINT org_tool_proposals_status_check CHECK ((status = ANY (ARRAY['open'::text, 'accepted'::text, 'changed'::text, 'dismissed'::text, 'expired'::text])))
 );
@@ -9258,7 +9310,9 @@ CREATE TABLE public.org_users (
     last_dashboard_visit_at timestamp with time zone,
     accounting_entry_enabled boolean DEFAULT false NOT NULL,
     accounting_entry_enabled_at timestamp with time zone,
-    accounting_entry_reminded_at timestamp with time zone
+    accounting_entry_reminded_at timestamp with time zone,
+    assistant_mode text,
+    CONSTRAINT org_users_assistant_mode_check CHECK ((assistant_mode = ANY (ARRAY['off'::text, 'background'::text, 'assistant'::text])))
 );
 
 ALTER TABLE ONLY public.org_users FORCE ROW LEVEL SECURITY;
@@ -11010,6 +11064,13 @@ ALTER TABLE ONLY public.org_allocation_schedules ALTER COLUMN id SET DEFAULT nex
 
 
 --
+-- Name: org_assistant_seats id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_assistant_seats ALTER COLUMN id SET DEFAULT nextval('public.org_assistant_seats_id_seq'::regclass);
+
+
+--
 -- Name: org_audit_log id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -12258,6 +12319,14 @@ ALTER TABLE ONLY public.org_allocation_monthly
 
 ALTER TABLE ONLY public.org_allocation_schedules
     ADD CONSTRAINT org_allocation_schedules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_assistant_seats org_assistant_seats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_assistant_seats
+    ADD CONSTRAINT org_assistant_seats_pkey PRIMARY KEY (id);
 
 
 --
@@ -15504,6 +15573,13 @@ CREATE INDEX org_allocation_schedules_org_fy_idx ON public.org_allocation_schedu
 
 
 --
+-- Name: org_assistant_seats_one_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX org_assistant_seats_one_live ON public.org_assistant_seats USING btree (org_id) WHERE (revoked_at IS NULL);
+
+
+--
 -- Name: org_bills_number_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -17125,6 +17201,30 @@ ALTER TABLE ONLY public.org_allocation_schedules
 
 ALTER TABLE ONLY public.org_allocation_schedules
     ADD CONSTRAINT org_allocation_schedules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+
+
+--
+-- Name: org_assistant_seats org_assistant_seats_granted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_assistant_seats
+    ADD CONSTRAINT org_assistant_seats_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_assistant_seats org_assistant_seats_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_assistant_seats
+    ADD CONSTRAINT org_assistant_seats_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_assistant_seats org_assistant_seats_revoked_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_assistant_seats
+    ADD CONSTRAINT org_assistant_seats_revoked_by_fkey FOREIGN KEY (revoked_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -20152,6 +20252,14 @@ ALTER TABLE ONLY public.org_tool_proposals
 
 
 --
+-- Name: org_tool_proposals org_tool_proposals_proposer_seat_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals
+    ADD CONSTRAINT org_tool_proposals_proposer_seat_id_fkey FOREIGN KEY (proposer_seat_id) REFERENCES public.org_assistant_seats(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_tool_proposals org_tool_proposals_proposer_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20817,6 +20925,19 @@ ALTER TABLE public.org_allocation_schedules ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY org_allocation_schedules_org_isolation ON public.org_allocation_schedules USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
+-- Name: org_assistant_seats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_assistant_seats ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_assistant_seats org_assistant_seats_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_assistant_seats_org_isolation ON public.org_assistant_seats USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
 
 
 --
@@ -23218,6 +23339,20 @@ GRANT SELECT,USAGE ON SEQUENCE public.org_allocation_schedules_id_seq TO causal_
 
 
 --
+-- Name: TABLE org_assistant_seats; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_assistant_seats TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_assistant_seats_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_assistant_seats_id_seq TO causal_app;
+
+
+--
 -- Name: SEQUENCE org_audit_log_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25132,5 +25267,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict pl6WPKen7RZHQ4XZJsUUVUtClK3M5zatJIPc75Gpoq1tD5xa2A8atb31jqxWo4F
+\unrestrict Ute7EzaJbv1ifVCZQev04z1irw0txGufmCPuKIQnCXOaPmzR3bhEVO5Xe1Cq5UR
 

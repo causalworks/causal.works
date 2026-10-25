@@ -17,6 +17,7 @@ require('./indirectCostRecovery');
 require('./ledgerEntry');
 require('./billInvoiceEdits');
 require('./giftConfirm');
+require('./bankLineCoding');
 const { runTool, listTools } = require('./registry');
 const proposals = require('./proposals');
 const { programScopeFor } = require('../lib/programScope');

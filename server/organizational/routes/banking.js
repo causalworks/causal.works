@@ -18,7 +18,8 @@ const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../li
 const {
   postLedgerTransaction, voidLedgerTransaction, isFiscalYearLocked, buildReversingLines, RESTRICTION_CLASSES,
 } = require('../lib/ledgerPosting');
-const { runTool, ctxForUser } = require('../tools');
+const { runTool, ctxForUser, ctxFromReq } = require('../tools');
+const { signedAmountCents, buildSplitLines, parseSplits } = require('../lib/bankLineCoding');
 const { recordGrantGiftPayment } = require('../lib/grantGiftPayment');
 const { recordMembershipDuesPayment } = require('../lib/membershipDuesPayment');
 const { recordSponsoredProjectDisbursementPayment } = require('../lib/sponsoredProjectDisbursementPayment');
@@ -494,110 +495,12 @@ function registerBankingRoutes(app, pool) {
     }
   });
 
-  function signedAmountCents(line) {
-    const magnitude = Number(line.amount_cents);
-    return line.credit_debit_indicator === 'debit' ? -magnitude : magnitude;
-  }
-
-  function buildSplitLines({ bankAccountId, splits, totalAmountCents }) {
-    const inflow = totalAmountCents >= 0;
-    const magnitude = Math.abs(totalAmountCents);
-    const bankLine = {
-      account_id: bankAccountId,
-      program_id: splits[0].programId,
-      debit_cents: inflow ? magnitude : 0,
-      credit_cents: inflow ? 0 : magnitude,
-    };
-    const codedLines = splits.map((s) => ({
-      account_id: s.accountId,
-      program_id: s.programId,
-      grant_id: s.grantId,
-      donor_restriction_class: s.restrictionClass,
-      debit_cents: inflow ? 0 : s.amountCents,
-      credit_cents: inflow ? s.amountCents : 0,
-    }));
-    return [bankLine, ...codedLines];
-  }
-
-  function parseSplits(body) {
-    const rawSplits = Array.isArray(body.splits) && body.splits.length > 0
-      ? body.splits
-      : [{ account_id: body.account_id, program_id: body.program_id, grant_id: body.grant_id, donor_restriction_class: body.donor_restriction_class, amount_cents: body.amount_cents }];
-
-    const splits = [];
-    for (let i = 0; i < rawSplits.length; i++) {
-      const s = rawSplits[i] || {};
-      const accountId = Number.parseInt(String(s.account_id), 10);
-      const programId = Number.parseInt(String(s.program_id), 10);
-      if (!Number.isInteger(accountId) || accountId < 1) return { error: `split ${i + 1}: account_id is required` };
-      if (!Number.isInteger(programId) || programId < 1) return { error: `split ${i + 1}: program_id is required` };
-      let grantId = null;
-      if (s.grant_id != null && s.grant_id !== '') {
-        grantId = Number.parseInt(String(s.grant_id), 10);
-        if (!Number.isInteger(grantId) || grantId < 1) return { error: `split ${i + 1}: grant_id must be a positive integer if provided` };
-      }
-      let restrictionClass = null;
-      if (s.donor_restriction_class != null && s.donor_restriction_class !== '') {
-        restrictionClass = String(s.donor_restriction_class);
-        if (!RESTRICTION_CLASSES.has(restrictionClass)) {
-          return { error: `split ${i + 1}: donor_restriction_class must be one of unrestricted, temporarily_restricted, permanently_restricted` };
-        }
-      }
-      splits.push({ accountId, programId, grantId, restrictionClass, amountCents: s.amount_cents });
-    }
-    return { splits };
-  }
-
   async function loadOwnStatementLine(orgId, lineId) {
     const r = await pool.query(
       `SELECT * FROM org_bank_statement_lines WHERE id = $1 AND org_id = $2`,
       [lineId, orgId]
     );
     return r.rows[0] || null;
-  }
-
-  async function codeStatementLineAsCreate(orgId, userId, lineId, { splits, memo, payee, referenceNumber, codingSource, appliedRuleId }) {
-    const line = await loadOwnStatementLine(orgId, lineId);
-    if (!line) return { httpStatus: 404, body: { error: 'Statement line not found' } };
-    { const lock = await closedPeriodCovering(pool, orgId, line.bank_account_id, line.statement_date); if (lock) return { httpStatus: 409, body: periodLockBody(lock) }; }
-    if (line.status !== 'unconfirmed') {
-      return { httpStatus: 409, body: { error: `Line is already ${line.status}`, code: 'already_coded' } };
-    }
-
-    const totalAmountCents = signedAmountCents(line);
-    const magnitude = Math.abs(totalAmountCents);
-    const filledSplits = splits.map((s, i) => ({
-      ...s,
-      amountCents: s.amountCents != null ? Number.parseInt(String(s.amountCents), 10)
-        : (splits.length === 1 ? magnitude : NaN),
-    }));
-    if (filledSplits.some((s) => !Number.isInteger(s.amountCents) || s.amountCents <= 0)) {
-      return { httpStatus: 400, body: { error: 'Each split needs a positive amount_cents' } };
-    }
-    const splitSum = filledSplits.reduce((sum, s) => sum + s.amountCents, 0);
-    if (splitSum !== magnitude) {
-      return { httpStatus: 400, body: { error: `Split amounts (${splitSum}) must sum to the line's total (${magnitude})` } };
-    }
-
-    const lines = buildSplitLines({ bankAccountId: line.bank_account_id, splits: filledSplits, totalAmountCents });
-    const result = await postLedgerTransaction(pool, {
-      orgId, userId,
-      transactionDate: String(line.statement_date).slice(0, 10),
-      memo: memo != null ? memo : line.description_raw,
-      payee: payee != null ? payee : line.payee_raw,
-      referenceNumber: referenceNumber != null ? referenceNumber : null,
-      lines, source: 'bank_reconciliation',
-    });
-    if (result.httpStatus >= 400) return result;
-
-    await pool.query(
-      `UPDATE org_bank_statement_lines
-       SET status = 'confirmed', ledger_transaction_id = $1, coding_source = $4, applied_rule_id = $5,
-           discuss_resolved_at = CASE WHEN discuss_note IS NOT NULL AND discuss_resolved_at IS NULL THEN NOW() ELSE discuss_resolved_at END
-       WHERE id = $2 AND org_id = $3`,
-      [result.body.id, lineId, orgId, codingSource === 'rule' ? 'rule' : 'manual', codingSource === 'rule' ? (appliedRuleId || null) : null]
-    );
-    return { httpStatus: 201, body: { id: lineId, status: 'confirmed', ledger_transaction_id: result.body.id, ledger_status: result.body.status } };
   }
 
   app.post('/api/organizational/orgs/:slug/bank-statement-lines/:id/create', ...orgAuth, financeWriter, async (req, res) => {
@@ -608,14 +511,7 @@ function registerBankingRoutes(app, pool) {
     if (error) return res.status(400).json({ error });
 
     try {
-      const result = await codeStatementLineAsCreate(req.orgId, req.user.user_id ?? req.user.id, lineId, {
-        splits,
-        memo: body.memo != null ? String(body.memo) : null,
-        payee: body.payee != null ? String(body.payee) : null,
-        referenceNumber: body.reference_number != null ? String(body.reference_number) : null,
-        codingSource: body.coding_source === 'rule' ? 'rule' : 'manual',
-        appliedRuleId: body.applied_rule_id != null ? Number.parseInt(String(body.applied_rule_id), 10) : null,
-      });
+      const result = await runTool('bank_line.code', ctxFromReq(pool, req), { ...body, line_id: lineId });
       return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /bank-statement-lines/:id/create:', e.message);
@@ -1246,13 +1142,7 @@ function registerBankingRoutes(app, pool) {
             destinationAccountId, referenceNumber: c.reference || null, memo: c.memo || null,
           });
         } else {
-          const { error, splits } = parseSplits(c);
-          if (error) { results.push({ line_id: lineId, ok: false, error }); continue; }
-          result = await codeStatementLineAsCreate(orgId, userId, lineId, {
-            splits, memo: c.memo || null, payee: c.payee || null, referenceNumber: c.reference_number || null,
-            codingSource: c.coding_source === 'rule' ? 'rule' : 'manual',
-            appliedRuleId: c.applied_rule_id != null ? Number.parseInt(String(c.applied_rule_id), 10) : null,
-          });
+          result = await runTool('bank_line.code', ctxForUser(pool, orgId, userId), { ...c, line_id: lineId });
         }
         if (result.httpStatus >= 400) {
           results.push({ line_id: lineId, ok: false, error: result.body.message || result.body.error, code: result.body.code });

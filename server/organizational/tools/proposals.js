@@ -45,7 +45,9 @@ async function acceptProposal(ctx, id, changedInput) {
     throw e;
   }
   if (out.httpStatus >= 400) {
-    await reopen();
+    if (out.body && out.body.code === 'already_coded') {
+      await ctx.pool.query(`UPDATE org_tool_proposals SET status = 'expired' WHERE id = $1 AND org_id = $2`, [id, ctx.orgId]);
+    } else await reopen();
     return out;
   }
   await ctx.pool.query(`UPDATE org_tool_proposals SET result_status = $3 WHERE id = $1 AND org_id = $2`, [id, ctx.orgId, out.httpStatus]);

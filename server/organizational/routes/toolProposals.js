@@ -9,6 +9,8 @@ const { ctxFromReq, proposals } = require('../tools');
 const { programScopeFor } = require('../lib/programScope');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 
+const { proposeForUnconfirmedLines } = require('../lib/bankLineProposals');
+
 const STATUSES = ['open', 'accepted', 'changed', 'dismissed', 'expired'];
 
 function registerToolProposalRoutes(app, pool) {
@@ -25,6 +27,15 @@ function registerToolProposalRoutes(app, pool) {
     } catch (e) {
       console.error('GET tool-proposals:', e.message);
       res.status(500).json({ error: 'Could not load proposals' });
+    }
+  });
+
+  app.post('/api/organizational/orgs/:slug/tool-proposals/prepare-bank-coding', ...orgAuth, deciders, async (req, res) => {
+    try {
+      res.json(await proposeForUnconfirmedLines(pool, req.orgId));
+    } catch (e) {
+      console.error('POST tool-proposals prepare-bank-coding:', e.message);
+      res.status(500).json({ error: 'Could not prepare proposals' });
     }
   });
 

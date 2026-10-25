@@ -70,11 +70,14 @@ function registerFinancialStatementRoutes(app, pool) {
       const netAssetsByClassRows = await netAssetsByClass(pool, orgId, { throughFiscalYear: fy });
 
       const boardDesignatedRes = await pool.query(
-        `SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0) AS balance_cents
+        `SELECT COALESCE(SUM(CASE WHEN a.type = 'asset' THEN l.debit_cents - l.credit_cents
+                                  ELSE l.credit_cents - l.debit_cents END), 0) AS balance_cents
          FROM org_ledger_lines l
          JOIN org_ledger_transactions t ON t.id = l.transaction_id
+         JOIN org_accounts a ON a.id = l.account_id
          WHERE t.org_id = $1 AND t.status = 'posted' AND t.fiscal_year <= $2
-           AND l.board_designation_id IS NOT NULL`,
+           AND l.board_designation_id IS NOT NULL
+           AND a.type IN ('asset', 'equity', 'income', 'expense')`,
         [orgId, fy]
       );
       const boardDesignatedCents = Number(boardDesignatedRes.rows[0].balance_cents);
@@ -100,8 +103,12 @@ function registerFinancialStatementRoutes(app, pool) {
           ['Total Assets', '', '', (totalAssets / 100).toFixed(2)].join(','),
           ...liabilities.map(r => [fmtCsv('Liabilities'), fmtCsv(r.code), fmtCsv(r.name), (Number(r.balance_cents) / 100).toFixed(2)].join(',')),
           ['Total Liabilities', '', '', (totalLiabilities / 100).toFixed(2)].join(','),
-          ['Net Assets - Without donor restrictions', '', '', (netAssetBuckets.without_restrictions / 100).toFixed(2)].join(','),
-          ['  of which: board-designated', '', '', (boardDesignatedCents / 100).toFixed(2)].join(','),
+          ...(boardDesignatedCents
+            ? [
+                ['Net Assets - Without donor restrictions - Board-designated', '', '', (boardDesignatedCents / 100).toFixed(2)].join(','),
+                ['Net Assets - Without donor restrictions - Undesignated', '', '', ((netAssetBuckets.without_restrictions - boardDesignatedCents) / 100).toFixed(2)].join(','),
+              ]
+            : [['Net Assets - Without donor restrictions', '', '', (netAssetBuckets.without_restrictions / 100).toFixed(2)].join(',')]),
           ['Net Assets - With donor restrictions', '', '', (netAssetBuckets.with_restrictions / 100).toFixed(2)].join(','),
           ['Total Net Assets', '', '', (totalNetAssets / 100).toFixed(2)].join(','),
           ['Total Liabilities and Net Assets', '', '', ((totalLiabilities + totalNetAssets) / 100).toFixed(2)].join(','),
@@ -123,6 +130,7 @@ function registerFinancialStatementRoutes(app, pool) {
         net_assets: {
           without_restrictions_cents: netAssetBuckets.without_restrictions,
           board_designated_cents: boardDesignatedCents,
+          undesignated_cents: netAssetBuckets.without_restrictions - boardDesignatedCents,
           with_restrictions_cents: netAssetBuckets.with_restrictions,
           total_cents: totalNetAssets,
         },
@@ -224,10 +232,10 @@ function registerFinancialStatementRoutes(app, pool) {
           ...revenue.filter(r => r.restriction_bucket === 'with_restrictions').map(r =>
             [fmtCsv('Revenue'), fmtCsv(r.code), fmtCsv(r.name), '', (Number(r.amount_cents)/100).toFixed(2), ''].join(',')),
           ['Total Revenue', '', '', (totalRevenueWithout/100).toFixed(2), (totalRevenueWith/100).toFixed(2), ((totalRevenueWithout+totalRevenueWith)/100).toFixed(2)].join(','),
+          ['Net Assets Released from Restrictions', '', '', (releasedFromRestrictions/100).toFixed(2), (-releasedFromRestrictions/100).toFixed(2), '0.00'].join(','),
           ...expenses.map(r =>
             [fmtCsv('Expenses'), fmtCsv(r.code), fmtCsv(r.name), (Number(r.amount_cents)/100).toFixed(2), '', ''].join(',')),
           ['Total Expenses', '', '', (totalExpenses/100).toFixed(2), '', (totalExpenses/100).toFixed(2)].join(','),
-          ['Net Assets Released from Restrictions', '', '', (releasedFromRestrictions/100).toFixed(2), (-releasedFromRestrictions/100).toFixed(2), '0.00'].join(','),
           ['Change in Net Assets', '', '', (changeWithout/100).toFixed(2), (changeWith/100).toFixed(2), (totalChange/100).toFixed(2)].join(','),
           ['Beginning Net Assets', '', '', (beginBuckets.without_restrictions/100).toFixed(2), (beginBuckets.with_restrictions/100).toFixed(2), (beginTotal/100).toFixed(2)].join(','),
           ['Ending Net Assets', '', '', (endWithout/100).toFixed(2), (endWith/100).toFixed(2), (endTotal/100).toFixed(2)].join(','),

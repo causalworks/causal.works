@@ -1737,9 +1737,11 @@
 
     html += sectionHeader('Net Assets');
     var na = d.net_assets || {};
-    html += accountRow('', 'Without donor restrictions', na.without_restrictions_cents || 0);
     if (na.board_designated_cents) {
-      html += '<tr><td style="padding-left:28px;color:var(--text-secondary);">of which: board-designated</td><td></td><td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-secondary);">' + fmtStmt(na.board_designated_cents) + '</td></tr>';
+      html += accountRow('', 'Without donor restrictions: board-designated', na.board_designated_cents);
+      html += accountRow('', 'Without donor restrictions: undesignated', na.undesignated_cents || 0);
+    } else {
+      html += accountRow('', 'Without donor restrictions', na.without_restrictions_cents || 0);
     }
     html += accountRow('', 'With donor restrictions', na.with_restrictions_cents || 0);
     html += totalRow('Total net assets', na.total_cents || 0);
@@ -1822,6 +1824,14 @@
       html += accountRow(r.code, r.name, r.without, r.with, acctHref(r));
     });
     html += totalRow('Total revenue', t.revenue_without_restrictions_cents || 0, t.revenue_with_restrictions_cents || 0, t.total_revenue_cents || 0, false);
+
+    var released = t.released_from_restrictions_cents || 0;
+    if (released) {
+      html += '<tr><td>Net assets released from restrictions</td><td></td>' +
+        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(released) + '</td>' +
+        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(-released) + '</td>' +
+        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(0) + '</td></tr>';
+    }
 
     html += sectionHeader('Expenses');
     sortedIn(soaSorter, (d.expenses || []).map(function(r) { return { account_id: r.account_id, code: r.code, name: r.name, without: Number(r.amount_cents), with: null }; }).filter(function(r) { return hideZero(!!r.without); })).forEach(function(r) {

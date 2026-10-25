@@ -58,9 +58,12 @@ function registerBoardDesignationRoutes(app, pool) {
     try {
       const r = await pool.query(
         `SELECT d.*,
-                COALESCE((SELECT SUM(l.credit_cents - l.debit_cents) FROM org_ledger_lines l
+                COALESCE((SELECT SUM(CASE WHEN a.type = 'asset' THEN l.debit_cents - l.credit_cents
+                                         ELSE l.credit_cents - l.debit_cents END) FROM org_ledger_lines l
                           JOIN org_ledger_transactions t ON t.id = l.transaction_id
-                          WHERE l.board_designation_id = d.id AND t.status = 'posted'), 0) AS balance_cents
+                          JOIN org_accounts a ON a.id = l.account_id
+                          WHERE l.board_designation_id = d.id AND t.status = 'posted'
+                            AND a.type IN ('asset', 'equity', 'income', 'expense')), 0) AS balance_cents
          FROM org_board_designations d
          WHERE d.org_id = $1
          ORDER BY d.status ASC, d.name ASC`,

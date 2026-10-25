@@ -11,7 +11,7 @@ const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear'
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
 const { postLedgerTransaction, isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { acquireDocumentLock } = require('../lib/documentLock');
-const { recordBillPayment, voidBillPayment } = require('../lib/billInvoicePayments');
+const { runTool, ctxFromReq } = require('../tools');
 const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { displayCents } = require('../lib/voidedDisplay');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
@@ -765,26 +765,8 @@ function registerBillsRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/bills/:id/payments', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const billId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(billId) || billId < 1) return res.status(400).json({ error: 'Invalid id' });
-    const body = req.body || {};
-    const bankAccountId = Number.parseInt(String(body.bank_account_id), 10);
-    const paymentDate = body.payment_date != null ? String(body.payment_date) : null;
-    const amountCents = Number.parseInt(String(body.amount_cents), 10);
-    if (!Number.isInteger(bankAccountId) || bankAccountId < 1) return res.status(400).json({ error: 'bank_account_id is required' });
-    if (!paymentDate || !DATE_RE.test(paymentDate)) return res.status(400).json({ error: 'payment_date is required and must be YYYY-MM-DD' });
-    if (!Number.isInteger(amountCents) || amountCents <= 0) return res.status(400).json({ error: 'amount_cents must be a positive integer' });
-
     try {
-      if (!headerProgramsInScope(req, await billLinePrograms(pool, billId))) {
-        return res.status(404).json({ error: 'Bill not found' });
-      }
-      const result = await recordBillPayment(pool, { orgId, userId, billId, bankAccountId, paymentDate, amountCents, reference: body.reference || null });
-      if (result.httpStatus < 400) {
-        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_bills', recordId: billId, fields: [{ fieldName: 'Payment recorded', oldValue: null, newValue: '$' + (amountCents / 100).toFixed(2) + ' on ' + paymentDate }], metadata: reqMeta(req) }).catch(() => {});
-      }
+      const result = await runTool('bill.record_payment', ctxFromReq(pool, req), { ...(req.body || {}), id: req.params.id });
       return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       const translated = translateBillWriteError(e);
@@ -795,28 +777,8 @@ function registerBillsRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/bills/:id/payments/:paymentId/void', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const billId = Number.parseInt(String(req.params.id), 10);
-    const paymentId = Number.parseInt(String(req.params.paymentId), 10);
-    const reason = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
-    if (!Number.isInteger(billId) || billId < 1 || !Number.isInteger(paymentId) || paymentId < 1) {
-      return res.status(400).json({ error: 'Invalid id' });
-    }
-    if (!reason) return res.status(400).json({ error: 'reason is required' });
-
     try {
-      if (!headerProgramsInScope(req, await billLinePrograms(pool, billId))) {
-        return res.status(404).json({ error: 'Bill not found' });
-      }
-      const recon = await pool.query(
-        `SELECT 1 FROM org_bank_statement_lines s JOIN org_bill_payments p ON p.ledger_transaction_id = s.ledger_transaction_id
-          WHERE s.org_id = $1 AND p.id = $2 LIMIT 1`, [orgId, paymentId]);
-      if (recon.rows.length) return res.status(409).json({ error: 'This payment is reconciled to a bank line. Unreconcile it first.', code: 'reconciled' });
-      const result = await voidBillPayment(pool, { orgId, userId, billId, paymentId, reason });
-      if (result.httpStatus < 400) {
-        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_bills', recordId: billId, fields: [{ fieldName: 'Payment voided', oldValue: null, newValue: 'payment #' + paymentId }], metadata: { ...reqMeta(req), reason } }).catch(() => {});
-      }
+      const result = await runTool('bill.void_payment', ctxFromReq(pool, req), { id: req.params.id, payment_id: req.params.paymentId, reason: req.body && req.body.reason });
       return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST bill payment void:', e.message, e.stack);

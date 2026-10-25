@@ -98,7 +98,7 @@ async function suggestWithModel(pool, orgId, line, { call = generate } = {}) {
       why,
       sent: { direction: sent.direction, payee: sent.payee, memo: sent.memo, amount: sent.amount, candidate_accounts: sent.accounts.length, candidate_programs: sent.programs.length },
     },
-    warnings: null,
+    warnings: ['No bank rule or earlier coding of this payee backs this suggestion.'],
     model: modelName(),
     promptVersion: PROMPT_VERSION,
   };

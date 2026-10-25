@@ -1,16 +1,13 @@
 'use strict';
 
 const { logAudit } = require('../lib/auditLog');
-const { isFiscalYearLocked } = require('../lib/ledgerPosting');
 
 const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
-const { postInKindGift, postPledgeCommitment, voidGiftPosting } = require('../lib/giftPosting');
-const { computeDuePledgeAccretionPeriods, runPledgeAccretion } = require('../lib/pledgeAccretion');
-const { linkOrReclassifyGrantGiftTransaction } = require('../lib/grantGiftPayment');
+const { computeDuePledgeAccretionPeriods } = require('../lib/pledgeAccretion');
 const { runTool, ctxFromReq } = require('../tools');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 
@@ -132,48 +129,9 @@ function registerGiftPostingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/post', ...writeAuth, async (req, res) => {
     const giftId = Number.parseInt(String(req.params.giftId), 10);
     if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const body = req.body || {};
-    const postingDate = body.posting_date != null ? String(body.posting_date) : null;
-
     try {
-      const kindR = await pool.query('SELECT gift_type, payment_method FROM org_gifts WHERE id = $1 AND org_id = $2 LIMIT 1', [giftId, orgId]);
-      if (!kindR.rows.length) return res.status(404).json({ error: 'Gift not found' });
-      const isInKind = kindR.rows[0].payment_method === 'in_kind';
-      const isPledge = kindR.rows[0].gift_type === 'pledge';
-
-      let result;
-      if (isInKind) {
-        result = await postInKindGift(pool, {
-          orgId, userId, giftId, postingDate,
-          revenueAccountId: body.revenue_account_id != null ? Number(body.revenue_account_id) : undefined,
-          expenseAccountId: body.expense_account_id != null ? Number(body.expense_account_id) : undefined,
-          programId: body.program_id != null ? Number(body.program_id) : undefined,
-          donorRestrictionClass: body.donor_restriction_class !== undefined ? body.donor_restriction_class : undefined,
-        });
-      } else if (isPledge) {
-        result = await postPledgeCommitment(pool, {
-          orgId, userId, giftId, postingDate,
-          revenueAccountId: body.revenue_account_id != null ? Number(body.revenue_account_id) : undefined,
-          receivableAccountId: body.receivable_account_id != null ? Number(body.receivable_account_id) : undefined,
-          discountRateBps: body.discount_rate_bps != null ? Number(body.discount_rate_bps) : undefined,
-          pledgeYears: body.pledge_years != null ? Number(body.pledge_years) : undefined,
-          programId: body.program_id != null ? Number(body.program_id) : undefined,
-          donorRestrictionClass: body.donor_restriction_class !== undefined ? body.donor_restriction_class : undefined,
-        });
-      } else {
-        return res.status(400).json({ error: 'This gift is neither in-kind nor a pledge -- nothing to post' });
-      }
-      if (result.httpStatus < 400 && isPledge) {
-        const g = await pool.query(
-          `SELECT g.is_multi_year_pledge, (SELECT COUNT(*) FROM org_gift_pledge_installments i WHERE i.gift_id = g.id) AS installments
-             FROM org_gifts g WHERE g.id = $1 AND g.org_id = $2`, [giftId, orgId]);
-        if (g.rows[0] && g.rows[0].is_multi_year_pledge && Number(g.rows[0].installments) === 0) {
-          result.body.warning = 'This multi-year pledge has no installment schedule, so its discount will not be accreted. Add the installments in Funding.';
-        }
-      }
-      return res.status(result.httpStatus).json(result.body);
+      const out = await runTool('gift.post', ctxFromReq(pool, req), { ...(req.body || {}), id: giftId });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /gift-postings/:giftId/post:', e.message);
       return res.status(500).json({ error: 'Could not post gift' });
@@ -201,71 +159,12 @@ function registerGiftPostingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/not-a-gift', ...writeAuth, async (req, res) => {
     const giftId = Number.parseInt(String(req.params.giftId), 10);
     if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
-    const body = req.body || {};
-    const accept = !body.keep;
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      const gR = await client.query(
-        `SELECT id, ledger_transaction_id, not_gift_note FROM org_gifts
-          WHERE id = $1 AND org_id = $2 AND not_gift_flagged_at IS NOT NULL AND review_status <> 'dismissed' FOR UPDATE`, [giftId, orgId]);
-      const g = gR.rows[0];
-      if (!g) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'No flagged gift with that id' }); }
-      if (!accept) {
-        await client.query('UPDATE org_gifts SET not_gift_flagged_at = NULL, not_gift_flagged_by = NULL, not_gift_note = NULL WHERE id = $1', [giftId]);
-        await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
-          fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: 'kept as a gift' }] });
-        await client.query('COMMIT');
-        return res.json({ id: giftId, accepted: false });
-      }
-      let recoded = null;
-      if (g.ledger_transaction_id) {
-        const tR = await client.query('SELECT id, fiscal_year, status FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [g.ledger_transaction_id, orgId]);
-        const t = tR.rows[0];
-        if (t && t.status === 'posted') {
-          let accountId = Number.parseInt(String(body.account_id), 10);
-          let programId = body.program_id != null && body.program_id !== '' ? Number.parseInt(String(body.program_id), 10) : null;
-          if (body.uncoded) {
-            const uR = await client.query('SELECT id FROM org_accounts WHERE org_id = $1 AND is_system_unallocated_receipts_account LIMIT 1', [orgId]);
-            if (!uR.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This workspace has no holding account for uncoded receipts. Choose an account.' }); }
-            accountId = uR.rows[0].id;
-          }
-          if (!(accountId > 0)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose the account this money belongs in, or leave it uncoded for later.' }); }
-          if (!body.uncoded && !(programId > 0)) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a program, or leave it uncoded for later.' }); }
-          if (await isFiscalYearLocked(client, orgId, t.fiscal_year)) {
-            await client.query('ROLLBACK');
-            return res.status(409).json({ error: 'Fiscal year ' + t.fiscal_year + ' is closed, so the entry cannot be recoded. Reopen the year, or void the entry and enter the corrected one, then accept.', code: 'recode_in_transactions', transaction_id: t.id });
-          }
-          const aR = await client.query('SELECT id, code, name, is_posting, is_cash_account FROM org_accounts WHERE org_id = $1 AND id = $2', [orgId, accountId]);
-          if (!aR.rows.length || !aR.rows[0].is_posting || aR.rows[0].is_cash_account) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Choose a posting account that is not a bank account.' }); }
-          const lR = await client.query(
-            `SELECT l.id, l.account_id, l.program_id, a.code || ' ' || a.name AS label
-               FROM org_ledger_lines l JOIN org_accounts a ON a.id = l.account_id
-              WHERE l.transaction_id = $1 AND l.credit_cents > 0 AND (l.source_line_type = 'org_gifts' AND l.source_line_id = $2 OR a.type = 'income')`, [t.id, giftId]);
-          if (lR.rows.length !== 1) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'This entry has more than one income line. Recode it in Transactions, then accept.', code: 'recode_in_transactions', transaction_id: t.id }); }
-          const line = lR.rows[0];
-          const fields = [{ fieldName: 'Donor review', oldValue: null, newValue: 'Accepted as not a gift' }];
-          if (line.account_id !== accountId) fields.push({ fieldName: 'Income line account', oldValue: line.label, newValue: aR.rows[0].code + ' ' + aR.rows[0].name });
-          if (!body.uncoded && programId && programId !== line.program_id) fields.push({ fieldName: 'Income line program', oldValue: String(line.program_id), newValue: String(programId) });
-          await client.query('UPDATE org_ledger_lines SET account_id = $1, program_id = COALESCE($2, program_id) WHERE id = $3', [accountId, body.uncoded ? null : programId, line.id]);
-          await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: t.id, fields,
-            metadata: { reason: 'Not a gift: ' + (g.not_gift_note || '') + (body.uncoded ? ' (left uncoded for later)' : '') } });
-          recoded = t.id;
-        }
-      }
-      await client.query(`UPDATE org_gifts SET review_status = 'dismissed', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`, [userId, giftId]);
-      await logAudit(client, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
-        fields: [{ fieldName: 'Not a gift', oldValue: 'flagged for Accounting', newValue: 'accepted, removed from Funding' }] });
-      await client.query('COMMIT');
-      return res.json({ id: giftId, accepted: true, recoded_transaction_id: recoded });
+      const out = await runTool('gift.resolve_not_a_gift', ctxFromReq(pool, req), { ...(req.body || {}), id: giftId });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
-      await client.query('ROLLBACK').catch(() => {});
       console.error('POST /gift-postings/:giftId/not-a-gift:', e.message);
       return res.status(500).json({ error: 'Could not resolve the flag' });
-    } finally {
-      client.release();
     }
   });
 
@@ -305,12 +204,9 @@ function registerGiftPostingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/void', ...writeAuth, async (req, res) => {
     const giftId = Number.parseInt(String(req.params.giftId), 10);
     if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const voidReason = req.body && req.body.void_reason != null ? String(req.body.void_reason) : null;
     try {
-      const result = await voidGiftPosting(pool, { orgId, userId, giftId, voidReason });
-      return res.status(result.httpStatus).json(result.body);
+      const out = await runTool('gift.void_posting', ctxFromReq(pool, req), { id: giftId, void_reason: req.body && req.body.void_reason });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /gift-postings/:giftId/void:', e.message);
       return res.status(500).json({ error: 'Could not void gift posting' });
@@ -320,13 +216,9 @@ function registerGiftPostingRoutes(app, pool) {
   app.post('/api/organizational/orgs/:slug/gift-postings/:giftId/link-transaction', ...writeAuth, async (req, res) => {
     const giftId = Number.parseInt(String(req.params.giftId), 10);
     if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'invalid gift id' });
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const transactionId = req.body && req.body.ledger_transaction_id != null ? Number.parseInt(String(req.body.ledger_transaction_id), 10) : null;
-    if (!Number.isInteger(transactionId) || transactionId < 1) return res.status(400).json({ error: 'ledger_transaction_id is required' });
     try {
-      const result = await linkOrReclassifyGrantGiftTransaction(pool, { orgId, userId, giftId, transactionId });
-      return res.status(result.httpStatus).json(result.body);
+      const out = await runTool('gift.link_transaction', ctxFromReq(pool, req), { id: giftId, ledger_transaction_id: req.body && req.body.ledger_transaction_id });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /gift-postings/:giftId/link-transaction:', e.message);
       return res.status(500).json({ error: 'Could not link transaction' });
@@ -349,16 +241,9 @@ function registerGiftPostingRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/pledges/run-accretion', ...writeAuth, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const body = req.body || {};
-    const throughDate = body.through_date != null ? String(body.through_date) : null;
-    if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
-    const incomeAccountId = body.income_account_id != null ? Number.parseInt(String(body.income_account_id), 10) : null;
-    if (!Number.isInteger(incomeAccountId) || incomeAccountId < 1) return res.status(400).json({ error: 'income_account_id is required' });
     try {
-      const { posted, failed } = await runPledgeAccretion(pool, { orgId, userId, throughDate, incomeAccountId });
-      return res.json({ posted, failed, posted_count: posted.length, failed_count: failed.length });
+      const out = await runTool('pledge.run_accretion', ctxFromReq(pool, req), req.body || {});
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /pledges/run-accretion:', e.message);
       return res.status(500).json({ error: 'Could not run pledge accretion' });

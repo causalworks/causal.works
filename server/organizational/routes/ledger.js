@@ -11,12 +11,12 @@ const { requireOrgMembership, requireOrgRole, FINANCE_ROLES } = require('../midd
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { translateLedgerWriteError, postLedgerTransaction, voidLedgerTransaction, isFiscalYearLocked, DATE_RE, RESTRICTION_CLASSES } = require('../lib/ledgerPosting');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
-const { previewLedgerRecode, executeLedgerRecode } = require('../lib/findAndRecode');
+const { previewLedgerRecode } = require('../lib/findAndRecode');
 const { validateConditions, searchLedgerLines, loadFieldOptions } = require('../lib/ledgerSearch');
 const { logAudit, diffFields } = require('../lib/auditLog');
 const { displayAmountSql, displayCents } = require('../lib/voidedDisplay');
 const { sourceLabel, statusLabel } = require('../lib/ledgerLabels');
-const { runTool, ctxForUser } = require('../tools');
+const { runTool, ctxForUser, ctxFromReq } = require('../tools');
 const { csvCell } = require('../lib/csvCell');
 
 function rowToLedgerDetailRow(row) {
@@ -1180,45 +1180,9 @@ function registerOrganizationalLedgerRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/ledger/recode', ...orgAuth, requireOrgRole('admin'), financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const body = req.body || {};
-    const lineIds = Array.isArray(body.line_ids) ? body.line_ids.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0) : [];
-    if (lineIds.length === 0) return res.status(400).json({ error: 'line_ids is required' });
-    const transactionDate = body.transaction_date != null ? String(body.transaction_date) : new Date().toISOString().slice(0, 10);
-    if (!DATE_RE.test(transactionDate)) return res.status(400).json({ error: 'transaction_date must be YYYY-MM-DD' });
-    const changesRaw = body.changes && typeof body.changes === 'object' ? body.changes : {};
-    const changes = {};
-    for (const f of ['account_id', 'program_id', 'grant_id']) {
-      if (changesRaw[f] === undefined) continue;
-      if (changesRaw[f] === null || changesRaw[f] === '') {
-        changes[f] = null;
-      } else {
-        const n = Number.parseInt(String(changesRaw[f]), 10);
-        if (!Number.isInteger(n) || n < 1) return res.status(400).json({ error: `changes.${f} must be a positive integer or null` });
-        changes[f] = n;
-      }
-    }
-    if (Object.keys(changes).length === 0) return res.status(400).json({ error: 'changes must include at least one of account_id, program_id, grant_id' });
-
     try {
-      const preview = await previewLedgerRecode(pool, orgId, lineIds, changes);
-      if (preview.hasConflicts) {
-        const error = preview.targetIsSystemAccount
-          ? 'System accounts (AR, AP, Bank, Clearing, Contribution Revenue, Expense Claims Payable) cannot be a recode target.'
-          : 'Some selected lines are not posted, or nothing was found for the given selection.';
-        return res.status(409).json({ error, code: 'recode_conflicts', ...preview });
-      }
-      const result = await executeLedgerRecode(pool, orgId, userId, lineIds, changes, transactionDate);
-      if (result.httpStatus !== 201) return res.status(result.httpStatus).json(result.body);
-
-      logAudit(pool, {
-        orgId, userId, action: 'update',
-        tableName: 'org_ledger_lines', recordId: lineIds[0],
-        fields: [{ fieldName: 'recode', oldValue: null, newValue: JSON.stringify(changes) }],
-        metadata: { operation: 'recode', line_ids: lineIds, correcting_journal_id: result.body.id },
-      }).catch(() => {});
-      return res.status(201).json({ ok: true, correcting_journal_id: result.body.id, line_count: lineIds.length });
+      const out = await runTool('ledger.recode', ctxFromReq(pool, req), req.body || {});
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /ledger/recode:', e.message);
       return res.status(500).json({ error: 'Could not recode ledger lines' });

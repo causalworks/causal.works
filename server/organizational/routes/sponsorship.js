@@ -10,9 +10,10 @@ const { requireWriteAccess, requireReadAccess } = require('../middleware/require
 const { logAudit, reqMeta } = require('../lib/auditLog');
 const { validateRule, isoDate } = require('../lib/sponsorFees');
 const { loadProjectBalance, loadSponsorSettings } = require('../lib/sponsorBalance');
-const { previewFees, runFees, voidFeePosting } = require('../lib/sponsorFeePosting');
-const { createRequest, reviewRequest, placeHold, liftHold, createRecall, postRecall, voidRecall, setGrantEntity, attachGrantAgreement, effectiveModel } = require('../lib/sponsorMoneyOut');
-const { releaseHistory, createClosing, postClosing, voidClosing, DESTINATIONS } = require('../lib/sponsorGrants');
+const { runTool, ctxFromReq } = require('../tools');
+const { previewFees } = require('../lib/sponsorFeePosting');
+const { createRequest, reviewRequest, placeHold, liftHold, createRecall, setGrantEntity, attachGrantAgreement, effectiveModel } = require('../lib/sponsorMoneyOut');
+const { releaseHistory, createClosing, DESTINATIONS } = require('../lib/sponsorGrants');
 const { createLink, revokeLink } = require('../lib/publicLinks');
 const { sendPlainEmail } = require('../lib/sendPlainEmail');
 const { loadOrgDocInfo } = require('../lib/orgLetterhead');
@@ -596,7 +597,7 @@ function registerSponsorshipRoutes(app, pool) {
     const recallId = posInt(req.params.recallId);
     if (!recallId) return res.status(400).json({ error: 'Invalid recall ID' });
     try {
-      const out = await postRecall(pool, { orgId: req.orgId, userId: uid(req), recallId, postingDate: req.body && req.body.posting_date ? String(req.body.posting_date) : null });
+      const out = await runTool('sponsor_recall.post', ctxFromReq(pool, req), { id: recallId, posting_date: req.body && req.body.posting_date });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-recalls/:id/post:', e.message);
@@ -609,8 +610,7 @@ function registerSponsorshipRoutes(app, pool) {
     if (!closingId) return res.status(400).json({ error: 'Invalid closing ID' });
     const b = req.body || {};
     try {
-      const out = await postClosing(pool, { orgId: req.orgId, userId: uid(req), closingId, postingDate: b.posting_date ? String(b.posting_date) : null,
-        bankAccountId: posInt(b.bank_account_id), expenseAccountId: posInt(b.expense_account_id) });
+      const out = await runTool('sponsor_closing.post', ctxFromReq(pool, req), { id: closingId, posting_date: b.posting_date, bank_account_id: b.bank_account_id, expense_account_id: b.expense_account_id });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-closings/:id/post:', e.message);
@@ -622,7 +622,7 @@ function registerSponsorshipRoutes(app, pool) {
     const closingId = posInt(req.params.closingId);
     if (!closingId) return res.status(400).json({ error: 'Invalid closing ID' });
     try {
-      const out = await voidClosing(pool, { orgId: req.orgId, userId: uid(req), closingId, reason: req.body && req.body.reason });
+      const out = await runTool('sponsor_closing.void', ctxFromReq(pool, req), { id: closingId, reason: req.body && req.body.reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-closings/:id/void:', e.message);
@@ -634,7 +634,7 @@ function registerSponsorshipRoutes(app, pool) {
     const recallId = posInt(req.params.recallId);
     if (!recallId) return res.status(400).json({ error: 'Invalid recall ID' });
     try {
-      const out = await voidRecall(pool, { orgId: req.orgId, userId: uid(req), recallId, reason: req.body && req.body.reason });
+      const out = await runTool('sponsor_recall.void', ctxFromReq(pool, req), { id: recallId, reason: req.body && req.body.reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-recalls/:id/void:', e.message);
@@ -655,7 +655,7 @@ function registerSponsorshipRoutes(app, pool) {
 
   app.post(P + '/sponsor-fees/run', ...acctWrite, async (req, res) => {
     try {
-      const out = await runFees(pool, { orgId: req.orgId, userId: uid(req), throughDate: req.body && req.body.through_date != null ? String(req.body.through_date) : null });
+      const out = await runTool('sponsor_fees.run', ctxFromReq(pool, req), { through_date: req.body && req.body.through_date });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-fees/run:', e.message);
@@ -683,7 +683,7 @@ function registerSponsorshipRoutes(app, pool) {
     const postingId = posInt(req.params.postingId);
     if (!postingId) return res.status(400).json({ error: 'Invalid fee entry ID' });
     try {
-      const out = await voidFeePosting(pool, { orgId: req.orgId, userId: uid(req), postingId, reason: req.body && req.body.reason });
+      const out = await runTool('sponsor_fee_posting.void', ctxFromReq(pool, req), { id: postingId, reason: req.body && req.body.reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST /sponsor-fees/postings/:id/void:', e.message);

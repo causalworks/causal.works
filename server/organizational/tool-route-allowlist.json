@@ -10,11 +10,5 @@
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/hold": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/lift-hold": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/recalls": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-recalls/:recallId/post": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-closings/:closingId/post": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-closings/:closingId/void": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-recalls/:recallId/void": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-fees/run": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/sponsor-fees/postings/:postingId/void": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/public/:slug/lead/payment-requests": "Posts to the ledger directly; not yet moved to the tool registry."
 }

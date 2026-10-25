@@ -12,6 +12,7 @@ require('./giftPostings');
 require('./creditNotes');
 require('./billInvoiceDocuments');
 require('./dues');
+require('./sponsorship');
 const { runTool, listTools } = require('./registry');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');

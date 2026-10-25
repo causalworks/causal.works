@@ -112,8 +112,6 @@
 
   // t: s = select, t = textarea, i = input. sh = shared by both reviewers; otherwise it's per person.
   var TABS = [
-    { key: 'readme', label: 'Start here' },
-    { key: 'guide', label: 'What we\'re asking' },
     { key: 'built', label: 'Built', hint: 'Built or partially built so far.', fixed: 1, fields: [
       { k: 'works', l: 'Does it work?', t: 's', o: WORKS },
       { k: 'comments', l: 'Comments / what you would change', t: 't', wide: 1 },
@@ -150,10 +148,10 @@
   ];
   var ANSWER_KEYS = ['works', 'priority', 'answer', 'comments', 'issue'];
 
-  var content = null, entries = {}, me = '', realMe = '', canDecide = false, active = 'readme';
+  var content = null, entries = {}, me = '', realMe = '', canDecide = false, active = 'qa';
   var colleagueSet = /[?&]set=colleague/.test(location.search); // trimmed card set for outside reviewers (cards flagged colleague:true)
   var showResolved = /[?&]resolved=1/.test(location.search); // resolved cards are hidden unless asked for (kept for the end-of-build test)
-  var filt = { q: '', area: '', open: false, cmp: 'any' };
+  var filt = { q: '', area: '', open: false, cmp: 'theirs' };
   var timers = {}, pending = {};
   var statusEl = document.getElementById('status');
   var peekEl = document.getElementById('peek');
@@ -218,8 +216,8 @@
       } else if (t.add) {
         n = '<span class="count">' + itemsFor(t.key).length + '</span>';
       } else if (t.key === 'compare') {
-        var d = compareItems().filter(function (c) { return c.differ; }).length;
-        if (d) n = '<span class="count">' + d + ' differ</span>';
+        var d = compareItems().filter(function (c) { return !c.mineDone && c.oth.length; }).length;
+        if (d) n = '<span class="count">' + d + ' to review</span>';
       }
       h += '<button type="button" data-tab="' + t.key + '" class="' + (t.key === active ? 'active' : '') + '">' + esc(t.label) + n + '</button>';
     });
@@ -294,34 +292,10 @@
     return h + '</div>';
   }
 
-  function renderGuide() {
-    var h = '<div class="readme">';
-    ((content.guide && content.guide[MODULE]) || []).forEach(function (r) {
-      if (r.kind === 'title') h += '<h1>' + esc(r.text) + '</h1>';
-      else if (r.kind === 'h') h += '<h2>' + esc(r.text) + '</h2>';
-      else h += '<p>' + esc(r.text) + '</p>';
-    });
-    return h + '</div>';
-  }
-
   function renderChanges() {
     var h = '<div class="readme"><h1>What changed</h1><p>Things built since the cards were written, one line each. Nothing to answer here. If something looks wrong when you use it, add it under Your additions.</p>';
     (content.changes || []).forEach(function (c) { h += '<p><b>' + esc(c.date) + ' &middot; ' + esc(c.area) + '</b><br>' + esc(c.text) + '</p>'; });
     return h + '</div>';
-  }
-
-  function renderReadme() {
-    var h = '<div class="readme">';
-    content.readme.forEach(function (r) {
-      if (r.kind === 'title') h += '<h1>' + esc(r.text) + '</h1>';
-      else if (r.kind === 'h') h += '<h2>' + esc(r.text) + '</h2>';
-      else h += '<p>' + esc(r.text) + '</p>';
-    });
-    h += '<h2>TWO OF US, SEPARATE ANSWERS</h2>';
-    h += '<p>Each of us has our own answers, saved under our own login. You can\'t overwrite each other. Decisions, responses and the decision log are shared by both of us, and only the admin enters them. The rest is greyed out for everyone else.</p>';
-    h += '<p>On each card, the other person\'s answer stays hidden until you\'ve answered it yourself, so we don\'t anchor on each other. (The checkbox at the top turns that off.) The Compare tab puts everyone\'s answers side by side and flags where they differ.</p>';
-    h += '<p>Answers save as you type and are stored in the database.</p></div>';
-    return h;
   }
 
   function compareCardHtml(c) {
@@ -391,8 +365,6 @@
   function render() {
     renderTabs();
     var main = document.getElementById('main');
-    if (active === 'readme') { main.innerHTML = renderReadme(); return; }
-    if (active === 'guide') { main.innerHTML = renderGuide(); return; }
     if (active === 'changes') { main.innerHTML = renderChanges(); return; }
     if (active === 'compare') { main.innerHTML = renderCompare(); return; }
     var def = tabDef(active), its = itemsFor(active), h = '';
@@ -523,10 +495,10 @@
   document.getElementById('tabs').addEventListener('click', function (e) {
     var k = e.target.closest && e.target.closest('button[data-tab]');
     if (k) {
-      active = k.getAttribute('data-tab'); filt = { q: '', area: '', open: false, cmp: 'any' };
+      active = k.getAttribute('data-tab'); filt = { q: '', area: '', open: false, cmp: 'theirs' };
       render(); document.getElementById('main').scrollTop = 0;
       // Other people may have added answers since this page loaded.
-      if (active !== 'readme') refreshEntries().then(function () { if (!Object.keys(pending).length) render(); });
+      refreshEntries().then(function () { if (!Object.keys(pending).length) render(); });
     }
   });
   peekEl.addEventListener('change', function () {

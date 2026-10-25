@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict WHjusZG8GekuLphExtFvRRdFZNToxQDersziacAurULLQzRXzfwrUtijKUGzqc6
+\restrict iktwCtspUpHcDWgLGXvbrWPqUP4vgXDKWcyRLMXHmYRDFgpvPLMMn0Y5WdQ3Beq
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -794,33 +794,6 @@ END $$;
 
 
 --
--- Name: org_audit_row_change(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.org_audit_row_change() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-DECLARE v_old jsonb; v_new jsonb; v_src jsonb; v_org integer; v_user integer; v_col text;
-BEGIN
-  v_old := CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END;
-  v_new := CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END;
-  FOREACH v_col IN ARRAY COALESCE(TG_ARGV, ARRAY[]::text[]) LOOP
-    v_old := v_old - v_col;
-    v_new := v_new - v_col;
-  END LOOP;
-  IF TG_OP = 'UPDATE' AND (v_old - 'updated_at') = (v_new - 'updated_at') THEN RETURN NULL; END IF;
-  v_src := COALESCE(v_new, v_old);
-  v_org := (v_src->>'org_id')::integer;
-  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM coop_members WHERE id = v_org) THEN RETURN NULL; END IF;
-  v_user := NULLIF(current_setting('app.current_user_id', true), '')::integer;
-  INSERT INTO org_audit_log (org_id, user_id, action, table_name, record_id, old_value, new_value)
-  VALUES (v_org, v_user, 'db_' || lower(TG_OP), TG_TABLE_NAME, (v_src->>'id')::bigint, v_old::text, v_new::text);
-  RETURN NULL;
-END $$;
-
-
---
 -- Name: org_audit_log_chain(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -852,6 +825,33 @@ BEGIN
     RAISE EXCEPTION 'org_audit_log rows cannot be changed or deleted by the application';
   END IF;
   RETURN OLD;
+END $$;
+
+
+--
+-- Name: org_audit_row_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_audit_row_change() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_old jsonb; v_new jsonb; v_src jsonb; v_org integer; v_user integer; v_col text;
+BEGIN
+  v_old := CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END;
+  v_new := CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END;
+  FOREACH v_col IN ARRAY COALESCE(TG_ARGV, ARRAY[]::text[]) LOOP
+    v_old := v_old - v_col;
+    v_new := v_new - v_col;
+  END LOOP;
+  IF TG_OP = 'UPDATE' AND (v_old - 'updated_at') = (v_new - 'updated_at') THEN RETURN NULL; END IF;
+  v_src := COALESCE(v_new, v_old);
+  v_org := (v_src->>'org_id')::integer;
+  IF v_org IS NULL OR NOT EXISTS (SELECT 1 FROM coop_members WHERE id = v_org) THEN RETURN NULL; END IF;
+  v_user := NULLIF(current_setting('app.current_user_id', true), '')::integer;
+  INSERT INTO org_audit_log (org_id, user_id, action, table_name, record_id, old_value, new_value)
+  VALUES (v_org, v_user, 'db_' || lower(TG_OP), TG_TABLE_NAME, (v_src->>'id')::bigint, v_old::text, v_new::text);
+  RETURN NULL;
 END $$;
 
 
@@ -1246,6 +1246,23 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+
+
+--
+-- Name: org_enforce_designation_on_equity_line(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_enforce_designation_on_equity_line() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.board_designation_id IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM org_accounts a WHERE a.id = NEW.account_id AND a.type = 'equity') THEN
+    RAISE EXCEPTION 'A board designation can only be placed on a net assets (equity) line'
+      USING ERRCODE = 'CA010';
+  END IF;
+  RETURN NEW;
+END $$;
 
 
 --
@@ -9516,6 +9533,42 @@ ALTER SEQUENCE public.pending_confirmations_id_seq OWNED BY public.pending_confi
 
 
 --
+-- Name: platform_audit_failures; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.platform_audit_failures (
+    id bigint NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    org_id integer,
+    user_id integer,
+    action text,
+    table_name text,
+    record_id integer,
+    error text,
+    reviewed_at timestamp with time zone
+);
+
+
+--
+-- Name: platform_audit_failures_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.platform_audit_failures_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: platform_audit_failures_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.platform_audit_failures_id_seq OWNED BY public.platform_audit_failures.id;
+
+
+--
 -- Name: pod_access_group_members; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11579,6 +11632,13 @@ ALTER TABLE ONLY public.pending_confirmations ALTER COLUMN id SET DEFAULT nextva
 
 
 --
+-- Name: platform_audit_failures id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.platform_audit_failures ALTER COLUMN id SET DEFAULT nextval('public.platform_audit_failures_id_seq'::regclass);
+
+
+--
 -- Name: pod_access_group_members id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -13233,6 +13293,14 @@ ALTER TABLE ONLY public.payment_provider_events
 
 ALTER TABLE ONLY public.pending_confirmations
     ADD CONSTRAINT pending_confirmations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: platform_audit_failures platform_audit_failures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.platform_audit_failures
+    ADD CONSTRAINT platform_audit_failures_pkey PRIMARY KEY (id);
 
 
 --
@@ -15580,6 +15648,13 @@ CREATE UNIQUE INDEX orgs_external_id_key ON public.orgs USING btree (external_id
 
 
 --
+-- Name: platform_audit_failures_open_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX platform_audit_failures_open_idx ON public.platform_audit_failures USING btree (occurred_at) WHERE (reviewed_at IS NULL);
+
+
+--
 -- Name: pod_access_group_rules_category_uniq; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -16007,6 +16082,13 @@ CREATE TRIGGER trg_ledger_lines_2_posting_account BEFORE INSERT OR UPDATE OF acc
 
 
 --
+-- Name: org_ledger_lines trg_ledger_lines_designation_equity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_ledger_lines_designation_equity BEFORE INSERT OR UPDATE OF board_designation_id, account_id ON public.org_ledger_lines FOR EACH ROW EXECUTE FUNCTION public.org_enforce_designation_on_equity_line();
+
+
+--
 -- Name: org_ledger_lines trg_ledger_lines_recompute_actuals; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16056,6 +16138,20 @@ CREATE TRIGGER trg_org_audit_log_immutable BEFORE DELETE OR UPDATE ON public.org
 
 
 --
+-- Name: org_bank_rules trg_org_bank_rules_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_bank_rules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bank_rules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_board_designations trg_org_board_designations_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_board_designations_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_board_designations FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
 -- Name: org_budget_lines trg_org_budget_lines_posting_account; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -16077,10 +16173,10 @@ CREATE TRIGGER trg_org_documents_keep_sponsor_doc_type BEFORE INSERT ON public.o
 
 
 --
--- Name: org_personnel trg_org_personnel_audit; Type: TRIGGER; Schema: public; Owner: -
+-- Name: org_fixed_assets trg_org_fixed_assets_audit; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trg_org_personnel_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_personnel FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+CREATE TRIGGER trg_org_fixed_assets_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_fixed_assets FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -16091,52 +16187,10 @@ CREATE TRIGGER trg_org_fringe_settings_audit AFTER INSERT OR DELETE OR UPDATE ON
 
 
 --
--- Name: org_board_designations trg_org_board_designations_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_board_designations_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_board_designations FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
-
-
---
--- Name: org_bank_rules trg_org_bank_rules_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_bank_rules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_bank_rules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
-
-
---
--- Name: org_recurring_schedules trg_org_recurring_schedules_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_recurring_schedules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_recurring_schedules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
-
-
---
--- Name: org_fixed_assets trg_org_fixed_assets_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_fixed_assets_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_fixed_assets FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
-
-
---
 -- Name: org_functional_classifications trg_org_functional_classifications_audit; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_org_functional_classifications_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_functional_classifications FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
-
-
---
--- Name: org_plaid_items trg_org_plaid_items_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_plaid_items_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_plaid_items FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('access_token', 'cursor');
-
-
---
--- Name: org_plaid_accounts trg_org_plaid_accounts_audit; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_org_plaid_accounts_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_plaid_accounts FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -16172,6 +16226,34 @@ CREATE TRIGGER trg_org_ledger_transactions_contact_same_org BEFORE INSERT OR UPD
 --
 
 CREATE TRIGGER trg_org_ledger_transactions_reversal_same_org BEFORE INSERT OR UPDATE OF reverses_transaction_id, org_id ON public.org_ledger_transactions FOR EACH ROW EXECUTE FUNCTION public.org_enforce_ledger_reversal_same_org();
+
+
+--
+-- Name: org_personnel trg_org_personnel_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_personnel_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_personnel FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_plaid_accounts trg_org_plaid_accounts_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_plaid_accounts_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_plaid_accounts FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
+
+
+--
+-- Name: org_plaid_items trg_org_plaid_items_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_plaid_items_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_plaid_items FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change('access_token', 'cursor');
+
+
+--
+-- Name: org_recurring_schedules trg_org_recurring_schedules_audit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_org_recurring_schedules_audit AFTER INSERT OR DELETE OR UPDATE ON public.org_recurring_schedules FOR EACH ROW EXECUTE FUNCTION public.org_audit_row_change();
 
 
 --
@@ -23990,6 +24072,20 @@ GRANT SELECT,USAGE ON SEQUENCE public.pending_confirmations_id_seq TO causal_app
 
 
 --
+-- Name: TABLE platform_audit_failures; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.platform_audit_failures TO causal_app;
+
+
+--
+-- Name: SEQUENCE platform_audit_failures_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.platform_audit_failures_id_seq TO causal_app;
+
+
+--
 -- Name: TABLE pod_access_group_members; Type: ACL; Schema: public; Owner: -
 --
 
@@ -24438,28 +24534,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 
 
 --
--- Name: platform_audit_failures; Type: TABLE; Schema: public; Owner: -
---
-
--- Audit writes that failed in application code; read on the platform admin page.
-CREATE TABLE IF NOT EXISTS public.platform_audit_failures (
-  id          bigserial PRIMARY KEY,
-  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  org_id      INTEGER,
-  user_id     INTEGER,
-  action      TEXT,
-  table_name  TEXT,
-  record_id   INTEGER,
-  error       TEXT,
-  reviewed_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS platform_audit_failures_open_idx ON public.platform_audit_failures (occurred_at) WHERE reviewed_at IS NULL;
-GRANT SELECT, INSERT, UPDATE ON public.platform_audit_failures TO causal_app;
-GRANT USAGE, SELECT ON SEQUENCE public.platform_audit_failures_id_seq TO causal_app;
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WHjusZG8GekuLphExtFvRRdFZNToxQDersziacAurULLQzRXzfwrUtijKUGzqc6
+\unrestrict iktwCtspUpHcDWgLGXvbrWPqUP4vgXDKWcyRLMXHmYRDFgpvPLMMn0Y5WdQ3Beq
 

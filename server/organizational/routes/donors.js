@@ -1245,7 +1245,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
           const fyStartYear = fyEndMonth === 12 ? year : year - 1;
           const fyStart = `${fyStartYear}-${String(fyEndMonth === 12 ? 1 : fyEndMonth + 1).padStart(2, '0')}-01`;
           const fyEnd = `${fyEndMonth === 12 ? year : year}-${String(fyEndMonth).padStart(2, '0')}-${fyEndMonth === 12 ? '31' : new Date(year, fyEndMonth, 0).getDate()}`;
-          dateClause = ` AND received_at >= $${params.length + 1} AND received_at <= $${params.length + 2}`;
+          dateClause = ` AND received_at >= $${params.length + 1} AND received_at < ($${params.length + 2}::date + 1)`;
           params.push(fyStart, fyEnd);
         }
       }

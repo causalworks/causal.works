@@ -279,13 +279,14 @@ function registerBudgetScenarioRoutes(app, pool) {
            COALESCE(bl.month, sl.month) AS month,
            COALESCE(bl.amount_cents, 0)::bigint AS baseline_amount_cents,
            COALESCE(sl.amount_cents, bl.amount_cents, 0)::bigint AS scenario_amount_cents,
-           (sl.id IS NOT NULL) AS overridden
+           (sl.account_id IS NOT NULL) AS overridden
          FROM (
-           SELECT * FROM org_budget_lines WHERE org_id = $1 AND fiscal_year = $2
+           SELECT account_id, program_id, grant_id, month, SUM(amount_cents)::bigint AS amount_cents
+             FROM org_budget_lines WHERE org_id = $1 AND fiscal_year = $2
+            GROUP BY account_id, program_id, grant_id, month
          ) bl
-         FULL OUTER JOIN org_budget_scenario_lines sl
-           ON sl.scenario_id = $3
-           AND sl.account_id = bl.account_id
+         FULL OUTER JOIN (SELECT * FROM org_budget_scenario_lines WHERE scenario_id = $3) sl
+           ON sl.account_id = bl.account_id
            AND COALESCE(sl.program_id, -1) = COALESCE(bl.program_id, -1)
            AND COALESCE(sl.grant_id, -1) = COALESCE(bl.grant_id, -1)
            AND sl.month = bl.month
@@ -331,15 +332,16 @@ function registerBudgetScenarioRoutes(app, pool) {
            COALESCE(bl.amount_cents, 0)::bigint AS baseline_amount_cents,
            COALESCE(sl.amount_cents, bl.amount_cents, 0)::bigint AS scenario_amount_cents
          FROM (
-           SELECT * FROM org_budget_lines WHERE org_id = $1 AND fiscal_year = $2
+           SELECT account_id, program_id, grant_id, month, SUM(amount_cents)::bigint AS amount_cents
+             FROM org_budget_lines WHERE org_id = $1 AND fiscal_year = $2
+            GROUP BY account_id, program_id, grant_id, month
          ) bl
-         FULL OUTER JOIN org_budget_scenario_lines sl
-           ON sl.scenario_id = $3
-           AND sl.account_id = bl.account_id
+         FULL OUTER JOIN (SELECT * FROM org_budget_scenario_lines WHERE scenario_id = $3) sl
+           ON sl.account_id = bl.account_id
            AND COALESCE(sl.program_id, -1) = COALESCE(bl.program_id, -1)
            AND COALESCE(sl.grant_id, -1) = COALESCE(bl.grant_id, -1)
            AND sl.month = bl.month
-         JOIN org_accounts oa ON oa.id = COALESCE(bl.account_id, sl.account_id)`,
+         JOIN org_accounts oa ON oa.id = COALESCE(bl.account_id, sl.account_id) AND oa.is_statistical = false`,
         [orgId, scenario.fiscal_year, scenarioId]
       );
 

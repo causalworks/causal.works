@@ -177,3 +177,16 @@ test('a line the model has looked at is not sent again, and nothing is sent whil
 test('text sent to the model drops long numbers, emails and links', () => {
   assert.equal(clean('PAYMENT 1234567890 to bob@example.org https://x.test/y ref'), 'PAYMENT to ref');
 });
+
+test('the scheduled job prepares proposals for workspaces whose assistant is on and skips the rest', { skip: SKIP }, async () => {
+  const { runBankCodingProposalsJob } = require('../../server/jobs/bank-coding-proposals-job');
+  const [on1, off1] = [await makeWorkspace(), await makeWorkspace()];
+  for (const w of [on1, off1]) {
+    await code(w, await addLine(w, 'Acme Supplies'), w.expense);
+    await addLine(w, 'Acme Supplies');
+  }
+  await on(on1);
+  await runBankCodingProposalsJob(pool);
+  assert.equal((await inOrg(on1, () => proposals.listProposals(scoped, on1.orgId))).length, 1);
+  assert.equal((await inOrg(off1, () => proposals.listProposals(scoped, off1.orgId))).length, 0);
+});

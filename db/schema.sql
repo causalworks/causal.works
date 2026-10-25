@@ -1,9 +1,9 @@
--- Includes migrations through 378
+-- Includes migrations through 379
 --
 -- PostgreSQL database dump
 --
 
-\restrict kZglIN6foO0ZEM95D3dwrpctvQeEMzGp9cmjd4L7Vo6CpaKeU0EnKLuC7B3Wte0
+\restrict GnBv7P8OGBuIGkFMgQ24bpT2AaurlwKLy3mL1toJ0vl3MYvXaNBhs7akg48f3y6
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -765,6 +765,21 @@ BEGIN
   UNION ALL
   SELECT x.sponsor_org_id, x.id, 'lifted'::text FROM lifted x;
 END $$;
+
+
+--
+-- Name: org_assistant_workspaces(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.org_assistant_workspaces() RETURNS TABLE(org_id integer)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  SELECT c.id
+    FROM coop_members c JOIN org_settings s ON s.org_id = c.id
+   WHERE s.assistant_mode <> 'off' AND c.deleted_at IS NULL
+   ORDER BY c.id;
+$$;
 
 
 --
@@ -22781,6 +22796,14 @@ GRANT ALL ON FUNCTION public.org_apply_sponsor_report_holds() TO causal_app;
 
 
 --
+-- Name: FUNCTION org_assistant_workspaces(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.org_assistant_workspaces() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.org_assistant_workspaces() TO causal_app;
+
+
+--
 -- Name: FUNCTION org_audit_ledger_change(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -25268,5 +25291,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict kZglIN6foO0ZEM95D3dwrpctvQeEMzGp9cmjd4L7Vo6CpaKeU0EnKLuC7B3Wte0
+\unrestrict GnBv7P8OGBuIGkFMgQ24bpT2AaurlwKLy3mL1toJ0vl3MYvXaNBhs7akg48f3y6
 

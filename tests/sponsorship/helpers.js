@@ -44,12 +44,7 @@ async function withDb(fn) {
   await client.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`DO $$ DECLARE t text; BEGIN
-      FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE 'org_sponsor\\_%' LOOP
-        EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO causal_app', t);
-      END LOOP;
-      GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO causal_app;
-    END $$`);
+
     const pool = txPool(client);
     const ctx = { client, pool };
     ctx.asApp = async (orgId, programIds) => {

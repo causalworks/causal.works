@@ -93,7 +93,7 @@ test('a payee coded before gets a proposal with a reason; accepting posts it; no
   assert.equal((await prepare(w)).proposed, 1);
   assert.equal((await prepare(w)).proposed, 0);
   const [p] = await inOrg(w, () => proposals.listProposals(scoped, w.orgId));
-  assert.match(p.reason, /Same coding as 2 of 3 past payments/);
+  assert.match(p.reason, /Same coding as 2 of 3 past payments to this payee\./);
   assert.equal(p.proposer_kind, 'job');
   assert.equal(p.warnings.length, 1);
   assert.equal(p.input.line_id, fresh);

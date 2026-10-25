@@ -5,6 +5,7 @@
 const { generate } = require('../../ai/llmClient');
 
 const TASK = 'bank_coding';
+const AGENT_NAME = 'Loopy';
 const PROMPT_VERSION = 'bank-coding-1';
 const MAX_CANDIDATES = 200;
 
@@ -90,13 +91,14 @@ async function suggestWithModel(pool, orgId, line, { call = generate } = {}) {
   const why = String(out.why || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   return {
     input: { line_id: line.id, account_id: account.id, program_id: program.id, coding_source: 'manual' },
-    reason: `Language model suggestion (${out.confidence} confidence): ${account.name}, ${program.name}${why ? `. ${why}` : ''}`,
+    reason: `No bank rule or earlier coding of this payee exists. ${AGENT_NAME} suggests: ${account.name}, ${program.name} based on common knowledge. Confidence: ${out.confidence}.`,
     evidence: {
       basis: 'model',
       confidence: out.confidence,
+      why,
       sent: { direction: sent.direction, payee: sent.payee, memo: sent.memo, amount: sent.amount, candidate_accounts: sent.accounts.length, candidate_programs: sent.programs.length },
     },
-    warnings: ['No bank rule or earlier coding of this payee backs this suggestion.'],
+    warnings: null,
     model: modelName(),
     promptVersion: PROMPT_VERSION,
   };

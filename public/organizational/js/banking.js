@@ -338,7 +338,7 @@
     const why = cashCodingProposalWhy.has(l.id)
       ? '<div style="font-size:0.75rem;">' + esc(p.reason || '') + (p.warnings && p.warnings.length ? ' ' + esc(p.warnings.join(' ')) : '') + '</div>' : '';
     return '<td colspan="4" style="color:var(--text-secondary);">Suggested: ' + esc(label)
-      + ' ' + btn('cc-prop-why', 'why') + btn('cc-prop-accept', 'Accept') + btn('cc-prop-edit', 'Edit') + btn('cc-prop-dismiss', 'Dismiss') + why + '</td>';
+      + ' <span style="white-space:nowrap;">' + btn('cc-prop-why', 'why') + btn('cc-prop-accept', 'Accept') + btn('cc-prop-edit', 'Edit') + btn('cc-prop-dismiss', 'Dismiss') + '</span>' + why + '</td>';
   }
 
   async function decideCashCodingProposal(lineId, act) {

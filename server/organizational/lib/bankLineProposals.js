@@ -32,15 +32,13 @@ async function payeeHistory(pool, orgId, line) {
   return { top: r.rows[0], total, kinds: r.rows.length };
 }
 
-const accountLabel = (x) => `${x.account_code} ${x.account_name}, ${x.program_name}`;
-
 // Returns { input, reason, evidence, warnings } for one line, or null when neither the rules nor the history settle it.
 async function suggestForLine(pool, orgId, line) {
   const byRule = (await matchRulesForLines(pool, orgId, [line.id]))[line.id];
   if (byRule) {
     return {
       input: { line_id: line.id, account_id: byRule.account_id, program_id: byRule.program_id, grant_id: byRule.grant_id, donor_restriction_class: byRule.donor_restriction_class, coding_source: 'rule', applied_rule_id: byRule.rule_id },
-      reason: `Matches your bank rule "${byRule.rule_name}": ${accountLabel(byRule)}`,
+      reason: `Matches your bank rule "${byRule.rule_name}".`,
       evidence: { basis: 'bank_rule', rule_id: byRule.rule_id },
       warnings: null,
     };
@@ -48,10 +46,10 @@ async function suggestForLine(pool, orgId, line) {
   const h = await payeeHistory(pool, orgId, line);
   if (!h) return null;
   const x = h.top;
-  const warnings = h.kinds > 1 ? [`This payee was coded ${h.kinds} different ways before; ${x.n} of ${h.total} used this coding.`] : null;
+  const warnings = h.kinds > 1 ? [`Coded ${h.kinds} different ways before.`] : null;
   return {
     input: { line_id: line.id, account_id: x.account_id, program_id: x.program_id, grant_id: x.grant_id, donor_restriction_class: x.donor_restriction_class, coding_source: 'manual' },
-    reason: `Same coding as ${x.n} of ${h.total} past ${h.total === 1 ? 'payment' : 'payments'} to this payee: ${accountLabel(x)}`,
+    reason: `Same coding as ${x.n} of ${h.total} past ${h.total === 1 ? 'payment' : 'payments'} to this payee.`,
     evidence: { basis: 'payee_history', matching_lines: x.n, payee_lines: h.total, codings_seen: h.kinds },
     warnings,
   };

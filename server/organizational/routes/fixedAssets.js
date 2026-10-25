@@ -7,7 +7,8 @@ const { waitingForAnAsset } = require('../lib/fixedAssetWaiting');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
-const { postLedgerTransaction } = require('../lib/ledgerPosting');
+const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
+const { acquireDocumentLock } = require('../lib/documentLock');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -349,6 +350,7 @@ function registerFixedAssetRoutes(app, pool) {
     const throughDate = req.body && req.body.through_date != null ? String(req.body.through_date) : null;
     if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
 
+    const docLock = await acquireDocumentLock(pool, 'fixed-assets:' + orgId);
     try {
       const due = await computeDuePeriods(orgId, throughDate);
       const posted = [];
@@ -376,7 +378,10 @@ function registerFixedAssetRoutes(app, pool) {
            RETURNING id`,
           [orgId, d.asset_id, d.period_date, d.amount_cents, result.body.id]
         );
-        if (!insertR.rows.length) continue;
+        if (!insertR.rows.length) {
+          await voidLedgerTransaction(pool, { orgId, userId, transactionId: result.body.id, voidReason: 'Depreciation for this period was already recorded' });
+          continue;
+        }
         posted.push({ asset_id: d.asset_id, period_date: d.period_date, amount_cents: String(d.amount_cents), ledger_transaction_id: result.body.id });
       }
 
@@ -397,7 +402,7 @@ function registerFixedAssetRoutes(app, pool) {
     } catch (e) {
       console.error('POST /fixed-assets/run-depreciation:', e.message);
       return res.status(500).json({ error: 'Could not run depreciation' });
-    }
+    } finally { await docLock.release(); }
   });
 
   app.post('/api/organizational/orgs/:slug/fixed-assets/:id/dispose', ...orgAuth, financeWriter, async (req, res) => {
@@ -414,6 +419,7 @@ function registerFixedAssetRoutes(app, pool) {
     if (proceedsCents > 0 && !bankAccountId) return res.status(400).json({ error: 'bank_account_id is required when disposal_proceeds_cents is greater than 0' });
     const gainLossAccountId = body.gain_loss_account_id != null && body.gain_loss_account_id !== '' ? Number.parseInt(String(body.gain_loss_account_id), 10) : null;
 
+    const docLock = await acquireDocumentLock(pool, 'fixed-assets:' + orgId);
     try {
       const assetR = await pool.query(
         `SELECT fa.*, COALESCE((SELECT SUM(amount_cents) FROM org_fixed_asset_depreciation_entries e WHERE e.fixed_asset_id = fa.id), 0) + fa.prior_depreciation_cents AS accumulated_depreciation_cents
@@ -467,7 +473,7 @@ function registerFixedAssetRoutes(app, pool) {
     } catch (e) {
       console.error('POST /fixed-assets/:id/dispose:', e.message);
       return res.status(500).json({ error: 'Could not dispose of this asset' });
-    }
+    } finally { await docLock.release(); }
   });
 
   app.get('/api/organizational/orgs/:slug/fixed-assets/schedule-d', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {

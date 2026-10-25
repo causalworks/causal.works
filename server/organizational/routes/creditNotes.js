@@ -8,6 +8,7 @@ const { requireAccountingAccess, requireAccountingWriter } = require('../middlew
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
+const { acquireDocumentLock } = require('../lib/documentLock');
 const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { logAudit, diffFields } = require('../lib/auditLog');
 const { refreshBillStatusAfterCredit, refreshInvoiceStatusAfterCredit } = require('../lib/billInvoicePayments');
@@ -113,12 +114,21 @@ function registerCreditNotesRoutes(app, pool) {
       }
     });
 
+    async function lockFor(orgId, id) {
+      const r = await pool.query(`SELECT ${originalCol} AS original_id FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
+      const original = r.rows[0] && r.rows[0].original_id;
+      const key = original ? (kind === 'bill-credit-notes' ? 'bill:' : 'invoice:') + original : 'credit-note:' + kind + ':' + id;
+      return acquireDocumentLock(pool, key);
+    }
+
     app.post(base + '/:id/apply', ...orgAuth, financeWriter, async (req, res) => {
       const orgId = req.orgId;
       const userId = req.user.user_id ?? req.user.id;
       const id = Number.parseInt(String(req.params.id), 10);
       if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
+      let docLock = null;
       try {
+        docLock = await lockFor(orgId, id);
         const r = await pool.query(`SELECT * FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
         if (!r.rows.length) return res.status(404).json({ error: 'Credit note not found' });
         const note = r.rows[0];
@@ -167,7 +177,7 @@ function registerCreditNotesRoutes(app, pool) {
         if (translated) return res.status(translated.status).json(translated.body);
         console.error('POST ' + kind + '/apply:', e.message, e.stack);
         return res.status(500).json({ error: 'Could not apply credit note' });
-      }
+      } finally { if (docLock) await docLock.release(); }
     });
 
     app.patch(base + '/:id', ...orgAuth, financeWriter, async (req, res) => {
@@ -237,7 +247,9 @@ function registerCreditNotesRoutes(app, pool) {
       const id = Number.parseInt(String(req.params.id), 10);
       if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid id' });
       const reason = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
+      let docLock = null;
       try {
+        docLock = await lockFor(orgId, id);
         const r = await pool.query(`SELECT status, ledger_transaction_id, ${originalCol} AS original_id FROM ${table} WHERE id = $1 AND org_id = $2 LIMIT 1`, [id, orgId]);
         if (!r.rows.length) return res.status(404).json({ error: 'Credit note not found' });
         const { status, ledger_transaction_id: txnId } = r.rows[0];
@@ -255,7 +267,7 @@ function registerCreditNotesRoutes(app, pool) {
         if (translated) return res.status(translated.status).json(translated.body);
         console.error('POST ' + kind + '/void:', e.message);
         return res.status(500).json({ error: 'Could not void credit note' });
-      }
+      } finally { if (docLock) await docLock.release(); }
     });
   }
 

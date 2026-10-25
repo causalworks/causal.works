@@ -8,6 +8,7 @@ const { requireOrgMembership, requireOrgRole } = require('../middleware/requireO
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
+const { acquireDocumentLock } = require('../lib/documentLock');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -83,6 +84,7 @@ function registerConversionBalancesRoutes(app, pool) {
     const programId = Number.parseInt(String(body.program_id), 10);
     if (!Number.isInteger(programId)) return res.status(400).json({ error: 'Pick a program for these lines.' });
     const src = Array.isArray(body.lines) ? body.lines : [];
+    const docLock = await acquireDocumentLock(pool, 'conversion-balances:' + orgId);
     try {
       const row = await currentRow(orgId);
       if (row && row.status === 'locked') return res.status(409).json({ error: 'The conversion balances are locked. Unlock them to make changes.', code: 'locked' });
@@ -143,7 +145,7 @@ function registerConversionBalancesRoutes(app, pool) {
     } catch (e) {
       console.error('PUT conversion-balances:', e.message);
       return res.status(500).json({ error: 'Could not save the conversion balances' });
-    }
+    } finally { await docLock.release(); }
   });
 
   app.post(base + '/lock', ...orgAuth, financeWriter, async (req, res) => {

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict iktwCtspUpHcDWgLGXvbrWPqUP4vgXDKWcyRLMXHmYRDFgpvPLMMn0Y5WdQ3Beq
+\restrict p85UhMEc35lqTllNjUe1fHsvbysJKdatT8YCW8hMrNNJknhKsXEF7wsb6hutX0n
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -1944,6 +1944,7 @@ DECLARE
   v_candidate_code text;
   v_offset integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_accounts
     WHERE org_id = p_org_id AND is_system_ap_account = true
     LIMIT 1;
@@ -1984,6 +1985,7 @@ DECLARE
   v_candidate_code text;
   v_offset integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_accounts WHERE org_id = p_org_id AND is_system_ar_account = true LIMIT 1;
   IF v_id IS NOT NULL THEN RETURN v_id; END IF;
 
@@ -2017,6 +2019,7 @@ DECLARE
   v_candidate_code text;
   v_offset integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_accounts
     WHERE org_id = p_org_id AND is_system_clearing_account = true
     LIMIT 1;
@@ -2057,6 +2060,7 @@ DECLARE
   v_candidate_code text;
   v_offset integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_accounts WHERE org_id = p_org_id AND is_system_contribution_revenue_account = true LIMIT 1;
   IF v_id IS NOT NULL THEN RETURN v_id; END IF;
 
@@ -2090,6 +2094,7 @@ DECLARE
   v_candidate_code text;
   v_offset integer := 0;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_accounts
     WHERE org_id = p_org_id AND is_system_expense_claims_payable_account = true
     LIMIT 1;
@@ -2128,6 +2133,7 @@ CREATE FUNCTION public.org_get_or_create_internal_transfer_program(p_org_id inte
 DECLARE
   v_id integer;
 BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('get-or-create:' || p_org_id::text, 0));
   SELECT id INTO v_id FROM org_programs
     WHERE org_id = p_org_id AND is_system_transfer_program = true
     LIMIT 1;
@@ -24537,5 +24543,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict iktwCtspUpHcDWgLGXvbrWPqUP4vgXDKWcyRLMXHmYRDFgpvPLMMn0Y5WdQ3Beq
+\unrestrict p85UhMEc35lqTllNjUe1fHsvbysJKdatT8YCW8hMrNNJknhKsXEF7wsb6hutX0n
 

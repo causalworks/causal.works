@@ -1,6 +1,7 @@
 'use strict';
 
-const { postLedgerTransaction } = require('./ledgerPosting');
+const { postLedgerTransaction, voidLedgerTransaction } = require('./ledgerPosting');
+const { acquireDocumentLock } = require('./documentLock');
 
 async function computeMtdcBase(pool, orgId, grantId, periodStartDate, periodEndDate) {
   const r = await pool.query(
@@ -49,7 +50,7 @@ async function previewIndirectRecovery(pool, orgId, periodStartDate, periodEndDa
   return out;
 }
 
-async function runIndirectRecovery(pool, { orgId, userId, periodStartDate, periodEndDate, debitAccountId, creditAccountId, programId }) {
+async function runIndirectRecoveryLocked(pool, { orgId, userId, periodStartDate, periodEndDate, debitAccountId, creditAccountId, programId }) {
   const due = await previewIndirectRecovery(pool, orgId, periodStartDate, periodEndDate);
   const posted = [];
   const failed = [];
@@ -77,10 +78,18 @@ async function runIndirectRecovery(pool, { orgId, userId, periodStartDate, perio
        RETURNING id`,
       [orgId, d.grant_id, periodStartDate, periodEndDate, d.mtdc_base_cents, d.rate_bps, d.recovery_amount_cents, result.body.id, userId]
     );
-    if (!insertR.rows.length) continue;
+    if (!insertR.rows.length) {
+      await voidLedgerTransaction(pool, { orgId, userId, transactionId: result.body.id, voidReason: 'Recovery for this period was already recorded' });
+      continue;
+    }
     posted.push({ grant_id: d.grant_id, recovery_amount_cents: String(d.recovery_amount_cents), ledger_transaction_id: result.body.id });
   }
   return { posted, failed };
+}
+
+async function runIndirectRecovery(pool, args) {
+  const docLock = await acquireDocumentLock(pool, 'indirect-recovery:' + args.orgId);
+  try { return await runIndirectRecoveryLocked(pool, args); } finally { await docLock.release(); }
 }
 
 module.exports = { computeMtdcBase, previewIndirectRecovery, runIndirectRecovery };

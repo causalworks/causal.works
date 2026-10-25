@@ -43,7 +43,7 @@ function footRows(rows) {
   rows.forEach((r, i) => {
     if (r.kind === 'header') stack.push({ idx: i, sum: 0, label: r.label });
     else if (r.kind === 'line' && stack.length) stack[stack.length - 1].sum += r.amount_cents;
-    else if ((r.kind === 'subtotal' || r.kind === 'total') && stack.length) {
+    else if (r.kind !== 'header' && r.kind !== 'line' && stack.length) {
       const g = stack.pop();
       if (g.sum !== r.amount_cents) failures.push({ message: `${r.label} is ${r.amount_cents} but its lines add to ${g.sum}`, row: i });
       if (stack.length) stack[stack.length - 1].sum += r.amount_cents;

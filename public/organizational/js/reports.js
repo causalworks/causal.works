@@ -15,7 +15,7 @@
     'report-detail-reconciliation',
     'report-detail-financial-position', 'report-detail-statement-of-activities',
     'report-detail-stmt-functional-expenses', 'report-detail-cash-flows',
-    'report-detail-trial-balance', 'report-detail-general-ledger', 'report-detail-account-transactions',
+    'report-detail-trial-balance', 'report-detail-general-ledger', 'report-detail-account-transactions', 'report-detail-net-assets-detail',
     'report-detail-receivables-schedule', 'report-detail-payables-schedule',
     'report-detail-1099',
   ];
@@ -37,27 +37,39 @@
     return tb && window.OrganizationalTableSort ? window.OrganizationalTableSort.attach(tb.closest('table'), { columns: columns, onChange: onChange }) : null;
   }
   function sortedIn(sorter, rows) { return sorter ? sorter.sortRows(rows) : rows; }
+  function sortAccountRuns(sorter, rows) {
+    var out = [];
+    var run = [];
+    function flush() { sortedIn(sorter, run).forEach(function(r) { out.push(r); }); run = []; }
+    rows.forEach(function(r) {
+      if (r.kind === 'line' && r.account_id) run.push(r);
+      else { flush(); out.push(r); }
+    });
+    flush();
+    return out;
+  }
   function centsOrNull(v) { const n = Number(v); return n ? n : null; }
+  let nadState = { bucket: 'without', designation: 'all' };
   let sfpCache = null;
   let soaCache = null;
   let sfeCache = null;
   let tbCache = null;
   let bsCache = null;
   const sfpSorter = reportSorter('organizational-sfp-tbody', [
-    { key: 'name', type: 'text', get: (r) => r.name },
+    { key: 'name', type: 'text', get: (r) => r.label },
     { key: 'code', type: 'text', get: (r) => r.code },
-    { key: 'balance', type: 'number', get: (r) => r.balance_cents },
+    { key: 'balance', type: 'number', get: (r) => r.amount_cents },
   ], function () { renderFinancialPosition(); });
   const soaSorter = reportSorter('organizational-soa-tbody', [
-    { key: 'name', type: 'text', get: (r) => r.name },
+    { key: 'name', type: 'text', get: (r) => r.label },
     { key: 'code', type: 'text', get: (r) => r.code },
-    { key: 'without', type: 'number', get: (r) => r.without },
-    { key: 'with', type: 'number', get: (r) => r.with },
-    { key: 'total', type: 'number', get: (r) => (Number(r.without) || 0) + (Number(r.with) || 0) },
+    { key: 'without', type: 'number', get: (r) => r.without_cents },
+    { key: 'with', type: 'number', get: (r) => r.with_cents },
+    { key: 'total', type: 'number', get: (r) => r.amount_cents },
   ], function () { renderStatementOfActivities(); });
   const sfeSorter = reportSorter('organizational-sfe-tbody', [
     { key: 'code', type: 'text', get: (l) => l.code },
-    { key: 'name', type: 'text', get: (l) => l.name },
+    { key: 'name', type: 'text', get: (l) => l.label },
     { key: 'total', type: 'number', get: (l) => l.total_cents },
     { key: 'program', type: 'number', get: (l) => l.program_services_cents },
     { key: 'mgmt', type: 'number', get: (l) => l.mgmt_general_cents },
@@ -113,6 +125,7 @@
         add('to', val('organizational-at-to'));
         add('account', val('organizational-at-account'));
       }
+      if (name === 'net-assets-detail') { add('bucket', nadState.bucket); add('designation', nadState.designation); }
       if (name === 'budget') add('program', budgetState.programId);
       if (name === 'giving-summary') add('campaign', val('organizational-giving-campaign-filter'));
     }
@@ -133,6 +146,7 @@
     setVal('organizational-gl-to', params.get('to') || '');
     setVal('organizational-at-from', params.get('from') || '');
     setVal('organizational-at-to', params.get('to') || '');
+    nadState = { bucket: params.get('bucket') === 'with' ? 'with' : 'without', designation: params.get('designation') || 'all' };
     budgetState.programId = params.get('program') || '';
     pendingFilters = {
       bsAsOf: params.get('as_of') || '',
@@ -161,6 +175,7 @@
     if (name === 'cash-flows') loadCashFlows();
     if (name === '1099') load1099Report();
     if (name === 'trial-balance') loadTrialBalance();
+    if (name === 'net-assets-detail') loadNetAssetsDetail();
     if (name === 'general-ledger') loadGeneralLedger();
     if (name === 'account-transactions') loadAccountTransactions();
     if (name === 'receivables-schedule' || name === 'payables-schedule') loadSchedule(name);
@@ -1712,6 +1727,46 @@
     }
   }
 
+  function nadHref(fy, bucket, designation) {
+    var q = new URLSearchParams({ report: 'net-assets-detail', fy: String(fy), bucket: bucket, designation: designation });
+    return window.location.pathname + '?' + q.toString();
+  }
+
+  async function loadNetAssetsDetail() {
+    var tbody = document.getElementById('organizational-nad-tbody');
+    var meta = document.getElementById('organizational-nad-meta');
+    var csvLink = document.getElementById('organizational-nad-csv');
+    var title = document.getElementById('organizational-nad-title');
+    if (!tbody || !currentSlug) return;
+    tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>';
+    var fy = fiscalYearForReports();
+    var base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/reports/net-assets-detail?fiscal_year=' + fy +
+      '&bucket=' + encodeURIComponent(nadState.bucket) + '&designation=' + encodeURIComponent(nadState.designation);
+    if (csvLink) csvLink.href = base + '&format=csv';
+    syncUrl(false);
+    var out = await apiJson(base, { method: 'GET' });
+    if (!out || !out.res.ok) {
+      var failures = out && out.data && out.data.failures;
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">' + (failures && failures.length
+        ? escapeHtml(out.data.error) + '<br>' + failures.map(escapeHtml).join('<br>')
+        : 'Could not load the entries.') + '</td></tr>';
+      return;
+    }
+    var d = out.data;
+    if (title) title.textContent = 'Net Assets Detail: ' + (/^\d+$/.test(d.designation) ? 'board designation' : (d.bucket === 'with' ? 'with donor restrictions' : (d.designation === 'none' ? 'without donor restrictions, undesignated' : 'without donor restrictions')));
+    var num = 'text-align:right;font-variant-numeric:tabular-nums;';
+    var html = d.lines.map(function(l) {
+      return '<tr><td>' + escapeHtml(String(l.transaction_date).slice(0, 10)) + '</td>' +
+        '<td>' + escapeHtml((l.code ? l.code + ' ' : '') + l.account_name) + '</td>' +
+        '<td>' + escapeHtml(l.memo || '') + '</td>' +
+        '<td style="color:var(--text-secondary);">' + escapeHtml(l.restriction_class.replace('_', ' ')) + '</td>' +
+        '<td style="' + num + '">' + fmtStmt(l.amount_cents) + '</td></tr>';
+    }).join('');
+    html += '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="4">Total' + (d.truncated ? ' (first ' + d.lines.length + ' of ' + d.line_count + ' entries shown; the total covers all)' : '') + '</td><td style="' + num + '">' + fmtStmt(d.total_cents) + '</td></tr>';
+    tbody.innerHTML = html;
+    if (meta) meta.textContent = d.line_count + ' entries · through FY' + fy;
+  }
+
   function renderFinancialPosition() {
     var tbody = document.getElementById('organizational-sfp-tbody');
     if (!tbody || !sfpCache) return;
@@ -1719,7 +1774,7 @@
     var fy = sfpCache.fy;
     var num = 'text-align:right;font-variant-numeric:tabular-nums;';
     var html = '';
-    (d.rows || []).forEach(function(r) {
+    sortAccountRuns(sfpSorter, d.rows || []).filter(function(r) { return r.kind !== 'line' || !r.account_id || hideZero(r.amount_cents !== 0); }).forEach(function(r) {
       var pad = r.indent > 1 ? 'padding-left:' + (14 + (r.indent - 1) * 14) + 'px;' : '';
       if (r.kind === 'header' && r.indent === 0) {
         html += '<tr style="background:var(--surface-active);"><td colspan="3" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(r.label) + '</td></tr>';
@@ -1727,11 +1782,15 @@
         html += '<tr><td colspan="3" style="font-weight:600;' + pad + '">' + escapeHtml(r.label) + '</td></tr>';
       } else if (r.kind === 'line') {
         var href = r.account_id ? ledgerHref(r.account_id, d.start_date, d.end_date, fy) : '';
+        if (r.key === 'with') href = nadHref(fy, 'with', 'all');
+        else if (r.key === 'undesignated') href = nadHref(fy, 'without', 'none');
+        else if (r.key && r.key.indexOf('designated-') === 0) href = nadHref(fy, 'without', r.key.slice('designated-'.length));
         html += '<tr><td style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="color:var(--text-secondary);">' + escapeHtml(rdCode(r.code) || '') + '</td><td style="' + num + '">' + amountLink(fmtStmt(r.amount_cents), href) + '</td></tr>';
       } else {
         var border = r.kind === 'grand' ? '2px' : '1px';
         var weight = r.kind === 'grand' ? '700' : '600';
-        html += '<tr style="font-weight:' + weight + ';border-top:' + border + ' solid var(--border);"><td colspan="2" style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="' + num + '">' + fmtStmt(r.amount_cents) + '</td></tr>';
+        var subHref = r.key === 'without' ? nadHref(fy, 'without', 'all') : '';
+        html += '<tr style="font-weight:' + weight + ';border-top:' + border + ' solid var(--border);"><td colspan="2" style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="' + num + '">' + amountLink(fmtStmt(r.amount_cents), subHref) + '</td></tr>';
       }
     });
     (d.warnings || []).forEach(function(w) {
@@ -1756,7 +1815,10 @@
 
     var out = await apiJson(base, { method: 'GET' });
     if (!out || !out.res.ok) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">Could not load statement.</td></tr>';
+      var failures = out && out.data && out.data.failures;
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="5">' + (failures && failures.length
+        ? escapeHtml(out.data.error) + '<br>' + failures.map(escapeHtml).join('<br>')
+        : 'Could not load statement.') + '</td></tr>';
       return;
     }
     if (out.data.not_available) {
@@ -1776,71 +1838,31 @@
     if (!tbody || !soaCache) return;
     var d = soaCache.d;
     var fy = soaCache.fy;
+    var num = 'text-align:right;font-variant-numeric:tabular-nums;';
     var html = '';
-    var t = d.totals || {};
-    var na = d.net_assets || {};
-    var beg = na.beginning || {};
-    var end = na.ending || {};
-
-    function sectionHeader(label) {
-      return '<tr style="background:var(--surface-active);"><td colspan="5" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(label) + '</td></tr>';
+    function cells(r, dashZero, hrefs) {
+      return [r.without_cents, r.with_cents, r.amount_cents].map(function(c, i) {
+        var text = dashZero && c === 0 ? '—' : fmtStmt(c);
+        return '<td style="' + num + '">' + amountLink(text, hrefs && hrefs[i]) + '</td>';
+      }).join('');
     }
-    function totalRow(label, woCents, wCents, totalCents, bold) {
-      var style = bold ? 'font-weight:600;border-top:2px solid var(--border);' : 'font-weight:600;border-top:1px solid var(--border);';
-      return '<tr style="' + style + '"><td colspan="2">' + escapeHtml(label) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(woCents) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(wCents) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(totalCents) + '</td></tr>';
-    }
-    function accountRow(code, name, woCents, wCents, href) {
-      return '<tr>' +
-        '<td>' + escapeHtml(name) + '</td>' +
-        '<td style="color:var(--text-secondary);">' + escapeHtml(rdCode(code) || '') + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (woCents != null ? fmtStmt(woCents) : '—') + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + (wCents != null ? fmtStmt(wCents) : '—') + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + amountLink(fmtStmt((woCents || 0) + (wCents || 0)), href) + '</td></tr>';
-    }
-    function acctHref(r) { return ledgerHref(r.account_id, d.start_date, d.end_date, fy); }
-
-    html += sectionHeader('Revenue');
-    var revByAccount = {};
-    (d.revenue || []).forEach(function(r) {
-      if (!revByAccount[r.account_id]) revByAccount[r.account_id] = { account_id: r.account_id, code: r.code, name: r.name, without: 0, with: 0 };
-      if (r.restriction_bucket === 'with_restrictions') revByAccount[r.account_id].with += Number(r.amount_cents);
-      else revByAccount[r.account_id].without += Number(r.amount_cents);
+    sortAccountRuns(soaSorter, d.rows || []).filter(function(r) { return r.kind !== 'line' || !r.account_id || hideZero(r.amount_cents !== 0); }).forEach(function(r) {
+      var pad = r.indent > 1 ? 'padding-left:' + (14 + (r.indent - 1) * 14) + 'px;' : '';
+      if (r.kind === 'header') {
+        html += '<tr style="background:var(--surface-active);"><td colspan="5" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(r.label) + '</td></tr>';
+      } else if (r.kind === 'line') {
+        var href = r.account_id ? ledgerHref(r.account_id, d.start_date, d.end_date, fy) : '';
+        var hrefs = ['', '', href];
+        if (r.key === 'begin') hrefs = [nadHref(fy - 1, 'without', 'all'), nadHref(fy - 1, 'with', 'all'), ''];
+        html += '<tr><td style="' + pad + '">' + escapeHtml(r.label) + '</td><td style="color:var(--text-secondary);">' + escapeHtml(rdCode(r.code) || '') + '</td>' + cells(r, true, hrefs) + '</tr>';
+      } else {
+        var strong = r.kind === 'grand';
+        html += '<tr style="font-weight:' + (strong ? '700' : '600') + ';border-top:' + (strong ? '2px' : '1px') + ' solid var(--border);"><td colspan="2" style="' + pad + '">' + escapeHtml(r.label) + '</td>' + cells(r, false, r.key === 'end' ? [nadHref(fy, 'without', 'all'), nadHref(fy, 'with', 'all'), ''] : null) + '</tr>';
+      }
     });
-    sortedIn(soaSorter, Object.values(revByAccount).map(function(r) { return { account_id: r.account_id, code: r.code, name: r.name, without: r.without || null, with: r.with || null }; }).filter(function(r) { return hideZero(!!(r.without || r.with)); })).forEach(function(r) {
-      html += accountRow(r.code, r.name, r.without, r.with, acctHref(r));
+    (d.warnings || []).forEach(function(w) {
+      html += '<tr><td colspan="5" style="color:var(--text-secondary);padding:8px 14px;">Check: ' + escapeHtml(w) + '</td></tr>';
     });
-    html += totalRow('Total revenue', t.revenue_without_restrictions_cents || 0, t.revenue_with_restrictions_cents || 0, t.total_revenue_cents || 0, false);
-
-    var released = t.released_from_restrictions_cents || 0;
-    if (released) {
-      html += '<tr><td>Net assets released from restrictions</td><td></td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(released) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(-released) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(0) + '</td></tr>';
-    }
-
-    html += sectionHeader('Expenses');
-    sortedIn(soaSorter, (d.expenses || []).map(function(r) { return { account_id: r.account_id, code: r.code, name: r.name, without: Number(r.amount_cents), with: null }; }).filter(function(r) { return hideZero(!!r.without); })).forEach(function(r) {
-      html += accountRow(r.code, r.name, r.without, null, acctHref(r));
-    });
-    html += totalRow('Total expenses', t.total_expenses_cents || 0, 0, t.total_expenses_cents || 0, false);
-
-    html += sectionHeader('Change in Net Assets');
-    html += totalRow('Change in net assets', t.change_without_restrictions_cents || 0, t.change_with_restrictions_cents || 0, t.total_change_in_net_assets_cents || 0, false);
-
-    html += sectionHeader('Net Assets');
-    html += '<tr><td>Beginning of year</td><td></td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(beg.without_restrictions_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(beg.with_restrictions_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(beg.total_cents || 0) + '</td></tr>';
-    html += '<tr style="font-weight:700;border-top:2px solid var(--border);"><td>End of year</td><td></td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(end.without_restrictions_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(end.with_restrictions_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(end.total_cents || 0) + '</td></tr>';
-
     tbody.innerHTML = html;
     syncCodeHeader('organizational-soa-tbody');
   }
@@ -1860,7 +1882,10 @@
 
     var out = await apiJson(base, { method: 'GET' });
     if (!out || !out.res.ok) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="6">Could not load statement.</td></tr>';
+      var failures = out && out.data && out.data.failures;
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="6">' + (failures && failures.length
+        ? escapeHtml(out.data.error) + '<br>' + failures.map(escapeHtml).join('<br>')
+        : 'Could not load statement.') + '</td></tr>';
       return;
     }
     if (out.data.not_available) {
@@ -1871,7 +1896,7 @@
     }
 
     var d = out.data;
-    var lines = d.lines || [];
+    var lines = (d.rows || []).filter(function(r) { return r.kind === 'line'; });
 
     if (!lines.length) {
       sfeCache = null;
@@ -1880,7 +1905,7 @@
       return;
     }
 
-    sfeCache = d;
+    sfeCache = { d: d, fy: fy };
     renderStmtFunctionalExpenses();
     var missing = lines.filter(function (l) { return l.missing_classification; }).length;
     if (meta) {
@@ -1892,28 +1917,29 @@
   function renderStmtFunctionalExpenses() {
     var tbody = document.getElementById('organizational-sfe-tbody');
     if (!tbody || !sfeCache) return;
-    var lines = sfeCache.lines || [];
-    var totals = sfeCache.totals || {};
-
-    var html = sortedIn(sfeSorter, lines.filter(function(l) { return hideZero(Number(l.total_cents) !== 0); })).map(function(l) {
-      return '<tr>' +
-        '<td style="color:var(--text-secondary);">' + escapeHtml(rdCode(l.code || '—')) + '</td>' +
-        '<td>' + escapeHtml(l.name || '—') + (l.missing_classification ? ' <span style="color:var(--organizational-status-warning);font-size:11px;" title="Allocations not set">⚠</span>' : '') + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(l.total_cents) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(l.program_services_cents) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(l.mgmt_general_cents) + '</td>' +
-        '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(l.fundraising_cents) + '</td>' +
-        '</tr>';
+    var d = sfeCache.d;
+    var fy = sfeCache.fy;
+    var num = 'text-align:right;font-variant-numeric:tabular-nums;';
+    function amounts(r, href) {
+      return '<td style="' + num + '">' + amountLink(fmtStmt(r.total_cents), href) + '</td>' +
+        '<td style="' + num + '">' + fmtStmt(r.program_services_cents) + '</td>' +
+        '<td style="' + num + '">' + fmtStmt(r.mgmt_general_cents) + '</td>' +
+        '<td style="' + num + '">' + fmtStmt(r.fundraising_cents) + '</td>';
+    }
+    var rows = d.rows || [];
+    var lineRows = sortedIn(sfeSorter, rows.filter(function(r) { return r.kind === 'line' && hideZero(Number(r.total_cents) !== 0); }));
+    var html = lineRows.map(function(r) {
+      var href = r.account_id ? ledgerHref(r.account_id, d.start_date, d.end_date, fy) : '';
+      return '<tr><td style="color:var(--text-secondary);">' + escapeHtml(rdCode(r.code || '—')) + '</td>' +
+        '<td>' + escapeHtml(r.label || '—') + (r.missing_classification ? ' <span style="color:var(--organizational-status-warning);font-size:11px;" title="Allocations not set">⚠</span>' : '') + '</td>' +
+        amounts(r, href) + '</tr>';
     }).join('');
-
-    html += '<tr style="font-weight:600;border-top:2px solid var(--border);">' +
-      '<td colspan="2">Total</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(totals.total_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(totals.program_services_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(totals.mgmt_general_cents || 0) + '</td>' +
-      '<td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtStmt(totals.fundraising_cents || 0) + '</td>' +
-      '</tr>';
-
+    rows.filter(function(r) { return r.kind === 'grand'; }).forEach(function(r) {
+      html += '<tr style="font-weight:600;border-top:2px solid var(--border);"><td colspan="2">' + escapeHtml(r.label) + '</td>' + amounts(r, '') + '</tr>';
+    });
+    (d.warnings || []).forEach(function(w) {
+      html += '<tr><td colspan="6" style="color:var(--text-secondary);padding:8px 14px;">Check: ' + escapeHtml(w) + '</td></tr>';
+    });
     tbody.innerHTML = html;
     syncCodeHeader('organizational-sfe-tbody');
   }
@@ -2486,7 +2512,10 @@
 
     var out = await apiJson(base, { method: 'GET' });
     if (!out || !out.res.ok) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="2">Could not load statement.</td></tr>';
+      var failures = out && out.data && out.data.failures;
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="2">' + (failures && failures.length
+        ? escapeHtml(out.data.error) + '<br>' + failures.map(escapeHtml).join('<br>')
+        : 'Could not load statement.') + '</td></tr>';
       return;
     }
     if (out.data.not_available) {
@@ -2498,52 +2527,21 @@
 
     var d = out.data;
     var html = '';
-
-    function sectionHeader(label) {
-      return '<tr style="background:var(--surface-active);"><td colspan="2" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(label) + '</td></tr>';
-    }
-    function lineRow(label, cents, indent) {
-      return '<tr><td style="' + (indent ? 'padding-left:28px;' : '') + '">' + escapeHtml(label) + '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(cents) + '</td></tr>';
-    }
-    function subtotalRow(label, cents) {
-      return '<tr style="font-weight:600;border-top:1px solid var(--border);"><td>' + escapeHtml(label) + '</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(cents) + '</td></tr>';
-    }
-
-    var op = d.operating || {};
-    html += sectionHeader('Cash flows from operating activities');
-    html += lineRow('Change in net assets', op.change_in_net_assets_cents || 0, false);
-    (op.non_cash_adjustments || []).forEach(function(r) {
-      html += lineRow('Add: ' + r.name + ' (non-cash)', r.amount_cents, true);
+    var num = 'text-align:right;font-variant-numeric:tabular-nums;';
+    (d.rows || []).forEach(function(r) {
+      if (r.kind === 'header') {
+        html += '<tr style="background:var(--surface-active);"><td colspan="2" style="font-weight:700;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-secondary);padding:8px 14px;">' + escapeHtml(r.label) + '</td></tr>';
+      } else if (r.kind === 'line') {
+        var href = r.account_id ? ledgerHref(r.account_id, d.start_date, d.end_date, fy) : '';
+        html += '<tr><td style="padding-left:28px;">' + escapeHtml(r.label) + '</td><td style="' + num + '">' + (r.amount_cents === 0 && !r.account_id ? '—' : amountLink(fmtStmt(r.amount_cents), href)) + '</td></tr>';
+      } else {
+        var strong = r.kind === 'grand';
+        html += '<tr style="font-weight:' + (strong ? '700' : '600') + ';border-top:' + (strong ? '2px' : '1px') + ' solid var(--border);"><td>' + escapeHtml(r.label) + '</td><td style="' + num + '">' + fmtStmt(r.amount_cents) + '</td></tr>';
+      }
     });
-    (op.operating_asset_changes || []).forEach(function(r) {
-      html += lineRow((r.cash_impact_cents < 0 ? 'Increase' : 'Decrease') + ' in ' + r.name, r.cash_impact_cents, true);
+    (d.warnings || []).forEach(function(w) {
+      html += '<tr><td colspan="2" style="color:var(--text-secondary);padding:8px 14px;">Check: ' + escapeHtml(w) + '</td></tr>';
     });
-    (op.operating_liability_changes || []).forEach(function(r) {
-      html += lineRow((r.cash_impact_cents >= 0 ? 'Increase' : 'Decrease') + ' in ' + r.name, r.cash_impact_cents, true);
-    });
-    html += subtotalRow('Net cash from operating activities', op.net_operating_cents || 0);
-
-    var inv = d.investing || {};
-    html += sectionHeader('Cash flows from investing activities');
-    if ((inv.items || []).length) {
-      (inv.items || []).forEach(function(r) { html += lineRow(r.name, r.cash_impact_cents, true); });
-    } else {
-      html += '<tr><td style="color:var(--text-secondary);padding-left:28px;">No investing activity</td><td style="text-align:right;">—</td></tr>';
-    }
-    html += subtotalRow('Net cash from investing activities', inv.net_investing_cents || 0);
-
-    var fin = d.financing || {};
-    html += sectionHeader('Cash flows from financing activities');
-    if ((fin.items || []).length) {
-      (fin.items || []).forEach(function(r) { html += lineRow(r.name, r.cash_impact_cents, true); });
-    } else {
-      html += '<tr><td style="color:var(--text-secondary);padding-left:28px;">No financing activity</td><td style="text-align:right;">—</td></tr>';
-    }
-    html += subtotalRow('Net cash from financing activities', fin.net_financing_cents || 0);
-
-    html += '<tr style="font-weight:700;border-top:2px solid var(--border);"><td>Net change in cash and cash equivalents</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(d.net_change_in_cash_cents || 0) + '</td></tr>';
-    html += lineRow('Cash and cash equivalents, beginning of year', d.beginning_cash_cents || 0, false);
-    html += '<tr style="font-weight:700;"><td>Cash and cash equivalents, end of year</td><td style="text-align:right;font-variant-numeric:tabular-nums;">' + fmtDollars(d.ending_cash_cents || 0) + '</td></tr>';
 
     tbody.innerHTML = html;
     if (meta) meta.textContent = 'FY' + fy + ' · Indirect method · Ledger-sourced';

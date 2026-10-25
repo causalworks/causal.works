@@ -1,6 +1,11 @@
 'use strict';
 
 const { fyDateRange, getFiscalYearEndMonth } = require('./fiscalYear');
+const { StatementIntegrityError } = require('./statementTree');
+const { buildFinancialPosition } = require('./financialPositionStatement');
+const { buildStatementOfActivities } = require('./statementOfActivities');
+const { buildCashFlows } = require('./cashFlowStatement');
+const { buildFunctionalExpenses } = require('./functionalExpensesStatement');
 
 async function runReconciliationChecks(pool, orgId, fiscalYear) {
   const checks = [];
@@ -176,6 +181,37 @@ async function runReconciliationChecks(pool, orgId, fiscalYear) {
         detail: netBalanceCents === 0
           ? `"${suspenseR.rows[0].name}" has a zero balance as of ${endDate}.`
           : `"${suspenseR.rows[0].name}" still holds ${netBalanceCents} cents as of ${endDate} (oldest contributing deposit: ${balanceR.rows[0].oldest_deposit_date}) -- link the matching grant gift(s) to reclassify before locking this period.`,
+      });
+    }
+  }
+
+  {
+    const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
+    if (!srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger') {
+      const builders = [
+        ['Statement of Financial Position', buildFinancialPosition],
+        ['Statement of Activities', buildStatementOfActivities],
+        ['Statement of Cash Flows', buildCashFlows],
+        ['Statement of Functional Expenses', buildFunctionalExpenses],
+      ];
+      const failures = [];
+      const notes = [];
+      for (const [name, build] of builders) {
+        try {
+          const st = await build(pool, orgId, fiscalYear);
+          (st.warnings || []).forEach((w) => notes.push(`${name}: ${w}`));
+        } catch (e) {
+          if (!(e instanceof StatementIntegrityError)) throw e;
+          e.failures.forEach((f) => failures.push(`${name}: ${f.message}`));
+        }
+      }
+      checks.push({
+        id: 'statements_tie',
+        label: 'Financial statements tie to the ledger and to each other',
+        status: failures.length ? 'fail' : (notes.length ? 'info' : 'pass'),
+        detail: failures.length
+          ? failures.join('; ')
+          : (notes.length ? notes.join('; ') : 'The four statements built from the ledger pass their own checks.'),
       });
     }
   }

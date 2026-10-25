@@ -74,4 +74,4 @@ async function buildFinancialPosition(pool, orgId, fy) {
   };
 }
 
-module.exports = { buildFinancialPosition };
+module.exports = { buildFinancialPosition, designationBalances };

@@ -551,6 +551,36 @@
             </section>
           </div>
 
+          <div id="report-detail-net-assets-detail" hidden>
+            <div class="organizational-report-detail-header">
+              <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>
+              <h1 class="organizational-org-dashboard-title" style="margin:0;" id="organizational-nad-title">Net Assets Detail</h1>
+            </div>
+            <p class="organizational-hint" style="margin-bottom:20px;">The posted entries that make up a net assets amount on a statement, through the end of the year. The total matches the statement.</p>
+            <section class="organizational-card organizational-card-flush">
+              <div style="padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--border);">
+                <span class="organizational-hint" id="organizational-nad-meta"></span>
+                <a id="organizational-nad-csv" class="organizational-btn organizational-btn-outline" href="#" download style="margin-left:auto;">Export CSV</a>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Net Assets Detail">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Account</th>
+                      <th>Memo</th>
+                      <th>Restriction</th>
+                      <th style="text-align:right;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-nad-tbody">
+                    <tr class="organizational-table-empty"><td colspan="5">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
           <div id="report-detail-receivables-schedule" hidden>
             <div class="organizational-report-detail-header">
               <button class="organizational-btn organizational-btn-ghost organizational-report-back" onclick="showReportsIndex()">← Reports</button>

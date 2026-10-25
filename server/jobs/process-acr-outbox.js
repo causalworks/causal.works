@@ -68,7 +68,8 @@ async function runProcessAcrOutbox(rawPool) {
 
 function scheduleProcessAcrOutbox(pool) {
   cron.schedule('*/10 * * * * *', () =>
-    runProcessAcrOutbox(pool).catch((err) => console.error('[process-acr-outbox] run failed:', err.message))
+    runProcessAcrOutbox(pool).catch((err) => console.error('[process-acr-outbox] run failed:', err.message)),
+    { timezone: 'UTC' }
   );
   runProcessAcrOutbox(pool).catch((err) => console.error('[process-acr-outbox] boot run failed:', err.message));
 }

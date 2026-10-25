@@ -21,7 +21,8 @@ async function runPurgeSyncedDocuments(rawPool) {
 
 function schedulePurgeSyncedDocuments(pool) {
   cron.schedule('7 * * * *', () =>
-    runPurgeSyncedDocuments(pool).catch((err) => console.error('[purge-synced-documents] run failed:', err.message))
+    runPurgeSyncedDocuments(pool).catch((err) => console.error('[purge-synced-documents] run failed:', err.message)),
+    { timezone: 'UTC' }
   );
   runPurgeSyncedDocuments(pool).catch((err) => console.error('[purge-synced-documents] boot run failed:', err.message));
 }

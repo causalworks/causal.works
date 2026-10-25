@@ -11,7 +11,7 @@ async function runExpirePodPermissions(rawPool) {
 }
 
 function scheduleExpirePodPermissions(pool) {
-  cron.schedule('* * * * *', () => runExpirePodPermissions(pool).catch((err) => console.error('[expire-pod-permissions] run failed:', err.message)));
+  cron.schedule('* * * * *', () => runExpirePodPermissions(pool).catch((err) => console.error('[expire-pod-permissions] run failed:', err.message)), { timezone: 'UTC' });
 
   runExpirePodPermissions(pool).catch((err) => console.error('[expire-pod-permissions] boot run failed:', err.message));
 }

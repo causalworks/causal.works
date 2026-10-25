@@ -56,7 +56,7 @@ async function suggestForLine(pool, orgId, line) {
 }
 
 // Proposes coding for unconfirmed lines that have no open proposal. Does nothing while the assistant is off for the workspace. Lines no rule or history settles go to the language model when it is switched on and the assistant holds a live seat.
-async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLineModel.suggestWithModel, modelEnabled = bankLineModel.enabled } = {}) {
+async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLineModel.suggestWithModel, modelEnabled = bankLineModel.enabled, modelDelayMs = 1100 } = {}) {
   const mode = await effectiveMode(pool, orgId, null);
   if (mode === 'off') return { skipped: 'The assistant is off in this workspace', proposed: 0, expired: 0 };
 
@@ -88,6 +88,7 @@ async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLine
     if (seat.ctx) {
       for (const line of leftovers.filter((l) => !l.model_tried_at).slice(0, MODEL_LIMIT)) {
         let s;
+        if (modelDelayMs) await new Promise((r) => setTimeout(r, modelDelayMs));
         try {
           s = await modelSuggest(pool, orgId, line);
         } catch (e) {

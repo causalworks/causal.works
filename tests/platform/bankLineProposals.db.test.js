@@ -136,7 +136,7 @@ test('accepting a proposal whose line was already coded expires it', { skip: SKI
 
 const { grantSeat } = require('../../server/organizational/lib/assistantSeat');
 const { clean } = require('../../server/organizational/lib/bankLineModel');
-const withModel = (w, modelSuggest) => inOrg(w, () => proposeForUnconfirmedLines(scoped, w.orgId, { modelSuggest, modelEnabled: () => true }));
+const withModel = (w, modelSuggest) => inOrg(w, () => proposeForUnconfirmedLines(scoped, w.orgId, { modelSuggest, modelEnabled: () => true, modelDelayMs: 0 }));
 const seat = (w) => inOrg(w, () => grantSeat(scoped, { orgId: w.orgId, userId: w.userId, reason: 'test seat' }));
 const stub = (w, calls) => async (_pool, _org, line) => {
   calls.push(line.id);

@@ -16,7 +16,7 @@ const { validateConditions, searchLedgerLines, loadFieldOptions } = require('../
 const { logAudit, diffFields } = require('../lib/auditLog');
 const { displayAmountSql, displayCents } = require('../lib/voidedDisplay');
 const { sourceLabel, statusLabel } = require('../lib/ledgerLabels');
-const { voidBillPayment, voidInvoicePayment } = require('../lib/billInvoicePayments');
+const { runTool, ctxForUser } = require('../tools');
 const { csvCell } = require('../lib/csvCell');
 
 function rowToLedgerDetailRow(row) {
@@ -894,12 +894,12 @@ function registerOrganizationalLedgerRoutes(app, pool) {
     if (voidReason) {
       const bp = await pool.query(`SELECT id, bill_id FROM org_bill_payments WHERE ledger_transaction_id = $1 AND org_id = $2 AND status = 'posted'`, [transactionId, orgId]);
       if (bp.rows.length) {
-        const r = await voidBillPayment(pool, { orgId, userId, billId: bp.rows[0].bill_id, paymentId: bp.rows[0].id, reason: voidReason });
+        const r = await runTool('bill.void_payment', ctxForUser(pool, orgId, userId), { id: bp.rows[0].bill_id, payment_id: bp.rows[0].id, reason: voidReason });
         return res.status(r.httpStatus).json(r.body);
       }
       const ip = await pool.query(`SELECT id, invoice_id FROM org_invoice_payments WHERE ledger_transaction_id = $1 AND org_id = $2 AND status = 'posted'`, [transactionId, orgId]);
       if (ip.rows.length) {
-        const r = await voidInvoicePayment(pool, { orgId, userId, invoiceId: ip.rows[0].invoice_id, paymentId: ip.rows[0].id, reason: voidReason });
+        const r = await runTool('invoice.void_payment', ctxForUser(pool, orgId, userId), { id: ip.rows[0].invoice_id, payment_id: ip.rows[0].id, reason: voidReason });
         return res.status(r.httpStatus).json(r.body);
       }
     }

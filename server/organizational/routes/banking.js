@@ -19,11 +19,11 @@ const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../li
 const {
   postLedgerTransaction, voidLedgerTransaction, isFiscalYearLocked, buildReversingLines, RESTRICTION_CLASSES,
 } = require('../lib/ledgerPosting');
+const { runTool, ctxForUser } = require('../tools');
 const { recordGrantGiftPayment } = require('../lib/grantGiftPayment');
 const { recordMembershipDuesPayment } = require('../lib/membershipDuesPayment');
 const { recordSponsoredProjectDisbursementPayment } = require('../lib/sponsoredProjectDisbursementPayment');
 const {
-  recordBillPayment, recordInvoicePayment, voidBillPayment, voidInvoicePayment,
   billRemainingBalanceCents, invoiceRemainingBalanceCents,
   billCreditSql, invoiceCreditSql,
 } = require('../lib/billInvoicePayments');
@@ -923,17 +923,17 @@ function registerBankingRoutes(app, pool) {
     };
     let ledgerTransactionId;
     if (matchType === 'bill') {
-      const result = await recordBillPayment(pool, {
-        orgId, userId, billId: targetId, bankAccountId: line.bank_account_id,
-        paymentDate: String(line.statement_date).slice(0, 10), amountCents: Number(line.amount_cents),
+      const result = await runTool('bill.record_payment', ctxForUser(pool, orgId, userId), {
+        id: targetId, bank_account_id: line.bank_account_id,
+        payment_date: String(line.statement_date).slice(0, 10), amount_cents: Number(line.amount_cents),
         reference: line.payee_raw || line.description_raw || null,
       });
       if (result.httpStatus >= 400) return result;
       ledgerTransactionId = result.body.ledger_transaction_id;
     } else if (matchType === 'invoice') {
-      const result = await recordInvoicePayment(pool, {
-        orgId, userId, invoiceId: targetId, bankAccountId: line.bank_account_id,
-        paymentDate: String(line.statement_date).slice(0, 10), amountCents: Number(line.amount_cents),
+      const result = await runTool('invoice.record_payment', ctxForUser(pool, orgId, userId), {
+        id: targetId, bank_account_id: line.bank_account_id,
+        payment_date: String(line.statement_date).slice(0, 10), amount_cents: Number(line.amount_cents),
         reference: line.payee_raw || line.description_raw || null,
       });
       if (result.httpStatus >= 400) return result;
@@ -1080,24 +1080,14 @@ function registerBankingRoutes(app, pool) {
 
       const posted = [];
       for (const it of parsedItems) {
-        const result = matchType === 'bill'
-          ? await recordBillPayment(pool, {
-              orgId, userId, billId: it.targetId, bankAccountId: line.bank_account_id,
-              paymentDate: String(line.statement_date).slice(0, 10), amountCents: it.amountCents,
-              reference: line.payee_raw || line.description_raw || null,
-            })
-          : await recordInvoicePayment(pool, {
-              orgId, userId, invoiceId: it.targetId, bankAccountId: line.bank_account_id,
-              paymentDate: String(line.statement_date).slice(0, 10), amountCents: it.amountCents,
-              reference: line.payee_raw || line.description_raw || null,
-            });
+        const result = await runTool(`${matchType}.record_payment`, ctxForUser(pool, orgId, userId), {
+          id: it.targetId, bank_account_id: line.bank_account_id,
+          payment_date: String(line.statement_date).slice(0, 10), amount_cents: it.amountCents,
+          reference: line.payee_raw || line.description_raw || null,
+        });
         if (result.httpStatus >= 400) {
           for (const done of posted) {
-            if (done.matchType === 'bill') {
-              await voidBillPayment(pool, { orgId, userId, billId: done.targetId, paymentId: done.paymentId, reason: 'Automatic rollback: a later item in the same multi-match failed' }).catch(() => {});
-            } else {
-              await voidInvoicePayment(pool, { orgId, userId, invoiceId: done.targetId, paymentId: done.paymentId, reason: 'Automatic rollback: a later item in the same multi-match failed' }).catch(() => {});
-            }
+            await runTool(`${done.matchType}.void_payment`, ctxForUser(pool, orgId, userId, { viaBank: true }), { id: done.targetId, payment_id: done.paymentId, reason: 'Automatic rollback: a later item in the same multi-match failed' }).catch(() => {});
           }
           return res.status(result.httpStatus).json(result.body);
         }
@@ -1362,7 +1352,7 @@ function registerBankingRoutes(app, pool) {
     const billPayR = await pool.query(`SELECT id, bill_id FROM org_bill_payments WHERE ledger_transaction_id = $1 AND org_id = $2 AND status = 'posted'`, [txnId, orgId]);
     if (billPayR.rows.length) {
       const p = billPayR.rows[0];
-      const result = await voidBillPayment(pool, { orgId, userId, billId: p.bill_id, paymentId: p.id, reason });
+      const result = await runTool('bill.void_payment', ctxForUser(pool, orgId, userId, { viaBank: true }), { id: p.bill_id, payment_id: p.id, reason });
       if (result.httpStatus >= 400) return result;
       return { httpStatus: 200, body: result.body.reversal_transaction_id
         ? { mode: 'reversed', original_transaction_id: txnId, reversing_transaction_id: result.body.reversal_transaction_id, fiscal_year: txn.fiscal_year }
@@ -1371,7 +1361,7 @@ function registerBankingRoutes(app, pool) {
     const invPayR = await pool.query(`SELECT id, invoice_id FROM org_invoice_payments WHERE ledger_transaction_id = $1 AND org_id = $2 AND status = 'posted'`, [txnId, orgId]);
     if (invPayR.rows.length) {
       const p = invPayR.rows[0];
-      const result = await voidInvoicePayment(pool, { orgId, userId, invoiceId: p.invoice_id, paymentId: p.id, reason });
+      const result = await runTool('invoice.void_payment', ctxForUser(pool, orgId, userId, { viaBank: true }), { id: p.invoice_id, payment_id: p.id, reason });
       if (result.httpStatus >= 400) return result;
       return { httpStatus: 200, body: result.body.reversal_transaction_id
         ? { mode: 'reversed', original_transaction_id: txnId, reversing_transaction_id: result.body.reversal_transaction_id, fiscal_year: txn.fiscal_year }

@@ -61,7 +61,7 @@ for (const [kind, k] of Object.entries(KINDS)) {
   defineTool({
     name: `${kind}.record_payment`,
     capability: 'post',
-    humanOnly: false,
+    nonHuman: 'propose',
     validate: validateRecord(kind, 'id'),
     async run(ctx, v) {
       if (!(await inScope(ctx, k, v.id))) return { httpStatus: 404, body: { error: `${k.label} not found` } };
@@ -76,11 +76,11 @@ for (const [kind, k] of Object.entries(KINDS)) {
   defineTool({
     name: `${kind}.void_payment`,
     capability: 'post',
-    humanOnly: true,
+    nonHuman: 'propose',
     validate: validateVoid('id'),
     async run(ctx, v) {
       if (!(await inScope(ctx, k, v.id))) return { httpStatus: 404, body: { error: `${k.label} not found` } };
-      const recon = await ctx.pool.query(k.reconciledSql, [ctx.orgId, v.paymentId]);
+      const recon = ctx.viaBank ? { rows: [] } : await ctx.pool.query(k.reconciledSql, [ctx.orgId, v.paymentId]);
       if (recon.rows.length) return { httpStatus: 409, body: { error: 'This payment is reconciled to a bank line. Unreconcile it first.', code: 'reconciled' } };
       const result = await k.void(ctx.pool, { orgId: ctx.orgId, userId: ctx.userId, id: v.id, paymentId: v.paymentId, reason: v.reason });
       if (result.httpStatus < 400) {

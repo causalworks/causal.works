@@ -59,11 +59,19 @@ test.before(() => {
 });
 test.after(async () => { if (pool) await pool.end(); });
 
-test('an assistant cannot run a human-only tool', { skip: SKIP }, async () => {
+test('an assistant gets a proposal for a void and nothing changes until a person runs it', { skip: SKIP }, async () => {
   const w = await makeWorkspace();
-  const r = await inOrg(w, () => runTool('bill.void_payment', ctx(w, 'assistant'), { id: w.bill, payment_id: 1, reason: 'x' }));
-  assert.equal(r.httpStatus, 403);
-  assert.equal(r.body.code, 'human_only');
+  const paid = await inOrg(w, () => runTool('bill.record_payment', ctx(w), { id: w.bill, bank_account_id: w.bank, payment_date: '2026-03-15', amount_cents: 4000 }));
+  assert.equal(paid.httpStatus, 201);
+  const input = { id: w.bill, payment_id: paid.body.id, reason: 'entered twice' };
+  const proposal = await inOrg(w, () => runTool('bill.void_payment', ctx(w, 'assistant'), input));
+  assert.equal(proposal.httpStatus, 202);
+  assert.equal(proposal.body.proposed, true);
+  const status = () => inOrg(w, () => scoped.query('SELECT status FROM org_bill_payments WHERE id = $1', [paid.body.id])).then((r) => r.rows[0].status);
+  assert.equal(await status(), 'posted');
+  const confirmed = await inOrg(w, () => runTool('bill.void_payment', ctx(w), input));
+  assert.equal(confirmed.httpStatus, 200);
+  assert.equal(await status(), 'void');
 });
 
 for (const [kind, key, payTable, fk] of [['bill', 'bill', 'org_bill_payments', 'bill_id'], ['invoice', 'invoice', 'org_invoice_payments', 'invoice_id']]) {

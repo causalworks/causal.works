@@ -21,6 +21,18 @@ function runwayFromProfile(profile) {
   };
 }
 
+async function runwayForOrg(pool, orgId, profile) {
+  const src = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
+  if (src.rows[0] && src.rows[0].actuals_source !== 'ledger') return runwayFromProfile(profile);
+  const r = await pool.query(
+    `SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS cents
+       FROM org_ledger_lines l
+       JOIN org_ledger_transactions t ON t.id = l.transaction_id AND t.status = 'posted' AND t.transaction_date <= CURRENT_DATE
+       JOIN org_accounts a ON a.id = l.account_id AND a.is_cash_account
+      WHERE t.org_id = $1`, [orgId]);
+  return { months: null, cash_balance_cents: Math.max(0, Number(r.rows[0].cents)) };
+}
+
 function reportingScheduleHints(name, schedule, endDateStr) {
   const hints = [];
   if (endDateStr) {
@@ -61,7 +73,7 @@ async function buildOrganizationalFinanceSnapshot(pool, orgId, fiscalYear) {
   const profile = orgRow.org_profile_data && typeof orgRow.org_profile_data === 'object'
     ? orgRow.org_profile_data
     : {};
-  const runway = runwayFromProfile(profile);
+  const runway = await runwayForOrg(pool, orgId, profile);
 
   const grantsR = await pool.query(
     `SELECT g.id, g.name, g.funder, g.amount_cents, g.status AS status,
@@ -222,4 +234,4 @@ async function buildOrganizationalFinanceSnapshot(pool, orgId, fiscalYear) {
   };
 }
 
-module.exports = { buildOrganizationalFinanceSnapshot, runwayFromProfile };
+module.exports = { buildOrganizationalFinanceSnapshot, runwayFromProfile, runwayForOrg };

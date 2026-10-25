@@ -1,7 +1,7 @@
 'use strict';
 
 const { loadOrgDocInfo, oneLine } = require('./orgLetterhead');
-const { runwayFromProfile } = require('./OrganizationalFinanceSnapshot');
+const { runwayForOrg } = require('./OrganizationalFinanceSnapshot');
 
 function fmtUsd(cents) {
   const n = Number(cents) || 0;
@@ -18,7 +18,7 @@ async function fetchBoardReportData(pool, orgId, fiscalYear) {
   const org = orgR.rows[0] || {};
   const docInfo = await loadOrgDocInfo(pool, orgId);
   const profile = org.org_profile_data && typeof org.org_profile_data === 'object' ? org.org_profile_data : {};
-  const runway = runwayFromProfile(profile);
+  const runway = await runwayForOrg(pool, orgId, profile);
 
   const revR = await pool.query(
     `SELECT COALESCE(SUM(a.amount_cents), 0)::bigint AS cents

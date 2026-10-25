@@ -4,6 +4,7 @@ const { requireAuth } = require('../../auth');
 const { requireReadAccess } = require('../middleware/requireWriteAccess');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
+const { csvCell } = require('../lib/csvCell');
 
 const TABLE_RE = /^org_[a-z0-9_]+$/;
 const ALLOWED_ACTIONS = new Set(['create', 'update', 'delete']);
@@ -17,11 +18,6 @@ function parseJson(text) {
   try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : null; } catch (_) { return null; }
 }
 
-function csvCell(v) {
-  let s = v == null ? '' : String(v);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
 
 function registerOrganizationalAuditLogRoutes(app, pool) {
   const auth = requireAuth(pool);

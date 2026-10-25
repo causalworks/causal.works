@@ -10,6 +10,7 @@ const { buildCashFlows } = require('../lib/cashFlowStatement');
 const { buildFunctionalExpenses } = require('../lib/functionalExpensesStatement');
 const { netAssetsDetail } = require('../lib/netAssetsDetail');
 const { StatementIntegrityError } = require('../lib/statementTree');
+const { csvCell } = require('../lib/csvCell');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
 function registerFinancialStatementRoutes(app, pool) {
@@ -26,9 +27,7 @@ function registerFinancialStatementRoutes(app, pool) {
     return r.rows[0] ? r.rows[0].actuals_source : 'ledger';
   }
 
-  function fmtCsv(value) {
-    return '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
-  }
+  const fmtCsv = csvCell;
 
   // ── Statement of Financial Position ───────────────────────────────────────
   app.get('/api/organizational/orgs/:slug/reports/financial-position', ...orgAuth, requireReportsOrBoard(pool), boardSeesAllPrograms, async (req, res) => {

@@ -20,6 +20,7 @@ const Msg = require('../lib/membershipMessages');
 const Rep = require('../lib/membershipReports');
 const Imp = require('../lib/membershipImport');
 const Dir = require('../lib/membershipDirectory');
+const { csvCell } = require('../lib/csvCell');
 
 const { cents, day, text } = M;
 
@@ -37,11 +38,6 @@ function intId(v) {
   return Number.isInteger(n) && n > 0 && String(n) === String(v).trim() ? n : null;
 }
 
-function csvCell(v) {
-  let s = String(v == null ? '' : v);
-  if (/^[=+\-@]/.test(s)) s = "'" + s;
-  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-}
 
 function fail(res, code, error, extra) {
   return res.status(code).json({ error, ...(extra || {}) });

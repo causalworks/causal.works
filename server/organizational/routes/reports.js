@@ -12,6 +12,7 @@ const { fetchBoardReportData, fetchGrantReportData, fallbackGrantNarrative } = r
 const { htmlToPdfBuffer } = require('../lib/OrganizationalHtmlPdf');
 const { buildCashflowGrid } = require('../lib/cashflowForecast');
 const { receiptStatement } = require('../lib/giftBenefit');
+const { csvCell } = require('../lib/csvCell');
 
 function escapeHtml(s) {
   return String(s || '')
@@ -213,7 +214,7 @@ function registerOrganizationalReportRoutes(app, pool) {
 
       const fmt = String(req.query.format || 'json').toLowerCase();
       if (fmt === 'csv') {
-        const esc = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+        const esc = csvCell;
         const totalsByType = { asset: 0, liability: 0, equity: 0 };
         for (const r of rows) {
           const t = String(r.type || '').toLowerCase();

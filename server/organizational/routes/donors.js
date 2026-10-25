@@ -10,6 +10,7 @@ const { parseBenefit } = require('../lib/giftBenefit');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { validateConstituentsRows } = require('../lib/importValidators');
 const { FINANCE_ROLES, FUNDRAISING_ROLES } = require('../lib/orgRoles');
+const { csvCell } = require('../lib/csvCell');
 
 const {
   CONTACT_ROLES, ROLES_SELECT, hasRoleCondition, parseRoles, parseKindFields, addContactRoles, setContactRoles,
@@ -26,11 +27,6 @@ function parseEmails(v) {
   return out.length ? out : null;
 }
 
-function csvEscape(v) {
-  const s = String(v == null ? '' : v);
-  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
-}
 const GIFT_TYPES = new Set(['grant', 'donation', 'pledge', 'membership_dues']);
 const GIFT_PAYMENT_METHODS = new Set(['check', 'ach', 'wire', 'credit_card', 'cash', 'stripe', 'in_kind', 'other']);
 const IN_KIND_VALUATION_METHODS = new Set(['quoted_market_price', 'comparable_sales', 'cost_replacement', 'professional_appraisal', 'donor_stated', 'other']);
@@ -1565,7 +1561,7 @@ function registerOrganizationalDonorRoutes(app, pool) {
         params
       );
 
-      function csvRow(cells) { return cells.map(csvEscape).join(',') + '\r\n'; }
+      function csvRow(cells) { return cells.map(csvCell).join(',') + '\r\n'; }
       let csv = csvRow(['first_name','last_name','display_name','email','mailing_address','kind','org_type','roles','tags']);
       for (const row of r.rows) {
         csv += csvRow([

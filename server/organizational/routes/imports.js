@@ -22,6 +22,7 @@ const {
 const { calculatePersonnelProjections } = require('../lib/personnelCalculator');
 const { recalcPersonnelBudget } = require('../lib/personnelRecalc');
 const { requireImportedActuals } = require('../lib/requireImportedActuals');
+const { csvCell } = require('../lib/csvCell');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -719,14 +720,7 @@ function formatUsdFromCents(cents) {
   return '$' + (n / 100).toFixed(2);
 }
 
-function escapeCSV(str) {
-  if (!str) return '';
-  str = String(str);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return '"' + str.replace(/"/g, '""') + '"';
-  }
-  return str;
-}
+const escapeCSV = csvCell;
 
 function rowToCSV(row) {
   return Object.values(row).map(escapeCSV).join(',');

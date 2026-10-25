@@ -5,15 +5,13 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
 const { fyDateRange, fiscalYearForDate, getFiscalYearEndMonth } = require('../lib/fiscalYear');
+const { csvCell } = require('../lib/csvCell');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const GL_JSON_LINE_CAP = 5000;
 const GL_CSV_LINE_CAP = 50000;
 const DEBIT_NORMAL = new Set(['asset', 'expense']);
 
-function csvCell(v) {
-  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-}
 function csvMoney(cents) {
   return (Number(cents) / 100).toFixed(2);
 }

@@ -17,6 +17,7 @@ const { logAudit, diffFields } = require('../lib/auditLog');
 const { displayAmountSql, displayCents } = require('../lib/voidedDisplay');
 const { sourceLabel, statusLabel } = require('../lib/ledgerLabels');
 const { voidBillPayment, voidInvoicePayment } = require('../lib/billInvoicePayments');
+const { csvCell } = require('../lib/csvCell');
 
 function rowToLedgerDetailRow(row) {
   return {
@@ -312,7 +313,7 @@ function registerOrganizationalLedgerRoutes(app, pool) {
       );
       const truncated = r.rows.length > TXN_CSV_MAX_LINES;
       const rows = truncated ? r.rows.slice(0, TXN_CSV_MAX_LINES) : r.rows;
-      const cell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const cell = csvCell;
       const money = (c) => (Number(c) === 0 ? '' : (Number(c) / 100).toFixed(2));
       const out = [['Date', 'Transaction', 'Status', 'Source', 'Payee', 'Memo', 'Reference', 'Account code', 'Account', 'Program', 'Grant', 'Line memo', 'Debit', 'Credit']];
       for (const x of rows) {

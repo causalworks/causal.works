@@ -6,6 +6,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { boardSeesAllPrograms } = require('../middleware/requireAccountingAccess');
 const { requireOrgMembership, requireOrgRole } = require('../middleware/requireOrgMembership');
 const { buildFunctionalExpenses, splitAllocation } = require('../lib/functionalExpensesStatement');
+const { csvCell } = require('../lib/csvCell');
 
 function registerFunctionalClassificationRoutes(app, pool) {
   const auth = requireAuth(pool);
@@ -165,8 +166,8 @@ function registerFunctionalClassificationRoutes(app, pool) {
           ...lines.map(l => {
             const unclassified = (l.program_services_bps + l.mgmt_general_bps + l.fundraising_bps) !== 10000 ? 'YES' : '';
             return [
-              l.code || '',
-              '"' + (l.name || '').replace(/"/g, '""') + '"',
+              csvCell(l.code || ''),
+              csvCell(l.name || ''),
               (l.total_cents / 100).toFixed(2),
               (l.program_services_cents / 100).toFixed(2),
               (l.mgmt_general_cents / 100).toFixed(2),

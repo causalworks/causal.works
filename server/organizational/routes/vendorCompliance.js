@@ -6,6 +6,7 @@ const { requireOrgMembership, requireOrgRole, FINANCE_ROLES } = require('../midd
 const { requireAccountingAccess } = require('../middleware/requireAccountingAccess');
 const { encryptTaxId } = require('../lib/vendorTaxIdCrypto');
 const { logAudit, reqMeta } = require('../lib/auditLog');
+const { csvCell } = require('../lib/csvCell');
 
 function registerVendorComplianceRoutes(app, pool) {
   const orgAuth = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool), requireOrgRole(['admin', ...FINANCE_ROLES])];
@@ -239,7 +240,7 @@ function registerVendorComplianceRoutes(app, pool) {
       }));
 
       if (format === 'csv') {
-        const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+        const esc = csvCell;
         const thresholdLabel = `Over $${(thresholdCents / 100).toLocaleString()} threshold`;
         const rows = [
           ['Vendor', 'Amount paid (reportable)', thresholdLabel, 'W-9 received', 'TIN type', 'Tax ID on file', 'Entity type'].map(esc).join(','),

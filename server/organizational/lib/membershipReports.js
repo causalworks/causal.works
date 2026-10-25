@@ -5,6 +5,7 @@
 
 const M = require('./membership');
 const S = require('./membershipStatus');
+const { csvCell } = require('./csvCell');
 
 const REPORTS = ['joins', 'retention', 'revenue', 'aging', 'growth', 'lapses'];
 
@@ -170,7 +171,7 @@ async function runReport(pool, orgId, name, q, opts) {
 }
 
 function toCsv(report) {
-  const cell = (v) => { let s = String(v == null ? '' : v); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const cell = csvCell;
   const cols = report.columns;
   const fmt = (k, v) => (k.endsWith('_cents') ? (Number(v || 0) / 100).toFixed(2) : v);
   return [cols.map((c) => c.replace(/_cents$/, '')).join(','), ...report.rows.map((r) => cols.map((c) => cell(fmt(c, r[c]))).join(','))].join('\r\n') + '\r\n';

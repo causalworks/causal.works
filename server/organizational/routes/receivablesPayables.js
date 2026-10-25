@@ -18,6 +18,7 @@ const { addFileInfo } = require('../lib/recordFiles');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { csvCell } = require('../lib/csvCell');
 
 const UPLOADS_ROOT = path.resolve(process.env.CAUSAL_UPLOADS_ROOT || path.join(__dirname, '../../../uploads'));
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -25,9 +26,6 @@ const BUCKETS = ['current', '1_30', '31_60', '61_90', '90_plus'];
 
 function bucketFor(days) {
   return days <= 0 ? 'current' : days <= 30 ? '1_30' : days <= 60 ? '31_60' : days <= 90 ? '61_90' : '90_plus';
-}
-function csvCell(v) {
-  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
 }
 function daysBetween(asOf, date) {
   const a = Date.parse(asOf + 'T00:00:00Z');

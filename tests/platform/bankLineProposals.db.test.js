@@ -208,6 +208,8 @@ test('measurement counts accepted, hand-coded the same, hand-coded differently a
   const m = await inOrg(w, () => measure(scoped, w.orgId));
   assert.equal(m.by_month.length, 1);
   assert.deepEqual([m.by_month[0].agreed, m.by_month[0].changed, m.by_month[0].dismissed], [2, 1, 1]);
+  assert.equal(m.by_source[0].key, 'payee_history');
+  assert.equal(m.by_source[0].total, 4);
   assert.equal(m.by_payee[0].key, 'acme supplies');
   assert.equal(m.by_payee[0].override_rate, 0.5);
   assert.equal(m.open, 0);

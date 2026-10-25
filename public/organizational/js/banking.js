@@ -187,6 +187,7 @@
       + '<div class="organizational-tabs" style="border-bottom:none;">' + tabBtn('match', 'Match') + tabBtn('create', 'Create') + tabBtn('transfer', 'Transfer') + tabBtn('discuss', discussLabel) + '</div>'
       + '<button type="button" class="banking-findmatch-link" data-line="' + l.id + '" style="background:none;border:none;color:var(--organizational-accent);font-size:0.8125rem;cursor:pointer;padding:0;">' + (rowFindMatchOpen.get(l.id) ? 'Hide full list' : 'Find &amp; Match') + '</button>'
       + '</div>'
+      + '<div id="banking-row-suggest-' + l.id + '" style="font-size:0.8125rem;margin-top:6px;" hidden></div>'
       + '<p class="organizational-panel-error" id="banking-row-error-' + l.id + '" hidden></p>'
       + '<div class="banking-row-tab-content" id="banking-row-content-' + l.id + '" style="margin-top:8px;"></div>'
       + '</div>'
@@ -201,6 +202,7 @@
     }
     cardsContainer.innerHTML = lines.map(cardHtml).join('');
     lines.forEach((l) => renderRowTabContent(l));
+    loadLineProposals().then(() => lines.forEach(renderRowSuggestion));
   }
 
   function renderRowTabContent(line) {
@@ -213,6 +215,22 @@
 
   if (cardsContainer) {
     cardsContainer.addEventListener('click', (e) => {
+      const propBtn = e.target.closest('.row-prop-why, .row-prop-accept, .row-prop-edit, .row-prop-dismiss');
+      if (propBtn) {
+        const id = Number(propBtn.getAttribute('data-line'));
+        const line = currentUnconfirmedLines.find((l) => l.id === id);
+        const p = lineProposals.get(id);
+        if (!line || !p) return;
+        if (propBtn.classList.contains('row-prop-why')) { if (proposalWhyOpen.has(id)) proposalWhyOpen.delete(id); else proposalWhyOpen.add(id); renderRowSuggestion(line); }
+        else if (propBtn.classList.contains('row-prop-edit')) {
+          rowProposalPrefill.set(id, p.input);
+          rowActiveTab.set(id, 'create');
+          const card = propBtn.closest('[data-line-id]');
+          if (card) card.querySelectorAll('.banking-row-tab').forEach((b) => b.classList.toggle('active', b.getAttribute('data-tab') === 'create'));
+          renderCreateTab(line);
+        } else decideProposal(id, propBtn.classList.contains('row-prop-accept') ? 'accept' : 'dismiss', loadLines);
+        return;
+      }
       const tabBtn = e.target.closest('.banking-row-tab');
       if (tabBtn) {
         const lineId = Number(tabBtn.getAttribute('data-line'));
@@ -300,8 +318,6 @@
   let cashCodingEdit = null;
   let cashCodingShowMatches = false;
   let cashCodingLoadToken = 0;
-  const cashCodingProposals = new Map();
-  const cashCodingProposalWhy = new Set();
 
   function blankSplit() { return { accountId: '', programId: '', grantId: '', restrictionClass: '', amountCents: null }; }
 
@@ -309,7 +325,7 @@
     const token = ++cashCodingLoadToken;
     const bankAccountId = acctSelect && acctSelect.value;
     cashCodingSplits.clear(); cashCodingTransfers.clear(); cashCodingMatchRows.clear();
-    cashCodingChecked.clear(); cashCodingRuleApplied.clear(); cashCodingProposals.clear(); cashCodingEdit = null;
+    cashCodingChecked.clear(); cashCodingRuleApplied.clear(); cashCodingEdit = null;
     setCashCodingStatus('');
     if (!bankAccountId) { cashCodingLines = []; renderCashCodingGrid(); return; }
     const params = new URLSearchParams({ status: 'unconfirmed', bank_account_id: bankAccountId });
@@ -322,33 +338,63 @@
     loadCashCodingProposals(token);
   }
 
-  async function loadCashCodingProposals(token) {
+  const lineProposals = new Map();
+  const rowProposalPrefill = new Map();
+  const proposalWhyOpen = new Set();
+
+  async function loadLineProposals() {
     const base = '/api/organizational/orgs/' + encodeURIComponent(currentSlug);
+    lineProposals.clear();
     const mode = await apiJson(base + '/assistant');
-    if (token !== cashCodingLoadToken || !mode || !mode.res.ok || mode.data.my_mode === 'off') return;
+    if (!mode || !mode.res.ok || mode.data.my_mode === 'off') return;
     const out = await apiJson(base + '/tool-proposals?status=open');
-    if (token !== cashCodingLoadToken || !out || !out.res.ok) return;
-    (out.data.proposals || []).filter((p) => p.tool_name === 'bank_line.code').forEach((p) => cashCodingProposals.set(Number(p.input.line_id), p));
+    if (!out || !out.res.ok) return;
+    (out.data.proposals || []).filter((p) => p.tool_name === 'bank_line.code').forEach((p) => lineProposals.set(Number(p.input.line_id), p));
+  }
+
+  async function loadCashCodingProposals(token) {
+    await loadLineProposals();
+    if (token !== cashCodingLoadToken) return;
     if (!cashCodingEdit) renderCashCodingGrid();
   }
 
-  function proposalCellHtml(l, p) {
-    const label = accountLabelFor(p.input.account_id) + ', ' + programLabelFor(p.input.program_id);
-    const btn = (cls, text) => '<button type="button" class="' + cls + '" data-line="' + l.id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:0.8125rem;padding:0 6px;">' + text + '</button>';
-    const why = cashCodingProposalWhy.has(l.id)
-      ? '<div style="font-size:0.75rem;">' + esc(p.reason || '') + (p.warnings && p.warnings.length ? ' ' + esc(p.warnings.join(' ')) : '') + '</div>' : '';
-    return '<td colspan="4" style="color:var(--text-secondary);">Suggested: ' + esc(label)
-      + ' <span style="white-space:nowrap;">' + btn('cc-prop-why', 'why') + btn('cc-prop-accept', 'Accept') + btn('cc-prop-edit', 'Edit') + btn('cc-prop-dismiss', 'Dismiss') + '</span>' + why + '</td>';
+  function proposalLabel(p) { return accountLabelFor(p.input.account_id) + ', ' + programLabelFor(p.input.program_id); }
+
+  async function decideProposal(lineId, act, reload) {
+    const p = lineProposals.get(lineId);
+    if (!p) return;
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/tool-proposals/' + p.id + '/' + act, { method: 'POST', body: '{}' });
+    if (!out || !out.res.ok) showError((out && out.data && out.data.error) || 'Could not save the decision.');
+    await reload();
+    if (act === 'accept') await loadLines();
   }
 
-  async function decideCashCodingProposal(lineId, act) {
-    const p = cashCodingProposals.get(lineId);
-    if (!p) return;
+  function renderRowSuggestion(line) {
+    const el = document.getElementById('banking-row-suggest-' + line.id);
+    const p = lineProposals.get(line.id);
+    if (!el) return;
+    if (!p) { el.hidden = true; el.innerHTML = ''; return; }
+    const btn = (cls, text) => '<button type="button" class="' + cls + '" data-line="' + line.id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:0.8125rem;padding:0 6px;">' + text + '</button>';
+    el.hidden = false;
+    el.innerHTML = '<span style="color:var(--text-secondary);">Suggested: ' + esc(proposalLabel(p)) + '</span> <span style="white-space:nowrap;">'
+      + btn('row-prop-why', 'why') + btn('row-prop-accept', 'Accept') + btn('row-prop-edit', 'Edit') + btn('row-prop-dismiss', 'Dismiss') + '</span>'
+      + (proposalWhyOpen.has(line.id) ? '<div style="font-size:0.75rem;color:var(--text-secondary);">' + esc(p.reason || '') + (p.warnings && p.warnings.length ? ' ' + esc(p.warnings.join(' ')) : '') + '</div>' : '');
+  }
+
+  async function useSuggestionsOnTicked() {
+    const ticked = cashCodingLines.filter((l) => cashCodingChecked.has(l.id));
+    if (!ticked.length) { showError('Tick the lines to use suggestions on first.'); return; }
     showError('');
-    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/tool-proposals/' + p.id + '/' + act, { method: 'POST', body: '{}' });
-    if (!out || !out.res.ok) { showError((out && out.data && out.data.error) || 'Could not save the decision.'); }
-    await loadCashCodingGrid();
-    if (act === 'accept') await loadLines();
+    let n = 0;
+    for (const l of ticked) {
+      const p = lineProposals.get(l.id);
+      const first = (cashCodingSplits.get(l.id) || [])[0];
+      if (!p || cashCodingTransfers.has(l.id) || (cashCodingMatchRows.get(l.id) || []).length || (first && first.accountId)) continue;
+      cashCodingSplits.set(l.id, [{ accountId: p.input.account_id, programId: p.input.program_id, grantId: p.input.grant_id || '', restrictionClass: p.input.donor_restriction_class || '', amountCents: null }]);
+      n += 1;
+    }
+    renderCashCodingGrid();
+    setCashCodingStatus(n ? n + ' of ' + ticked.length + ' ticked lines filled from suggestions. Check them, then Save & reconcile all.' : 'None of the ticked lines have a suggestion that can be used (already coded, transfers and lines with a possible match are skipped).');
   }
 
   async function loadCashCodingMatchFlags(queue, token) {
@@ -398,6 +444,7 @@
       { key: 'date', type: 'date', get: (l) => l.statement_date },
       { key: 'payee', type: 'text', get: (l) => l.payee_raw },
       { key: 'description', type: 'text', get: (l) => l.description_raw },
+      { key: 'suggested', type: 'text', get: (l) => { const p = lineProposals.get(l.id); return p ? accountLabelFor(p.input.account_id) : ''; } },
       { key: 'account', type: 'text', get: (l) => accountLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].accountId) },
       { key: 'program', type: 'text', get: (l) => programLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].programId) },
       { key: 'grant', type: 'text', get: (l) => grantLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].grantId) },
@@ -504,6 +551,13 @@
     renderCashCodingGrid();
   }
 
+  function suggestionCell(l) {
+    const p = lineProposals.get(l.id);
+    if (!p) return '<td></td>';
+    const text = accountLabelFor(p.input.account_id);
+    return '<td title="' + esc(text + ', ' + programLabelFor(p.input.program_id) + '. ' + (p.reason || '')) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);">' + esc(text) + '</td>';
+  }
+
   function cashCodingRowsHtml(l) {
     const splits = cashCodingSplits.get(l.id) || [blankSplit()];
     const isTransfer = cashCodingTransfers.has(l.id);
@@ -518,12 +572,10 @@
           + '<td style="white-space:nowrap;">' + esc(String(l.statement_date || '').slice(0, 10)) + '</td>'
           + '<td title="' + esc(l.payee_raw || '') + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(l.payee_raw || '') + '</td>'
           + '<td title="' + esc(l.description_raw || '') + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(l.description_raw || '') + (multi ? ' <span style="color:var(--text-secondary);">(total ' + fmtMoney(magnitude) + ')</span>' : '') + '</td>'
-        : '<td></td><td colspan="3" style="text-align:right;color:var(--text-secondary);">split ' + (i + 1) + '</td>';
+          + suggestionCell(l)
+        : '<td></td><td colspan="4" style="text-align:right;color:var(--text-secondary);">split ' + (i + 1) + '</td>';
       let coding;
-      const proposal = first && !suggested.length && !isTransfer && !sp.accountId ? cashCodingProposals.get(l.id) : null;
-      if (proposal) {
-        coding = proposalCellHtml(l, proposal);
-      } else if (suggested.length && first) {
+      if (suggested.length && first) {
         coding = '<td colspan="4" style="color:var(--text-secondary);">Possible match: ' + esc(suggested[0].label) + (suggested.length > 1 ? ' (+' + (suggested.length - 1) + ')' : '') + '</td>';
       } else if (isTransfer) {
         coding = ccCell(l, i, 'transfer', cashAccountLabelFor(cashCodingTransfers.get(l.id)) || 'Transfer to…')
@@ -552,10 +604,12 @@
     if (!tbody) return;
     const visible = cashCodingLines.filter((l) => cashCodingShowMatches || !(cashCodingMatchRows.get(l.id) || []).length);
     const hidden = cashCodingLines.length - visible.length;
+    const useBtn = document.getElementById('organizational-cashcoding-use-suggestions');
+    if (useBtn) useBtn.hidden = lineProposals.size === 0;
     const showLbl = document.getElementById('organizational-cashcoding-show-label');
     if (showLbl) showLbl.textContent = 'Show lines with suggested matches' + (hidden ? ' (' + hidden + ')' : '');
     if (!visible.length) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="12">' + (cashCodingLines.length ? 'No lines without a suggested match.' : 'No unconfirmed lines.') + '</td></tr>';
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="13">' + (cashCodingLines.length ? 'No lines without a suggested match.' : 'No unconfirmed lines.') + '</td></tr>';
       return;
     }
     tbody.innerHTML = sortedCashCodingLines(visible).map(cashCodingRowsHtml).join('');
@@ -645,17 +699,6 @@
       if (e.target.closest('.cc-match')) {
         const tab = document.querySelector('#organizational-banking-view-tabs [data-view="reconcile"]');
         if (tab) tab.click();
-        return;
-      }
-      const propBtn = e.target.closest('.cc-prop-why, .cc-prop-accept, .cc-prop-edit, .cc-prop-dismiss');
-      if (propBtn) {
-        const id = Number(propBtn.getAttribute('data-line'));
-        if (propBtn.classList.contains('cc-prop-why')) { if (cashCodingProposalWhy.has(id)) cashCodingProposalWhy.delete(id); else cashCodingProposalWhy.add(id); renderCashCodingGrid(); }
-        else if (propBtn.classList.contains('cc-prop-edit')) {
-          const p = cashCodingProposals.get(id);
-          if (p) { cashCodingSplits.set(id, [{ accountId: p.input.account_id, programId: p.input.program_id, grantId: p.input.grant_id || '', restrictionClass: p.input.donor_restriction_class || '', amountCents: null }]); cashCodingChecked.add(id); renderCashCodingGrid(); }
-        }
-        else decideCashCodingProposal(id, propBtn.classList.contains('cc-prop-accept') ? 'accept' : 'dismiss');
         return;
       }
       const menuBtn = e.target.closest('.cc-menu');
@@ -779,6 +822,9 @@
     if (!failed.length) setCashCodingStatus(codings.length + ' reconciled.');
     await loadLines();
   });
+
+  const useSuggestionsBtn = document.getElementById('organizational-cashcoding-use-suggestions');
+  if (useSuggestionsBtn) useSuggestionsBtn.addEventListener('click', useSuggestionsOnTicked);
 
   const applyRulesBtn = document.getElementById('organizational-cashcoding-apply-rules');
 
@@ -966,7 +1012,18 @@
       else showRowError(line.id, (out && out.data && (out.data.message || out.data.error)) || 'Could not code this line.');
     });
 
+    applyProposalPrefill(line);
     applyRuleSuggestion(line).then(() => applyCodingSuggestion(line));
+  }
+
+  function applyProposalPrefill(line) {
+    const input = rowProposalPrefill.get(line.id);
+    if (!input) return;
+    const set = (id, v) => { const el = document.getElementById(id + line.id); if (el && v) el.value = String(v); };
+    set('banking-create-account-', input.account_id);
+    set('banking-create-program-', input.program_id);
+    set('banking-create-grant-', input.grant_id);
+    set('banking-create-restriction-', input.donor_restriction_class);
   }
 
   async function applyRuleSuggestion(line) {

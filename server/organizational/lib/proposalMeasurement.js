@@ -5,7 +5,7 @@
 // Outcome of each proposal. A proposal that expired because the line was coded by hand counts as agreed when the entry has the proposed account and program, otherwise as changed.
 const OUTCOMES_SQL = `
   SELECT p.id, p.created_at, p.proposer_kind, p.model,
-         s.payee_raw, a.name AS account_name,
+         s.payee_raw, a.name AS account_name, COALESCE(p.evidence->>'basis', 'unknown') AS basis,
          CASE
            WHEN p.status = 'accepted' THEN 'agreed'
            WHEN p.status = 'changed' THEN 'changed'
@@ -43,6 +43,7 @@ async function measure(pool, orgId) {
   const worst = (list) => list.filter((e) => e.total >= 2).sort((a, b) => b.override_rate - a.override_rate || b.total - a.total).slice(0, 10);
   return {
     by_month: byMonth,
+    by_source: summarize(rows, (r) => r.basis).sort((a, b) => (a.key < b.key ? -1 : 1)),
     by_payee: worst(summarize(rows, (r) => String(r.payee_raw || '').trim().toLowerCase() || '(no payee)')),
     by_category: worst(summarize(rows, (r) => r.account_name || '(unknown)')),
     open: rows.filter((r) => r.outcome === 'open').length,

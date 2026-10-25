@@ -364,7 +364,7 @@
     holder.innerHTML = '<hr style="border:0;border-top:1px solid var(--border);margin:14px 0;"><p style="margin:0;"><b>How suggestions did</b></p>'
       + (d.by_month.length
         ? '<p class="organizational-hint" style="margin:2px 0 0;">Agreed counts suggestions you accepted, plus lines you coded yourself the same way. ' + d.open + ' waiting.</p>'
-          + resultsTable('By month', 'Month', d.by_month) + resultsTable('Payees overridden most', 'Payee', d.by_payee) + resultsTable('Accounts overridden most', 'Account', d.by_category)
+          + resultsTable('By month', 'Month', d.by_month) + resultsTable('By source', 'Source', (d.by_source || []).map((r) => ({ ...r, key: ({ bank_rule: 'Bank rule', payee_history: 'Earlier coding of the payee', model: 'Loopy (language model)' })[r.key] || r.key }))) + resultsTable('Payees overridden most', 'Payee', d.by_payee) + resultsTable('Accounts overridden most', 'Account', d.by_category)
         : '<p class="organizational-hint" style="margin:2px 0 0;">No suggestions have been decided yet.</p>');
     body.appendChild(holder);
   }

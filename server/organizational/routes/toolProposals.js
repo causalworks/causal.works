@@ -33,7 +33,7 @@ function registerToolProposalRoutes(app, pool) {
 
   app.get('/api/organizational/orgs/:slug/tool-proposals/measurement', ...orgAuth, deciders, async (req, res) => {
     try {
-      if (programScopeFor(req) !== null) return res.json({ by_month: [], by_payee: [], by_category: [], open: 0 });
+      if (programScopeFor(req) !== null) return res.json({ by_month: [], by_source: [], by_payee: [], by_category: [], open: 0 });
       res.json(await measure(pool, req.orgId));
     } catch (e) {
       console.error('GET tool-proposals measurement:', e.message);

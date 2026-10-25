@@ -230,6 +230,7 @@
               <div style="padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--border);">
                 <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-uncheck" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Uncheck all</button>
                 <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-discard" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Discard changes</button>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-use-suggestions" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;" hidden>Use suggestions</button>
                 <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-cashcoding-apply-rules" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Apply rule ▾</button>
                 <button type="button" class="organizational-btn-link" id="organizational-cashcoding-shortcuts" style="font-size:0.8125rem;">Shortcut keys</button>
                 <span class="organizational-hint" id="organizational-cashcoding-shortcuts-hint" hidden style="margin:0;">Shift-click a tick box to tick a range · Ctrl or Cmd+D copies the coding from the line above · Esc closes a list</span>
@@ -239,8 +240,8 @@
               <div class="organizational-table-wrap">
                 <table class="organizational-table" aria-label="Cash Coding grid" style="table-layout:fixed;">
                   <colgroup>
-                    <col style="width:32px;"><col style="width:92px;"><col style="width:12%;"><col style="width:15%;"><col style="width:17%;">
-                    <col style="width:11%;"><col style="width:9%;"><col style="width:8%;"><col style="width:84px;"><col style="width:84px;"><col style="width:28px;"><col style="width:28px;">
+                    <col style="width:32px;"><col style="width:92px;"><col style="width:11%;"><col style="width:12%;"><col style="width:13%;"><col style="width:15%;">
+                    <col style="width:10%;"><col style="width:8%;"><col style="width:7%;"><col style="width:84px;"><col style="width:84px;"><col style="width:28px;"><col style="width:28px;">
                   </colgroup>
                   <thead>
                     <tr>
@@ -248,6 +249,7 @@
                       <th>Date</th>
                       <th>Payee</th>
                       <th>Description</th>
+                      <th>Suggested</th>
                       <th>Account</th>
                       <th>Program</th>
                       <th>Grant</th>
@@ -260,7 +262,7 @@
                   </thead>
                   <tbody id="organizational-cashcoding-tbody">
                     <tr class="organizational-table-empty">
-                      <td colspan="12">No unconfirmed lines.</td>
+                      <td colspan="13">No unconfirmed lines.</td>
                     </tr>
                   </tbody>
                 </table>

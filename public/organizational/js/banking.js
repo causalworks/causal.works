@@ -306,6 +306,7 @@
     });
     document.dispatchEvent(new CustomEvent('banking:view', { detail: { view: currentView } }));
     if (currentView === 'cash-coding') loadCashCodingGrid();
+    if (currentView === 'suggestions') loadSuggestionsQueue();
     if (currentView === 'rules') loadBankRules();
   }));
 
@@ -368,6 +369,78 @@
     if (!out || !out.res.ok) showError((out && out.data && out.data.error) || 'Could not save the decision.');
     await reload();
     if (act === 'accept') await loadLines();
+  }
+
+  // Suggestions queue
+  const SUGGESTION_SOURCES = { bank_rule: 'Bank rule', payee_history: 'Earlier coding', model: 'Loopy' };
+  let queueRows = [];
+
+  async function loadSuggestionsQueue() {
+    const body = document.getElementById('organizational-suggestions-body');
+    const bankAccountId = acctSelect && acctSelect.value;
+    if (!body) return;
+    if (!bankAccountId) { body.innerHTML = '<tr class="organizational-table-empty"><td colspan="8">Choose a bank account.</td></tr>'; return; }
+    await loadLineProposals();
+    const params = new URLSearchParams({ status: 'unconfirmed', bank_account_id: bankAccountId });
+    const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/bank-statement-lines?' + params.toString());
+    const lines = (out && out.data && out.data.lines) || [];
+    queueRows = lines.filter((l) => lineProposals.has(l.id)).map((l) => ({ line: l, p: lineProposals.get(l.id) }));
+    renderSuggestionsQueue();
+  }
+
+  function renderSuggestionsQueue() {
+    const body = document.getElementById('organizational-suggestions-body');
+    const source = document.getElementById('organizational-suggestions-source').value;
+    const rows = queueRows.filter((r) => !source || (r.p.evidence && r.p.evidence.basis) === source);
+    const all = document.getElementById('organizational-suggestions-select-all');
+    if (all) all.checked = false;
+    if (!rows.length) { body.innerHTML = '<tr class="organizational-table-empty"><td colspan="8">' + (queueRows.length ? 'No suggestions from this source.' : 'No suggestions for this account.') + '</td></tr>'; return; }
+    const link = (cls, id, text) => '<button type="button" class="' + cls + '" data-line="' + id + '" style="background:none;border:none;color:var(--green);cursor:pointer;font-size:0.8125rem;padding:0 6px;">' + text + '</button>';
+    body.innerHTML = rows.map(({ line, p }) => (
+      '<tr>'
+      + '<td><input type="checkbox" class="suggestions-tick" data-line="' + line.id + '" aria-label="Select"></td>'
+      + '<td>' + esc(String(line.statement_date || '').slice(0, 10)) + '</td>'
+      + '<td>' + esc(line.payee_raw) + '</td>'
+      + '<td>' + fmtMoney(lineSignedCents(line)) + '</td>'
+      + '<td>' + esc(proposalLabel(p)) + '</td>'
+      + '<td>' + esc(SUGGESTION_SOURCES[p.evidence && p.evidence.basis] || '') + '</td>'
+      + '<td style="font-size:0.75rem;color:var(--text-secondary);">' + esc(p.reason || '') + (p.warnings && p.warnings.length ? ' ' + esc(p.warnings.join(' ')) : '') + '</td>'
+      + '<td style="white-space:nowrap;">' + link('suggestions-accept', line.id, 'Accept') + link('suggestions-dismiss', line.id, 'Dismiss') + '</td>'
+      + '</tr>'
+    )).join('');
+  }
+
+  async function reloadAfterQueueDecision() {
+    await loadSuggestionsQueue();
+    await loadLines();
+  }
+
+  const queueBody = document.getElementById('organizational-suggestions-body');
+  if (queueBody) {
+    queueBody.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-line]');
+      if (!btn) return;
+      const act = btn.classList.contains('suggestions-accept') ? 'accept' : 'dismiss';
+      await decideProposal(Number(btn.getAttribute('data-line')), act, reloadAfterQueueDecision);
+    });
+    document.getElementById('organizational-suggestions-source').addEventListener('change', renderSuggestionsQueue);
+    document.getElementById('organizational-suggestions-select-all').addEventListener('change', (e) => {
+      queueBody.querySelectorAll('.suggestions-tick').forEach((c) => { c.checked = e.target.checked; });
+    });
+    document.getElementById('organizational-suggestions-accept-ticked').addEventListener('click', async () => {
+      const ids = Array.from(queueBody.querySelectorAll('.suggestions-tick:checked')).map((c) => Number(c.getAttribute('data-line')));
+      const status = document.getElementById('organizational-suggestions-status');
+      if (!ids.length) { status.textContent = 'Tick the suggestions to accept.'; return; }
+      let done = 0;
+      for (const id of ids) {
+        status.textContent = 'Accepting ' + (done + 1) + ' of ' + ids.length + '…';
+        const out = await apiJson('/api/organizational/orgs/' + encodeURIComponent(currentSlug) + '/tool-proposals/' + lineProposals.get(id).id + '/accept', { method: 'POST', body: '{}' });
+        if (!out || !out.res.ok) { status.textContent = 'Stopped after ' + done + ': ' + ((out && out.data && out.data.error) || 'could not save.'); break; }
+        done++;
+        if (done === ids.length) status.textContent = 'Accepted ' + done + '.';
+      }
+      await reloadAfterQueueDecision();
+    });
   }
 
   function renderRowSuggestion(line) {

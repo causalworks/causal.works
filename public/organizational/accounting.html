@@ -181,6 +181,7 @@
               <div class="organizational-tabs" id="organizational-banking-view-tabs">
                 <button type="button" class="organizational-tab active" data-view="reconcile">Reconcile</button>
                 <button type="button" class="organizational-tab" data-view="cash-coding">Cash Coding</button>
+                <button type="button" class="organizational-tab" data-view="suggestions">Suggestions</button>
                 <button type="button" class="organizational-tab" data-view="statements">Statements</button>
                 <button type="button" class="organizational-tab" data-view="register">Register</button>
                 <button type="button" class="organizational-tab" data-view="reconcile-month">Reconcile Period</button>
@@ -267,6 +268,39 @@
               </div>
               <div style="position:sticky;bottom:0;padding:10px 16px;display:flex;justify-content:center;border-top:1px solid var(--border);background:var(--surface-card);">
                 <button type="button" class="organizational-btn organizational-btn-primary" id="organizational-cashcoding-save-all">Save &amp; reconcile all</button>
+              </div>
+            </section>
+
+            <section class="organizational-card organizational-card-flush organizational-tab-content" id="organizational-banking-view-suggestions">
+              <div style="padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid var(--border);">
+                <select id="organizational-suggestions-source" aria-label="Source" style="height:30px;box-sizing:border-box;font-size:0.8125rem;">
+                  <option value="">All sources</option>
+                  <option value="bank_rule">Bank rule</option>
+                  <option value="payee_history">Earlier coding</option>
+                  <option value="model">Loopy</option>
+                </select>
+                <button type="button" class="organizational-btn organizational-btn-outline" id="organizational-suggestions-accept-ticked" style="height:30px;box-sizing:border-box;font-size:0.8125rem;padding:0 12px;">Accept ticked</button>
+                <span class="organizational-hint" id="organizational-suggestions-status" style="margin:0;flex:1;"></span>
+              </div>
+              <div class="organizational-table-wrap">
+                <table class="organizational-table" aria-label="Suggestions" style="table-layout:fixed;">
+                  <colgroup><col style="width:32px;"><col style="width:92px;"><col style="width:16%;"><col style="width:96px;"><col style="width:22%;"><col style="width:110px;"><col><col style="width:170px;"></colgroup>
+                  <thead>
+                    <tr>
+                      <th><input type="checkbox" id="organizational-suggestions-select-all" aria-label="Select all"></th>
+                      <th>Date</th>
+                      <th>Payee</th>
+                      <th>Amount</th>
+                      <th>Suggested</th>
+                      <th>Source</th>
+                      <th>Why</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="organizational-suggestions-body">
+                    <tr class="organizational-table-empty"><td colspan="8">No suggestions.</td></tr>
+                  </tbody>
+                </table>
               </div>
             </section>
 

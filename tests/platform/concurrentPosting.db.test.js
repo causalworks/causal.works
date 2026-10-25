@@ -101,3 +101,16 @@ test('first-use receivable account creation is safe under simultaneous requests'
   const ids = await Promise.all(Array.from({ length: 5 }, () => inOrg(w, async () => (await scoped.query('SELECT org_get_or_create_ar_account($1) AS id', [w.orgId])).rows[0].id)));
   assert.equal(new Set(ids).size, 1);
 });
+
+test('five simultaneous disposals of one asset post once', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  const assetId = (await inOrg(w, () => scoped.query(
+    `INSERT INTO org_fixed_assets (org_id, name, asset_account_id, accumulated_depreciation_account_id, depreciation_expense_account_id,
+        acquisition_date, cost_cents, useful_life_months, program_id) VALUES ($1, 'Desk', $2, $3, $4, '2026-01-31', 120000, 12, $5) RETURNING id`,
+    [w.orgId, w.asset, w.accum, w.expense, w.program]))).rows[0].id;
+  const h = routes['/api/organizational/orgs/:slug/fixed-assets/:id/dispose'];
+  const outs = await Promise.all(Array.from({ length: 5 }, () => call(h, w, { params: { id: String(assetId) }, body: { disposal_date: '2026-06-30', gain_loss_account_id: w.income } })));
+  assert.equal(outs.filter((o) => o.status === 200).length, 1, JSON.stringify(outs.map((o) => o.status)));
+  const n = (await inOrg(w, () => scoped.query(`SELECT COUNT(*)::int AS n FROM org_ledger_transactions WHERE org_id = $1 AND source = 'fixed_asset_disposal' AND status = 'posted'`, [w.orgId]))).rows[0].n;
+  assert.equal(n, 1);
+});

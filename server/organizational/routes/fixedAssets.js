@@ -7,35 +7,11 @@ const { waitingForAnAsset } = require('../lib/fixedAssetWaiting');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { logAudit, diffFields, reqMeta } = require('../lib/auditLog');
-const { postLedgerTransaction, voidLedgerTransaction } = require('../lib/ledgerPosting');
-const { acquireDocumentLock } = require('../lib/documentLock');
+const { runTool, ctxFromReq } = require('../tools');
+const { computeDuePeriods } = require('../lib/fixedAssetDepreciation');
 const { fyDateRange, getFiscalYearEndMonth } = require('../lib/fiscalYear');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function lastDayOfMonthIso(year, month) {
-  const day = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function depreciationSchedule(asset) {
-  const base = Number(asset.cost_cents) - Number(asset.salvage_value_cents);
-  const months = asset.useful_life_months;
-  const monthlyCents = Math.floor(base / months);
-  const acqDate = new Date(asset.acquisition_date + 'T00:00:00');
-  let year = acqDate.getFullYear();
-  let month = acqDate.getMonth() + 1;
-  const periods = [];
-  let runningTotal = 0;
-  for (let i = 1; i <= months; i++) {
-    const amount = i === months ? (base - runningTotal) : monthlyCents;
-    runningTotal += amount;
-    periods.push({ period_date: lastDayOfMonthIso(year, month), amount_cents: amount });
-    month += 1;
-    if (month > 12) { month = 1; year += 1; }
-  }
-  return periods;
-}
 
 function rowToAsset(row) {
   const costCents = Number(row.cost_cents);
@@ -306,34 +282,11 @@ function registerFixedAssetRoutes(app, pool) {
     }
   });
 
-  async function computeDuePeriods(orgId, throughDate) {
-    const assetsR = await pool.query(
-      `SELECT * FROM org_fixed_assets WHERE org_id = $1 AND status = 'active' AND acquisition_date <= $2`,
-      [orgId, throughDate]
-    );
-    const due = [];
-    for (const asset of assetsR.rows) {
-      const schedule = depreciationSchedule(asset);
-      const postedR = await pool.query(
-        `SELECT period_date::text AS period_date FROM org_fixed_asset_depreciation_entries WHERE fixed_asset_id = $1`,
-        [asset.id]
-      );
-      const postedSet = new Set(postedR.rows.map((r) => r.period_date));
-      for (const period of schedule) {
-        if (period.period_date > throughDate) break;
-        if (postedSet.has(period.period_date)) continue;
-        if (asset.prior_depreciation_through && period.period_date <= String(asset.prior_depreciation_through).slice(0, 10)) continue;
-        due.push({ asset_id: asset.id, asset_name: asset.name, period_date: period.period_date, amount_cents: period.amount_cents, asset });
-      }
-    }
-    return due;
-  }
-
   app.get('/api/organizational/orgs/:slug/fixed-assets/run-depreciation-preview', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
     const throughDate = req.query.through_date != null ? String(req.query.through_date) : null;
     if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
     try {
-      const due = await computeDuePeriods(req.orgId, throughDate);
+      const due = await computeDuePeriods(pool, req.orgId, throughDate);
       return res.json({
         periods: due.map((d) => ({ asset_id: d.asset_id, asset_name: d.asset_name, period_date: d.period_date, amount_cents: String(d.amount_cents) })),
         total_cents: String(due.reduce((s, d) => s + d.amount_cents, 0)),
@@ -345,135 +298,23 @@ function registerFixedAssetRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/fixed-assets/run-depreciation', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const throughDate = req.body && req.body.through_date != null ? String(req.body.through_date) : null;
-    if (!throughDate || !DATE_RE.test(throughDate)) return res.status(400).json({ error: 'through_date is required and must be YYYY-MM-DD' });
-
-    const docLock = await acquireDocumentLock(pool, 'fixed-assets:' + orgId);
     try {
-      const due = await computeDuePeriods(orgId, throughDate);
-      const posted = [];
-      const failed = [];
-      for (const d of due) {
-        const asset = d.asset;
-        const result = await postLedgerTransaction(pool, {
-          orgId, userId, transactionDate: d.period_date,
-          memo: 'Depreciation: ' + asset.name + ' (' + d.period_date + ')',
-          payee: null, referenceNumber: null,
-          lines: [
-            { account_id: asset.depreciation_expense_account_id, program_id: asset.program_id, debit_cents: d.amount_cents, credit_cents: 0 },
-            { account_id: asset.accumulated_depreciation_account_id, program_id: asset.program_id, debit_cents: 0, credit_cents: d.amount_cents },
-          ],
-          source: 'fixed_asset_depreciation',
-        });
-        if (result.httpStatus >= 400) {
-          failed.push({ asset_id: d.asset_id, period_date: d.period_date, error: result.body.error || result.body.message });
-          continue;
-        }
-        const insertR = await pool.query(
-          `INSERT INTO org_fixed_asset_depreciation_entries (org_id, fixed_asset_id, period_date, amount_cents, ledger_transaction_id)
-           VALUES ($1,$2,$3,$4,$5)
-           ON CONFLICT (fixed_asset_id, period_date) DO NOTHING
-           RETURNING id`,
-          [orgId, d.asset_id, d.period_date, d.amount_cents, result.body.id]
-        );
-        if (!insertR.rows.length) {
-          await voidLedgerTransaction(pool, { orgId, userId, transactionId: result.body.id, voidReason: 'Depreciation for this period was already recorded' });
-          continue;
-        }
-        posted.push({ asset_id: d.asset_id, period_date: d.period_date, amount_cents: String(d.amount_cents), ledger_transaction_id: result.body.id });
-      }
-
-      const assetIds = [...new Set(due.map((d) => d.asset_id))];
-      if (assetIds.length) {
-        await pool.query(
-          `UPDATE org_fixed_assets fa
-           SET status = 'fully_depreciated'
-           WHERE fa.id = ANY($1::int[]) AND fa.org_id = $2 AND fa.status = 'active'
-             AND (SELECT COALESCE(SUM(amount_cents), 0) FROM org_fixed_asset_depreciation_entries e WHERE e.fixed_asset_id = fa.id)
-                 >= (fa.cost_cents - fa.salvage_value_cents)`,
-          [assetIds, orgId]
-        );
-      }
-
-      await logAudit(pool, { orgId, userId, action: 'create', tableName: 'org_fixed_asset_depreciation_entries', metadata: { ...reqMeta(req), through_date: throughDate, posted_count: posted.length, failed_count: failed.length } });
-      return res.json({ posted, failed, posted_count: posted.length, failed_count: failed.length });
+      const result = await runTool('fixed_assets.run_depreciation', ctxFromReq(pool, req), req.body || {});
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /fixed-assets/run-depreciation:', e.message);
       return res.status(500).json({ error: 'Could not run depreciation' });
-    } finally { await docLock.release(); }
+    }
   });
 
   app.post('/api/organizational/orgs/:slug/fixed-assets/:id/dispose', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const assetId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(assetId) || assetId < 1) return res.status(400).json({ error: 'invalid asset id' });
-    const body = req.body || {};
-    const disposalDate = body.disposal_date != null ? String(body.disposal_date) : null;
-    if (!disposalDate || !DATE_RE.test(disposalDate)) return res.status(400).json({ error: 'disposal_date is required and must be YYYY-MM-DD' });
-    const proceedsCents = body.disposal_proceeds_cents != null ? Number.parseInt(String(body.disposal_proceeds_cents), 10) : 0;
-    if (!Number.isInteger(proceedsCents) || proceedsCents < 0) return res.status(400).json({ error: 'disposal_proceeds_cents must be a non-negative integer if provided' });
-    const bankAccountId = body.bank_account_id != null && body.bank_account_id !== '' ? Number.parseInt(String(body.bank_account_id), 10) : null;
-    if (proceedsCents > 0 && !bankAccountId) return res.status(400).json({ error: 'bank_account_id is required when disposal_proceeds_cents is greater than 0' });
-    const gainLossAccountId = body.gain_loss_account_id != null && body.gain_loss_account_id !== '' ? Number.parseInt(String(body.gain_loss_account_id), 10) : null;
-
-    const docLock = await acquireDocumentLock(pool, 'fixed-assets:' + orgId);
     try {
-      const assetR = await pool.query(
-        `SELECT fa.*, COALESCE((SELECT SUM(amount_cents) FROM org_fixed_asset_depreciation_entries e WHERE e.fixed_asset_id = fa.id), 0) + fa.prior_depreciation_cents AS accumulated_depreciation_cents
-         FROM org_fixed_assets fa WHERE fa.id = $1 AND fa.org_id = $2`,
-        [assetId, orgId]
-      );
-      if (!assetR.rows.length) return res.status(404).json({ error: 'Fixed asset not found' });
-      const asset = assetR.rows[0];
-      if (asset.status === 'disposed') return res.status(409).json({ error: 'This asset has already been disposed', code: 'already_disposed' });
-
-      const costCents = Number(asset.cost_cents);
-      const accumulatedCents = Number(asset.accumulated_depreciation_cents);
-      const netBookValueCents = costCents - accumulatedCents;
-      const gainLossCents = proceedsCents - netBookValueCents;
-
-      if (gainLossCents !== 0 && !gainLossAccountId) {
-        return res.status(400).json({
-          error: 'gain_loss_account_id is required: disposal_proceeds_cents (' + proceedsCents + ') does not equal net book value (' + netBookValueCents + '), producing a ' + (gainLossCents > 0 ? 'gain' : 'loss') + ' of ' + Math.abs(gainLossCents) + ' cents that needs an account to post to.',
-          code: 'gain_loss_account_required',
-        });
-      }
-
-      const lines = [
-        { account_id: asset.asset_account_id, program_id: asset.program_id, debit_cents: 0, credit_cents: costCents },
-      ];
-      if (accumulatedCents > 0) {
-        lines.push({ account_id: asset.accumulated_depreciation_account_id, program_id: asset.program_id, debit_cents: accumulatedCents, credit_cents: 0 });
-      }
-      if (proceedsCents > 0) {
-        lines.push({ account_id: bankAccountId, program_id: asset.program_id, debit_cents: proceedsCents, credit_cents: 0 });
-      }
-      if (gainLossCents > 0) {
-        lines.push({ account_id: gainLossAccountId, program_id: asset.program_id, debit_cents: 0, credit_cents: gainLossCents });
-      } else if (gainLossCents < 0) {
-        lines.push({ account_id: gainLossAccountId, program_id: asset.program_id, debit_cents: -gainLossCents, credit_cents: 0 });
-      }
-
-      const result = await postLedgerTransaction(pool, {
-        orgId, userId, transactionDate: disposalDate,
-        memo: 'Disposal: ' + asset.name,
-        payee: null, referenceNumber: null,
-        lines, source: 'fixed_asset_disposal',
-      });
-      if (result.httpStatus >= 400) return res.status(result.httpStatus).json(result.body);
-
-      await pool.query(
-        `UPDATE org_fixed_assets SET status = 'disposed', disposal_date = $1, disposal_proceeds_cents = $2 WHERE id = $3 AND org_id = $4`,
-        [disposalDate, proceedsCents, assetId, orgId]
-      );
-      return res.json({ id: assetId, status: 'disposed', ledger_transaction_id: result.body.id, gain_loss_cents: String(gainLossCents) });
+      const result = await runTool('fixed_assets.dispose', ctxFromReq(pool, req), { ...(req.body || {}), id: req.params.id });
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /fixed-assets/:id/dispose:', e.message);
       return res.status(500).json({ error: 'Could not dispose of this asset' });
-    } finally { await docLock.release(); }
+    }
   });
 
   app.get('/api/organizational/orgs/:slug/fixed-assets/schedule-d', ...orgAuth, requireAccountingAccess(pool, 'reports'), async (req, res) => {

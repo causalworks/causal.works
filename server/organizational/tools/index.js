@@ -5,6 +5,8 @@
 require('./payments');
 require('./expenseClaims');
 require('./giftsAndDisbursements');
+require('./fixedAssets');
+require('./ledgerSetup');
 const { runTool, listTools } = require('./registry');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');

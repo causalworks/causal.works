@@ -7,15 +7,12 @@ const { requireAuth } = require('../../auth');
 const { requireOrganizationalAccess } = require('../middleware/requireOrganizationalAccess');
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingWriter } = require('../middleware/requireAccountingAccess');
-const {
-  postLedgerTransaction, voidLedgerTransaction, isFiscalYearLocked, buildReversingLines,
-} = require('../lib/ledgerPosting');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 const { extractReceiptFields } = require('../lib/receiptOcr');
 const { sendExpenseClaimMessageEmail } = require('../lib/sendExpenseClaimMessageEmail');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
-const { acquireDocumentLock } = require('../lib/documentLock');
+const { runTool, ctxFromReq } = require('../tools');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -404,103 +401,19 @@ function registerExpenseClaimRoutes(app, pool) {
     const r = await pool.query(`SELECT * FROM org_expense_claim_lines WHERE claim_id = $1`, [claimId]);
     return r.rows;
   }
-  async function requireReceipt(orgId, claimId) {
-    const r = await pool.query(
-      `SELECT 1 FROM org_documents WHERE org_id = $1 AND source_ref_type = 'expense_claim' AND source_ref_id = $2 AND archived_at IS NULL LIMIT 1`,
-      [orgId, claimId]
-    );
-    return r.rows.length > 0;
-  }
   async function getApprovalMode(orgId) {
     const r = await pool.query(`SELECT expense_claim_approval_mode FROM org_settings WHERE org_id = $1`, [orgId]);
     return (r.rows[0] && r.rows[0].expense_claim_approval_mode) || 'pre_approval';
   }
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/submit', ...orgAuth, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const claimId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(claimId) || claimId < 1) return res.status(400).json({ error: 'invalid claim id' });
-    const body = req.body || {};
-
-    const docLock = await acquireDocumentLock(pool, 'claim:' + claimId);
     try {
-    try {
-      const claim = await loadOwnClaim(orgId, claimId);
-      if (!claim) return res.status(404).json({ error: 'Expense claim not found' });
-      const lines = await loadClaimLines(claimId);
-      if (!headerProgramsInScope(req, lines.map((l) => l.program_id))) {
-        return res.status(404).json({ error: 'Expense claim not found' });
-      }
-      if (claim.status !== 'draft') return res.status(409).json({ error: `Claim is not a draft (status: ${claim.status})`, code: 'not_draft' });
-      if (!lines.length) return res.status(422).json({ error: 'Claim has no line items' });
-      const claimTotalCents = lines.reduce((s, l) => s + Number(l.amount_cents), 0);
-
-      if (!(await requireReceipt(orgId, claimId))) {
-        const settingsR = await pool.query(`SELECT expense_claim_receipt_required_threshold_cents FROM org_settings WHERE org_id = $1`, [orgId]);
-        const thresholdCents = (settingsR.rows[0] && settingsR.rows[0].expense_claim_receipt_required_threshold_cents) || 0;
-        const exempt = claimTotalCents < thresholdCents;
-        const hasAffidavit = claim.receipt_affidavit_at != null;
-        if (!exempt && !hasAffidavit) {
-          return res.status(422).json({
-            error: 'A receipt is required before submitting, or file a missing-receipt affidavit',
-            code: 'receipt_or_affidavit_required',
-            threshold_cents: String(thresholdCents),
-            claim_total_cents: String(claimTotalCents),
-          });
-        }
-      }
-
-      const mode = await getApprovalMode(orgId);
-      const submitterR = await pool.query(`SELECT email FROM users WHERE id = $1`, [claim.submitted_by]);
-      const submitterName = submitterR.rows[0] ? submitterR.rows[0].email : null;
-
-      if (mode === 'pre_approval') {
-        await pool.query(`UPDATE org_expense_claims SET status = 'pending_approval', updated_at = NOW() WHERE id = $1 AND org_id = $2`, [claimId, orgId]);
-        return res.json({ id: claimId, status: 'pending_approval' });
-      }
-
-      const bankAccountId = Number.parseInt(String(body.bank_account_id), 10);
-      if (!Number.isInteger(bankAccountId) || bankAccountId < 1) {
-        return res.status(400).json({ error: 'bank_account_id is required to pay this claim now (post-payout approval mode)' });
-      }
-      const totalCents = claimTotalCents;
-      const ledgerLines = lines.map((l) => ({
-        account_id: l.account_id, program_id: l.program_id, grant_id: l.grant_id,
-        debit_cents: Number(l.amount_cents), credit_cents: 0, line_memo: l.line_memo,
-        source_line_type: 'org_expense_claim_lines', source_line_id: l.id,
-      }));
-      ledgerLines.push({
-        account_id: bankAccountId, program_id: lines[0].program_id, grant_id: null,
-        debit_cents: 0, credit_cents: totalCents,
-        line_memo: `Reimbursement paid to ${submitterName || 'claimant'} for expense claim #${claimId}`,
-      });
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId, userId, transactionDate: claim.claim_date,
-        memo: `Expense claim #${claimId} (${submitterName || 'claimant'}) -- paid, confirmation pending`,
-        payee: submitterName, referenceNumber: null,
-        lines: ledgerLines, source: 'expense_claim_approval',
-      });
-      if (postResult.httpStatus >= 400) return res.status(postResult.httpStatus).json(postResult.body);
-
-      await pool.query(
-        `UPDATE org_expense_claims
-         SET status = 'paid_pending_confirmation', ledger_transaction_id = $1, payment_ledger_transaction_id = $1, bank_account_id = $2, updated_at = NOW()
-         WHERE id = $3 AND org_id = $4`,
-        [postResult.body.id, bankAccountId, claimId, orgId]
-      );
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_expense_claims', recordId: claimId,
-        fields: [{ fieldName: 'status', oldValue: 'draft', newValue: 'paid_pending_confirmation' }],
-        metadata: { ...reqMeta(req), ledger_transaction_id: postResult.body.id, approval_mode: 'post_payout' },
-      }).catch(() => {});
-      return res.json({ id: claimId, status: 'paid_pending_confirmation', ledger_transaction_id: postResult.body.id });
+      const result = await runTool('expense_claim.submit', ctxFromReq(pool, req), { id: req.params.id, bank_account_id: (req.body || {}).bank_account_id });
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /expense-claims/:id/submit:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not submit this expense claim' });
     }
-    } finally { await docLock.release(); }
   });
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/receipt-affidavit', ...orgAuth, async (req, res) => {
@@ -614,128 +527,23 @@ function registerExpenseClaimRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/approve', ...orgAuth, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const claimId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(claimId) || claimId < 1) return res.status(400).json({ error: 'invalid claim id' });
-
-    const docLock = await acquireDocumentLock(pool, 'claim:' + claimId);
     try {
-    try {
-      const claim = await loadOwnClaim(orgId, claimId);
-      if (!claim) return res.status(404).json({ error: 'Expense claim not found' });
-      if (!headerProgramsInScope(req, (await loadClaimLines(claimId)).map((l) => l.program_id))) {
-        return res.status(404).json({ error: 'Expense claim not found' });
-      }
-      if (claim.status !== 'pending_approval') return res.status(409).json({ error: `Claim is not awaiting approval (status: ${claim.status})`, code: 'not_pending_approval' });
-      if (claim.submitted_by === userId) {
-        return res.status(403).json({ error: 'You cannot approve your own expense claim', code: 'self_approval_blocked' });
-      }
-      if (!['admin', 'board'].includes(String(req.coopOrgRole))) {
-        return res.status(403).json({ error: 'Only an admin or board member can approve an expense claim', code: 'role_not_permitted' });
-      }
-
-      const lines = await loadClaimLines(claimId);
-      const submitterR = await pool.query(`SELECT email FROM users WHERE id = $1`, [claim.submitted_by]);
-      const submitterName = submitterR.rows[0] ? submitterR.rows[0].email : null;
-      const payableAccountR = await pool.query(`SELECT org_get_or_create_expense_claims_payable_account($1) AS id`, [orgId]);
-      const payableAccountId = payableAccountR.rows[0].id;
-      const totalCents = lines.reduce((s, l) => s + Number(l.amount_cents), 0);
-
-      await pool.query(`UPDATE org_expense_claims SET approved_by = $1, approved_at = NOW() WHERE id = $2 AND org_id = $3`, [userId, claimId, orgId]);
-
-      const ledgerLines = lines.map((l) => ({
-        account_id: l.account_id, program_id: l.program_id, grant_id: l.grant_id,
-        debit_cents: Number(l.amount_cents), credit_cents: 0, line_memo: l.line_memo,
-        source_line_type: 'org_expense_claim_lines', source_line_id: l.id,
-      }));
-      ledgerLines.push({
-        account_id: payableAccountId, program_id: lines[0].program_id, grant_id: null,
-        debit_cents: 0, credit_cents: totalCents,
-        line_memo: `Expense Claims Payable for claim #${claimId}`,
-      });
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId, userId, transactionDate: claim.claim_date,
-        memo: `Expense claim #${claimId} (${submitterName || 'claimant'}) -- approved`,
-        payee: submitterName, referenceNumber: null,
-        lines: ledgerLines, source: 'expense_claim_approval',
-        internalApproval: { approvedBy: userId, sourceRefId: claimId, sourceRefType: 'expense_claim' },
-      });
-      if (postResult.httpStatus >= 400) {
-        await pool.query(`UPDATE org_expense_claims SET approved_by = NULL, approved_at = NULL WHERE id = $1 AND org_id = $2`, [claimId, orgId]);
-        return res.status(postResult.httpStatus).json(postResult.body);
-      }
-
-      await pool.query(`UPDATE org_expense_claims SET status = 'approved', ledger_transaction_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`, [postResult.body.id, claimId, orgId]);
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_expense_claims', recordId: claimId,
-        fields: [{ fieldName: 'status', oldValue: 'pending_approval', newValue: 'approved' }],
-        metadata: { ...reqMeta(req), ledger_transaction_id: postResult.body.id },
-      }).catch(() => {});
-      return res.json({ id: claimId, status: 'approved', ledger_transaction_id: postResult.body.id });
+      const result = await runTool('expense_claim.approve', ctxFromReq(pool, req), { id: req.params.id });
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /expense-claims/:id/approve:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not approve this expense claim' });
     }
-    } finally { await docLock.release(); }
   });
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/pay', ...orgAuth, requireAccountingWriter(pool), async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const claimId = Number.parseInt(String(req.params.id), 10);
-    const body = req.body || {};
-    if (!Number.isInteger(claimId) || claimId < 1) return res.status(400).json({ error: 'invalid claim id' });
-    const bankAccountId = Number.parseInt(String(body.bank_account_id), 10);
-    if (!Number.isInteger(bankAccountId) || bankAccountId < 1) return res.status(400).json({ error: 'bank_account_id is required' });
-    const paymentDate = body.payment_date != null ? String(body.payment_date) : null;
-    if (!paymentDate || !DATE_RE.test(paymentDate)) return res.status(400).json({ error: 'payment_date is required and must be YYYY-MM-DD' });
-
-    const docLock = await acquireDocumentLock(pool, 'claim:' + claimId);
     try {
-    try {
-      const claim = await loadOwnClaim(orgId, claimId);
-      if (!claim) return res.status(404).json({ error: 'Expense claim not found' });
-      const lines = await loadClaimLines(claimId);
-      if (!headerProgramsInScope(req, lines.map((l) => l.program_id))) {
-        return res.status(404).json({ error: 'Expense claim not found' });
-      }
-      if (claim.status !== 'approved') return res.status(409).json({ error: `Claim is not approved (status: ${claim.status})`, code: 'not_approved' });
-
-      const totalCents = lines.reduce((s, l) => s + Number(l.amount_cents), 0);
-      const payableAccountR = await pool.query(`SELECT org_get_or_create_expense_claims_payable_account($1) AS id`, [orgId]);
-      const payableAccountId = payableAccountR.rows[0].id;
-      const submitterR = await pool.query(`SELECT email FROM users WHERE id = $1`, [claim.submitted_by]);
-      const submitterName = submitterR.rows[0] ? submitterR.rows[0].email : null;
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId, userId, transactionDate: paymentDate,
-        memo: `Reimbursement paid: expense claim #${claimId} (${submitterName || 'claimant'})`,
-        payee: submitterName, referenceNumber: null,
-        lines: [
-          { account_id: payableAccountId, program_id: lines[0].program_id, grant_id: null, debit_cents: totalCents, credit_cents: 0 },
-          { account_id: bankAccountId, program_id: lines[0].program_id, grant_id: null, debit_cents: 0, credit_cents: totalCents },
-        ],
-        source: 'expense_claim_payment',
-      });
-      if (postResult.httpStatus >= 400) return res.status(postResult.httpStatus).json(postResult.body);
-
-      await pool.query(
-        `INSERT INTO org_expense_claim_payments (org_id, claim_id, payment_date, amount_cents, bank_account_id, ledger_transaction_id, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [orgId, claimId, paymentDate, totalCents, bankAccountId, postResult.body.id, userId]
-      );
-      await pool.query(
-        `UPDATE org_expense_claims SET status = 'paid', payment_ledger_transaction_id = $1, bank_account_id = $2, updated_at = NOW() WHERE id = $3 AND org_id = $4`,
-        [postResult.body.id, bankAccountId, claimId, orgId]
-      );
-      return res.json({ id: claimId, status: 'paid', ledger_transaction_id: postResult.body.id });
+      const result = await runTool('expense_claim.pay', ctxFromReq(pool, req), { ...(req.body || {}), id: req.params.id });
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /expense-claims/:id/pay:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not record payment for this expense claim' });
     }
-    } finally { await docLock.release(); }
   });
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/confirm', ...orgAuth, async (req, res) => {
@@ -770,68 +578,15 @@ function registerExpenseClaimRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/expense-claims/:id/void', ...orgAuth, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const claimId = Number.parseInt(String(req.params.id), 10);
-    const reason = req.body && req.body.reason != null ? String(req.body.reason).trim() : '';
-    if (!Number.isInteger(claimId) || claimId < 1) return res.status(400).json({ error: 'invalid claim id' });
-    if (!reason) return res.status(400).json({ error: 'reason is required' });
-
     try {
-      const claim = await loadOwnClaim(orgId, claimId);
-      if (!claim) return res.status(404).json({ error: 'Expense claim not found' });
-      if (!headerProgramsInScope(req, (await loadClaimLines(claimId)).map((l) => l.program_id))) {
-        return res.status(404).json({ error: 'Expense claim not found' });
-      }
-      if (['void', 'disputed'].includes(claim.status)) return res.status(409).json({ error: `Claim is already ${claim.status}`, code: 'already_terminal' });
-      const ownUnposted = claim.submitted_by === userId && !claim.ledger_transaction_id && !claim.payment_ledger_transaction_id;
-      if (!ownUnposted) {
-        let allowed = false;
-        await requireAccountingWriter(pool)(req, res, () => { allowed = true; });
-        if (!allowed) return;
-      }
-
-      const wasPaidOut = ['paid', 'paid_pending_confirmation', 'confirmed'].includes(claim.status);
-      const newStatus = ['paid_pending_confirmation', 'confirmed'].includes(claim.status) ? 'disputed' : 'void';
-
-      async function voidOrReverse(transactionId) {
-        const txnR = await pool.query(`SELECT * FROM org_ledger_transactions WHERE id = $1 AND org_id = $2`, [transactionId, orgId]);
-        const txn = txnR.rows[0];
-        if (!txn || txn.status === 'voided') return;
-        const locked = await isFiscalYearLocked(pool, orgId, txn.fiscal_year);
-        if (!locked) {
-          await voidLedgerTransaction(pool, { orgId, userId, transactionId, voidReason: reason });
-          return;
-        }
-        const originalLinesR = await pool.query(
-          `SELECT account_id, program_id, grant_id, donor_restriction_class::text AS donor_restriction_class, board_designation_id, debit_cents, credit_cents, line_memo
-           FROM org_ledger_lines WHERE transaction_id = $1`,
-          [transactionId]
-        );
-        const reversingLines = buildReversingLines(originalLinesR.rows);
-        await postLedgerTransaction(pool, {
-          orgId, userId, transactionDate: new Date().toISOString().slice(0, 10),
-          memo: `Reversal of expense claim #${claimId} transaction ${transactionId} (locked FY${txn.fiscal_year}): ${reason}`,
-          payee: null, referenceNumber: null, lines: reversingLines,
-          source: txn.source, reversesTransactionId: transactionId,
-        });
-      }
-
-      if (claim.ledger_transaction_id) await voidOrReverse(claim.ledger_transaction_id);
-      if (claim.payment_ledger_transaction_id && claim.payment_ledger_transaction_id !== claim.ledger_transaction_id) {
-        await voidOrReverse(claim.payment_ledger_transaction_id);
-      }
-
-      await pool.query(
-        `UPDATE org_expense_claims SET status = $1, disputed_reason = $2, updated_at = NOW() WHERE id = $3 AND org_id = $4`,
-        [newStatus, newStatus === 'disputed' ? reason : null, claimId, orgId]
-      );
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_expense_claims', recordId: claimId,
-        fields: [{ fieldName: 'status', oldValue: claim.status, newValue: newStatus }],
-        metadata: { ...reqMeta(req), reason, was_paid_out: wasPaidOut },
-      }).catch(() => {});
-      return res.json({ id: claimId, status: newStatus });
+      const ctx = ctxFromReq(pool, req);
+      ctx.accountingWriter = () => new Promise((resolve) => {
+        const refusal = { httpStatus: 403, body: null };
+        const capture = { status(code) { refusal.httpStatus = code; return capture; }, json(b) { refusal.body = b; resolve(refusal); return capture; } };
+        requireAccountingWriter(pool)(req, capture, () => resolve(null));
+      });
+      const result = await runTool('expense_claim.void', ctx, { id: req.params.id, reason: req.body && req.body.reason });
+      return res.status(result.httpStatus).json(result.body);
     } catch (e) {
       console.error('POST /expense-claims/:id/void:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not void this expense claim' });

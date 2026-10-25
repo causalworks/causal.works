@@ -1,6 +1,5 @@
 'use strict';
 
-const { recordPledgeInstallmentReceipt } = require('../lib/pledgeReceipt');
 const { NS, withLock, BUSY } = require('../lib/advisoryLock');
 const { findExpectedGifts } = require('../lib/giftMatch');
 const { scoreCandidate } = require('../lib/bankMatchScore');
@@ -947,9 +946,9 @@ function registerBankingRoutes(app, pool) {
       if (result.httpStatus >= 400) return result;
       ledgerTransactionId = result.body.ledger_transaction_id;
     } else if (matchType === 'pledge_installment') {
-      const result = await recordPledgeInstallmentReceipt(pool, {
-        orgId, userId, installmentId: targetId, bankAccountId: line.bank_account_id,
-        date: String(line.statement_date).slice(0, 10), amountCents: Number(line.amount_cents),
+      const result = await runTool('pledge_installment.receive', ctxForUser(pool, orgId, userId), {
+        id: targetId, bank_account_id: line.bank_account_id,
+        date: String(line.statement_date).slice(0, 10), amount_cents: Number(line.amount_cents),
         reference: line.payee_raw || line.description_raw || null,
       });
       if (result.httpStatus >= 400) return result;

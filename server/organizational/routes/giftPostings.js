@@ -11,7 +11,7 @@ const { requireAccountingAccess } = require('../middleware/requireAccountingAcce
 const { postInKindGift, postPledgeCommitment, voidGiftPosting } = require('../lib/giftPosting');
 const { computeDuePledgeAccretionPeriods, runPledgeAccretion } = require('../lib/pledgeAccretion');
 const { linkOrReclassifyGrantGiftTransaction } = require('../lib/grantGiftPayment');
-const { postDisbursement, unpostDisbursement } = require('../lib/disbursementPosting');
+const { runTool, ctxFromReq } = require('../tools');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -185,12 +185,7 @@ function registerGiftPostingRoutes(app, pool) {
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'invalid disbursement id' });
     const b = req.body || {};
     try {
-      const out = await postDisbursement(pool, {
-        orgId: req.orgId, userId: req.user.user_id ?? req.user.id, disbursementId: id, postingDate: b.posting_date != null ? String(b.posting_date) : null,
-        expenseAccountId: b.expense_account_id != null ? Number(b.expense_account_id) : undefined,
-        bankAccountId: b.bank_account_id != null ? Number(b.bank_account_id) : undefined,
-        programId: b.program_id != null ? Number(b.program_id) : undefined,
-      });
+      const out = await runTool('disbursement.post', ctxFromReq(pool, req), { ...b, id });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) { console.error('POST disbursement post:', e.message); return res.status(500).json({ error: 'Could not post the disbursement' }); }
   });
@@ -198,7 +193,7 @@ function registerGiftPostingRoutes(app, pool) {
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'invalid disbursement id' });
     try {
-      const out = await unpostDisbursement(pool, { orgId: req.orgId, userId: req.user.user_id ?? req.user.id, disbursementId: id, reason: String((req.body && req.body.reason) || '').trim() });
+      const out = await runTool('disbursement.unpost', ctxFromReq(pool, req), { id, reason: req.body && req.body.reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) { console.error('POST disbursement unpost:', e.message); return res.status(500).json({ error: 'Could not unpost the disbursement' }); }
   });

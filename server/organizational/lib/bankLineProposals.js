@@ -4,9 +4,11 @@
 
 const { matchRulesForLines } = require('../routes/bankRules');
 const { runTool } = require('../tools');
-const { effectiveMode } = require('./assistantSeat');
+const { effectiveMode, assistantContext } = require('./assistantSeat');
+const bankLineModel = require('./bankLineModel');
 
 const BATCH_LIMIT = 200;
+const MODEL_LIMIT = 25;
 
 async function payeeHistory(pool, orgId, line) {
   const payee = String(line.payee_raw || '').trim();
@@ -55,8 +57,8 @@ async function suggestForLine(pool, orgId, line) {
   };
 }
 
-// Proposes coding for unconfirmed lines that have no open proposal. Does nothing while the assistant is off for the workspace.
-async function proposeForUnconfirmedLines(pool, orgId) {
+// Proposes coding for unconfirmed lines that have no open proposal. Does nothing while the assistant is off for the workspace. Lines no rule or history settles go to the language model when it is switched on and the assistant holds a live seat.
+async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLineModel.suggestWithModel, modelEnabled = bankLineModel.enabled } = {}) {
   const mode = await effectiveMode(pool, orgId, null);
   if (mode === 'off') return { skipped: 'The assistant is off in this workspace', proposed: 0, expired: 0 };
 
@@ -73,14 +75,35 @@ async function proposeForUnconfirmedLines(pool, orgId) {
       ORDER BY s.statement_date, s.id LIMIT ${BATCH_LIMIT}`, [orgId]);
 
   let proposed = 0;
+  let proposedByModel = 0;
+  const leftovers = [];
   for (const line of lines.rows) {
     const s = await suggestForLine(pool, orgId, line);
-    if (!s) continue;
+    if (!s) { leftovers.push(line); continue; }
     const ctx = { pool, orgId, userId: null, actor: 'job', programScope: null, meta: {}, proposal: { reason: s.reason, evidence: s.evidence, warnings: s.warnings } };
     const out = await runTool('bank_line.code', ctx, s.input);
     if (out.httpStatus === 202) proposed += 1;
   }
-  return { proposed, expired: expired.rowCount, examined: lines.rows.length };
+
+  if (modelEnabled() && leftovers.length) {
+    const seat = await assistantContext(pool, { orgId });
+    if (seat.ctx) {
+      for (const line of leftovers.filter((l) => !l.model_tried_at).slice(0, MODEL_LIMIT)) {
+        let s;
+        try {
+          s = await modelSuggest(pool, orgId, line);
+        } catch (e) {
+          console.warn('bank line model step:', String(e.message).slice(0, 120));
+          continue;
+        }
+        await pool.query('UPDATE org_bank_statement_lines SET model_tried_at = now() WHERE id = $1 AND org_id = $2', [line.id, orgId]);
+        if (!s) continue;
+        const out = await runTool('bank_line.code', { ...seat.ctx, proposal: { reason: s.reason, evidence: s.evidence, warnings: s.warnings, model: s.model, promptVersion: s.promptVersion } }, s.input);
+        if (out.httpStatus === 202) { proposed += 1; proposedByModel += 1; }
+      }
+    }
+  }
+  return { proposed, proposedByModel, expired: expired.rowCount, examined: lines.rows.length };
 }
 
 module.exports = { suggestForLine, proposeForUnconfirmedLines };

@@ -133,3 +133,47 @@ test('accepting a proposal whose line was already coded expires it', { skip: SKI
   assert.equal((await inOrg(w, () => proposals.acceptProposal(ctx(w), p.id))).httpStatus, 409);
   assert.equal((await inOrg(w, () => proposals.listProposals(scoped, w.orgId, { status: 'expired' }))).length, 1);
 });
+
+const { grantSeat } = require('../../server/organizational/lib/assistantSeat');
+const { clean } = require('../../server/organizational/lib/bankLineModel');
+const withModel = (w, modelSuggest) => inOrg(w, () => proposeForUnconfirmedLines(scoped, w.orgId, { modelSuggest, modelEnabled: () => true }));
+const seat = (w) => inOrg(w, () => grantSeat(scoped, { orgId: w.orgId, userId: w.userId, reason: 'test seat' }));
+const stub = (w, calls) => async (_pool, _org, line) => {
+  calls.push(line.id);
+  return { input: { line_id: line.id, account_id: w.expense, program_id: w.program, coding_source: 'manual' }, reason: 'Language model suggestion', evidence: { basis: 'model' }, warnings: null, model: 'test-model', promptVersion: 'v-test' };
+};
+
+test('leftover lines go to the model only with the assistant on and a live seat; the proposal records the model and the assistant', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  await on(w);
+  const line = await addLine(w, 'Never Seen Before');
+  const calls = [];
+  const noSeat = await withModel(w, stub(w, calls));
+  assert.equal(noSeat.proposedByModel, 0);
+  assert.equal(calls.length, 0);
+  await seat(w);
+  const out = await withModel(w, stub(w, calls));
+  assert.equal(out.proposedByModel, 1);
+  const [p] = await inOrg(w, () => proposals.listProposals(scoped, w.orgId));
+  assert.equal(p.proposer_kind, 'assistant');
+  assert.equal(p.model, 'test-model');
+  assert.equal(p.prompt_version, 'v-test');
+  assert.equal(p.input.line_id, line);
+});
+
+test('a line the model has looked at is not sent again, and nothing is sent while the assistant is off', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  await seat(w);
+  await addLine(w, 'Never Seen Before');
+  const calls = [];
+  await withModel(w, stub(w, calls));
+  assert.equal(calls.length, 0);
+  await on(w);
+  await withModel(w, async (...a) => { calls.push(a[2].id); return null; });
+  await withModel(w, async (...a) => { calls.push(a[2].id); return null; });
+  assert.equal(calls.length, 1);
+});
+
+test('text sent to the model drops long numbers, emails and links', () => {
+  assert.equal(clean('PAYMENT 1234567890 to bob@example.org https://x.test/y ref'), 'PAYMENT to ref');
+});

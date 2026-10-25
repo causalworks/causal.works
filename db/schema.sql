@@ -1,9 +1,9 @@
--- Includes migrations through 377
+-- Includes migrations through 378
 --
 -- PostgreSQL database dump
 --
 
-\restrict Ute7EzaJbv1ifVCZQev04z1irw0txGufmCPuKIQnCXOaPmzR3bhEVO5Xe1Cq5UR
+\restrict kZglIN6foO0ZEM95D3dwrpctvQeEMzGp9cmjd4L7Vo6CpaKeU0EnKLuC7B3Wte0
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -4398,6 +4398,7 @@ CREATE TABLE public.org_bank_statement_lines (
     plaid_pending_transaction_id text,
     pending boolean DEFAULT false NOT NULL,
     applied_rule_id integer,
+    model_tried_at timestamp with time zone,
     CONSTRAINT org_bank_statement_lines_amount_non_negative CHECK ((amount_cents >= 0)),
     CONSTRAINT org_bank_statement_lines_coding_source_check CHECK ((coding_source = ANY (ARRAY['manual'::text, 'rule'::text]))),
     CONSTRAINT org_bank_statement_lines_credit_debit_indicator_check CHECK ((credit_debit_indicator = ANY (ARRAY['credit'::text, 'debit'::text]))),
@@ -25267,5 +25268,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ute7EzaJbv1ifVCZQev04z1irw0txGufmCPuKIQnCXOaPmzR3bhEVO5Xe1Cq5UR
+\unrestrict kZglIN6foO0ZEM95D3dwrpctvQeEMzGp9cmjd4L7Vo6CpaKeU0EnKLuC7B3Wte0
 

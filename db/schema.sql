@@ -1,9 +1,9 @@
--- Includes migrations through 375
+-- Includes migrations through 376
 --
 -- PostgreSQL database dump
 --
 
-\restrict 66yswvLmn6Uv0v7c1898Gl9wJnbsyAUzXY9jWvlUtBO7LNYsGn2ysb5GPhp2JrH
+\restrict pl6WPKen7RZHQ4XZJsUUVUtClK3M5zatJIPc75Gpoq1tD5xa2A8atb31jqxWo4F
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -9188,6 +9188,63 @@ ALTER SEQUENCE public.org_tasks_id_seq OWNED BY public.org_tasks.id;
 
 
 --
+-- Name: org_tool_proposals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_tool_proposals (
+    id integer NOT NULL,
+    org_id integer NOT NULL,
+    tool_name text NOT NULL,
+    proposer_kind text NOT NULL,
+    proposer_user_id integer,
+    model text,
+    prompt_version text,
+    input jsonb NOT NULL,
+    reason text,
+    evidence jsonb,
+    warnings jsonb,
+    status text DEFAULT 'open'::text NOT NULL,
+    decided_by integer,
+    decided_at timestamp with time zone,
+    final_input jsonb,
+    result_status integer,
+    expires_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT org_tool_proposals_proposer_kind_check CHECK ((proposer_kind = ANY (ARRAY['assistant'::text, 'job'::text]))),
+    CONSTRAINT org_tool_proposals_status_check CHECK ((status = ANY (ARRAY['open'::text, 'accepted'::text, 'changed'::text, 'dismissed'::text, 'expired'::text])))
+);
+
+ALTER TABLE ONLY public.org_tool_proposals FORCE ROW LEVEL SECURITY;
+
+
+--
+-- Name: TABLE org_tool_proposals; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.org_tool_proposals IS 'Tool calls an assistant or job proposed; nothing changes until a person accepts.';
+
+
+--
+-- Name: org_tool_proposals_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.org_tool_proposals_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: org_tool_proposals_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.org_tool_proposals_id_seq OWNED BY public.org_tool_proposals.id;
+
+
+--
 -- Name: org_users; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11597,6 +11654,13 @@ ALTER TABLE ONLY public.org_tasks ALTER COLUMN id SET DEFAULT nextval('public.or
 
 
 --
+-- Name: org_tool_proposals id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals ALTER COLUMN id SET DEFAULT nextval('public.org_tool_proposals_id_seq'::regclass);
+
+
+--
 -- Name: org_users id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -13218,6 +13282,14 @@ ALTER TABLE ONLY public.org_suggestions
 
 ALTER TABLE ONLY public.org_tasks
     ADD CONSTRAINT org_tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: org_tool_proposals org_tool_proposals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals
+    ADD CONSTRAINT org_tool_proposals_pkey PRIMARY KEY (id);
 
 
 --
@@ -15681,6 +15753,13 @@ CREATE UNIQUE INDEX org_sponsor_reports_quarter_uq ON public.org_sponsor_reports
 --
 
 CREATE UNIQUE INDEX org_sponsored_project_disbursements_property_uq ON public.org_sponsored_project_disbursements USING btree (property_gift_id) WHERE ((property_gift_id IS NOT NULL) AND (status <> 'void'::text));
+
+
+--
+-- Name: org_tool_proposals_open_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_tool_proposals_open_idx ON public.org_tool_proposals USING btree (org_id, status, created_at);
 
 
 --
@@ -20057,6 +20136,30 @@ ALTER TABLE ONLY public.org_tasks
 
 
 --
+-- Name: org_tool_proposals org_tool_proposals_decided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals
+    ADD CONSTRAINT org_tool_proposals_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: org_tool_proposals org_tool_proposals_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals
+    ADD CONSTRAINT org_tool_proposals_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_tool_proposals org_tool_proposals_proposer_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_tool_proposals
+    ADD CONSTRAINT org_tool_proposals_proposer_user_id_fkey FOREIGN KEY (proposer_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: org_users org_users_coop_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -22280,6 +22383,19 @@ CREATE POLICY org_tasks_org_isolation ON public.org_tasks USING ((org_id = (NULL
 
 
 --
+-- Name: org_tool_proposals; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_tool_proposals ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_tool_proposals org_tool_proposals_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_tool_proposals_org_isolation ON public.org_tool_proposals USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_users; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -24425,6 +24541,20 @@ GRANT SELECT,USAGE ON SEQUENCE public.org_tasks_id_seq TO causal_app;
 
 
 --
+-- Name: TABLE org_tool_proposals; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_tool_proposals TO causal_app;
+
+
+--
+-- Name: SEQUENCE org_tool_proposals_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.org_tool_proposals_id_seq TO causal_app;
+
+
+--
 -- Name: TABLE org_users; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25002,5 +25132,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 66yswvLmn6Uv0v7c1898Gl9wJnbsyAUzXY9jWvlUtBO7LNYsGn2ysb5GPhp2JrH
+\unrestrict pl6WPKen7RZHQ4XZJsUUVUtClK3M5zatJIPc75Gpoq1tD5xa2A8atb31jqxWo4F
 

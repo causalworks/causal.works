@@ -24,9 +24,14 @@ async function runTool(name, ctx, input) {
   const checked = tool.validate ? tool.validate(input || {}) : { value: input || {} };
   if (checked.error) return { httpStatus: 400, body: { error: checked.error } };
   if (tool.nonHuman === 'propose' && ctx.actor !== 'human') {
-    return { httpStatus: 202, body: { proposed: true, tool: tool.name, input: input || {}, message: 'Waiting for a person to confirm. Nothing was changed.' } };
+    const proposalId = await require('./proposals').storeProposal(ctx, tool.name, input || {});
+    return { httpStatus: 202, body: { proposed: true, proposal_id: proposalId, tool: tool.name, input: input || {}, message: 'Waiting for a person to confirm. Nothing was changed.' } };
   }
   return tool.run(ctx, checked.value);
+}
+
+function hasTool(name) {
+  return tools.has(name);
 }
 
 function listTools() {
@@ -38,4 +43,4 @@ function scopeAllows(ctx, programIds) {
   return programIds.every((id) => ctx.programScope.includes(id));
 }
 
-module.exports = { CAPABILITIES, defineTool, runTool, listTools, scopeAllows };
+module.exports = { CAPABILITIES, defineTool, runTool, listTools, hasTool, scopeAllows };

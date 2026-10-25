@@ -18,6 +18,7 @@ require('./ledgerEntry');
 require('./billInvoiceEdits');
 require('./giftConfirm');
 const { runTool, listTools } = require('./registry');
+const proposals = require('./proposals');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');
 
@@ -30,4 +31,4 @@ function ctxForUser(pool, orgId, userId, extra = {}) {
   return { pool, orgId, userId, actor: 'human', programScope: null, meta: {}, ...extra };
 }
 
-module.exports = { runTool, listTools, ctxFromReq, ctxForUser };
+module.exports = { runTool, listTools, ctxFromReq, ctxForUser, proposals };

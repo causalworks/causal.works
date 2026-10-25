@@ -1,9 +1,4 @@
 {
- "PATCH /api/organizational/orgs/:slug/bills/:id": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/gifts/:id/confirm": "Posts to the ledger directly; not yet moved to the tool registry.",
- "PATCH /api/organizational/orgs/:slug/invoices/:id": "Posts to the ledger directly; not yet moved to the tool registry.",
- "PATCH /api/organizational/orgs/:slug/ledger/transactions/:id": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/ledger/transactions/:id/approve": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/disbursements": "Changes sponsorship state only; the library function it calls has no ledger posting call, and posting runs through the sponsor and disbursement tools (checked 2026-10-25).",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/disbursements/:disbId/approve": "Changes sponsorship state only; the library function it calls has no ledger posting call, and posting runs through the sponsor and disbursement tools (checked 2026-10-25).",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/payment-requests": "Changes sponsorship state only; the library function it calls has no ledger posting call, and posting runs through the sponsor and disbursement tools (checked 2026-10-25).",

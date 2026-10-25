@@ -59,6 +59,7 @@ async function makeWorkspace() {
       ],
     });
     assert.ok(posted.httpStatus < 300, JSON.stringify(posted.body));
+    w.entry = posted.body.id;
     w.expenseLine = (await x('SELECT id FROM org_ledger_lines WHERE transaction_id = $1 AND account_id = $2', [posted.body.id, w.expense])).rows[0].id;
   });
   return w;
@@ -145,4 +146,60 @@ test('five simultaneous sends of one invoice post once, then simultaneous write-
   const off = await Promise.all(Array.from({ length: 5 }, () => run(w, 'invoice.write_off', input)));
   assert.equal(off.filter((r) => r.httpStatus === 200).length, 1, statuses(off));
   assert.equal(await count(w, 'invoice'), 2);
+});
+
+test('five simultaneous identical edits of one entry change it once', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  const input = { id: w.entry, reason: 'typo', memo: 'Office supplies', lines: [{ id: w.expenseLine, account_id: w.expense2 }] };
+  assert.equal((await run(w, 'ledger_entry.update', input, 'assistant')).httpStatus, 202);
+  const results = await Promise.all(Array.from({ length: 5 }, () => run(w, 'ledger_entry.update', input)));
+  assert.equal(results.filter((r) => r.httpStatus === 200).length, 1, statuses(results));
+  const audits = await q(w, `SELECT COUNT(*)::int AS n FROM org_audit_log WHERE org_id = $1 AND table_name = 'org_ledger_transactions' AND record_id = $2 AND field_name = 'Memo'`, [w.orgId, w.entry]);
+  assert.equal(audits.rows[0].n, 1);
+});
+
+test('five simultaneous approvals of one pending entry approve once', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  const pending = await inOrg(w, () => postLedgerTransaction(scoped, {
+    orgId: w.orgId, userId: w.userId, transactionDate: '2026-03-06', memo: 'Large purchase', payee: null, referenceNumber: null, source: 'manual',
+    lines: [
+      { account_id: w.expense, program_id: w.program, debit_cents: 900000, credit_cents: 0 },
+      { account_id: w.bank, program_id: w.program, debit_cents: 0, credit_cents: 900000 },
+    ],
+  }));
+  await q(w, `UPDATE org_ledger_transactions SET status = 'pending_approval' WHERE id = $1`, [pending.body.id]);
+  const other = (await pool.query('INSERT INTO users (email, forwarding_address) VALUES ($1, $1) RETURNING id', [`approver-${Date.now()}@example.test`])).rows[0];
+  const approve = () => inOrg(w, () => runTool('ledger_entry.approve', { pool: scoped, orgId: w.orgId, userId: other.id, actor: 'human', programScope: null, meta: {} }, { id: pending.body.id }));
+  const results = await Promise.all(Array.from({ length: 5 }, approve));
+  assert.equal(results.filter((r) => r.httpStatus === 200).length, 1, statuses(results));
+});
+
+test('simultaneous edits of an approved bill and a sent invoice each apply once; drafts edit freely', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  const billLine = (await q(w, 'SELECT id FROM org_bill_lines WHERE bill_id = $1', [w.bill])).rows[0].id;
+  assert.equal((await run(w, 'bill.approve', { id: w.bill })).httpStatus, 409, 'already approved');
+  const posted = await q(w, `UPDATE org_bills SET status = 'pending_approval' WHERE id = $1`, [w.bill]);
+  assert.equal(posted.rowCount, 1);
+  const draftEdit = await run(w, 'bill.update', { id: w.bill, reference: 'PO-1' });
+  assert.equal(draftEdit.httpStatus, 200, JSON.stringify(draftEdit.body));
+  assert.equal((await run(w, 'bill.approve', { id: w.bill })).httpStatus, 200);
+  const input = { id: w.bill, reason: 'wrong account', lines: [{ id: billLine, account_id: w.expense2 }] };
+  assert.equal((await run(w, 'bill.update', input, 'assistant')).httpStatus, 202);
+  const results = await Promise.all(Array.from({ length: 5 }, () => run(w, 'bill.update', input)));
+  const ok = results.filter((r) => r.httpStatus === 200).length;
+  assert.equal(ok, 5, statuses(results) + JSON.stringify(results[0].body));
+  const lineAccount = (await q(w, 'SELECT account_id FROM org_bill_lines WHERE id = $1', [billLine])).rows[0].account_id;
+  assert.equal(lineAccount, w.expense2);
+  const ledgerOnExpense2 = (await q(w, `SELECT COUNT(*)::int AS n FROM org_ledger_lines l JOIN org_ledger_transactions t ON t.id = l.transaction_id WHERE t.org_id = $1 AND l.account_id = $2 AND t.source = 'bill_approval'`, [w.orgId, w.expense2])).rows[0].n;
+  assert.equal(ledgerOnExpense2, 1);
+
+  assert.equal((await run(w, 'invoice.send', { id: w.invoice, email: false })).httpStatus, 409, 'already sent');
+  const invLine = (await q(w, 'SELECT id FROM org_invoice_lines WHERE invoice_id = $1', [w.invoice])).rows[0].id;
+  await q(w, `UPDATE org_invoices SET status = 'draft' WHERE id = $1`, [w.invoice]);
+  assert.equal((await run(w, 'invoice.update', { id: w.invoice, reference: 'INV-9' })).httpStatus, 200);
+  assert.equal((await run(w, 'invoice.send', { id: w.invoice, email: false })).httpStatus, 200);
+  const edit = await run(w, 'invoice.update', { id: w.invoice, reason: 'wrong income account', lines: [{ id: invLine, account_id: w.inKindIncome }] });
+  assert.equal(edit.httpStatus, 200, JSON.stringify(edit.body));
+  const refused = await run(w, 'invoice.update', { id: w.invoice, reason: 'x', due_date: '2026-05-01', constituent_id: w.who });
+  assert.equal(refused.httpStatus, 409);
 });

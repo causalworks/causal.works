@@ -11,6 +11,7 @@ const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { validateConstituentsRows } = require('../lib/importValidators');
 const { FINANCE_ROLES, FUNDRAISING_ROLES } = require('../lib/orgRoles');
 const { csvCell } = require('../lib/csvCell');
+const { runTool, ctxFromReq } = require('../tools');
 
 const {
   CONTACT_ROLES, ROLES_SELECT, hasRoleCondition, parseRoles, parseKindFields, addContactRoles, setContactRoles,
@@ -954,44 +955,9 @@ function registerOrganizationalDonorRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/gifts/:id/confirm', ...orgBase, gateGiftOf('id'), async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const giftId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(giftId) || giftId < 1) return res.status(400).json({ error: 'Invalid id' });
-    const body = req.body || {};
     try {
-      const g = (await pool.query(`SELECT * FROM org_gifts WHERE id = $1 AND org_id = $2 AND source = 'accounting' LIMIT 1`, [giftId, orgId])).rows[0];
-      if (!g) return res.status(404).json({ error: 'Gift not found' });
-      if (g.review_status !== 'to_confirm') return res.status(409).json({ error: 'This gift is already ' + g.review_status + '.' });
-      let donorId = g.constituent_id != null ? Number(g.constituent_id) : null;
-      if (body.constituent_id != null && body.constituent_id !== '') {
-        donorId = Number.parseInt(String(body.constituent_id), 10);
-        if (!Number.isInteger(donorId) || donorId < 1) return res.status(400).json({ error: 'constituent_id must be a positive integer' });
-        const c = await pool.query('SELECT 1 FROM org_constituents WHERE id = $1 AND org_id = $2', [donorId, orgId]);
-        if (!c.rows.length) return res.status(400).json({ error: 'That contact was not found in this workspace' });
-      }
-      if (!donorId) return res.status(400).json({ error: 'Choose the donor from Contacts before confirming.' });
-      const campaign = body.campaign !== undefined ? (String(body.campaign || '').trim() || null) : g.campaign;
-      await addContactRoles(pool, orgId, donorId, ['donor']);
-      await pool.query(
-        `UPDATE org_gifts SET constituent_id = $1, campaign = $2, review_status = 'confirmed', reviewed_by = $3, reviewed_at = NOW() WHERE id = $4 AND org_id = $5`,
-        [donorId, campaign, userId, giftId, orgId]);
-      let ledgerContactSet = false;
-      if (g.ledger_transaction_id) {
-        try {
-          const u = await pool.query(
-            `UPDATE org_ledger_transactions SET constituent_id = $1 WHERE id = $2 AND org_id = $3 AND constituent_id IS NULL`,
-            [donorId, g.ledger_transaction_id, orgId]);
-          ledgerContactSet = u.rowCount > 0;
-          if (ledgerContactSet) {
-            logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: g.ledger_transaction_id,
-              fields: [{ fieldName: 'Contact', oldValue: null, newValue: 'contact #' + donorId }], metadata: { ...reqMeta(req), reason: 'Donor confirmed in Funding for gift #' + giftId } }).catch(() => {});
-          }
-        } catch (e) { console.error('confirm gift: could not set the entry contact:', e.message); }
-      }
-      logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_gifts', recordId: giftId,
-        fields: [{ fieldName: 'Review', oldValue: 'to_confirm', newValue: 'confirmed' }], metadata: reqMeta(req) }).catch(() => {});
-      return res.json({ id: giftId, review_status: 'confirmed', constituent_id: donorId, ledger_contact_set: ledgerContactSet });
+      const out = await runTool('gift.confirm_donor', ctxFromReq(pool, req), { ...(req.body || {}), id: req.params.id });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST gifts/:id/confirm:', e.message);
       return res.status(500).json({ error: 'Could not confirm this gift' });

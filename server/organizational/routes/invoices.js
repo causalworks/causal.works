@@ -12,13 +12,15 @@ const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear'
 const { isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { runTool, ctxFromReq } = require('../tools');
 const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
-const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
+const { logAudit, reqMeta } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
 const { translateInvoiceWriteError } = require('../lib/documentWriteErrors');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
 const { sendInvoiceEmail } = require('../lib/sendInvoiceEmail');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+const { parseInvoiceLines, replaceInvoiceLines: replaceLines, INVOICE_LINES_SELECT: LINES_SELECT } = require('../lib/documentLines');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -73,67 +75,14 @@ function rowToInvoiceLine(row) {
   };
 }
 
-function parseInvoiceLines(lines) {
-  if (!Array.isArray(lines) || lines.length < 1) {
-    return { error: 'lines must be an array of at least 1 entry' };
-  }
-  const parsed = [];
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i] || {};
-    const rowNum = i + 1;
-    const accountId = Number.parseInt(String(l.account_id), 10);
-    const programId = Number.parseInt(String(l.program_id), 10);
-    const unitAmountCents = Number.parseInt(String(l.unit_amount_cents), 10);
-    const quantity = l.quantity != null ? Number(l.quantity) : 1;
-    if (!Number.isInteger(accountId) || accountId < 1) return { error: `line ${rowNum}: account_id is required` };
-    if (!Number.isInteger(programId) || programId < 1) return { error: `line ${rowNum}: program_id is required` };
-    if (!Number.isInteger(unitAmountCents) || unitAmountCents <= 0) return { error: `line ${rowNum}: unit_amount_cents must be a positive integer` };
-    if (!Number.isFinite(quantity) || quantity <= 0) return { error: `line ${rowNum}: quantity must be a positive number` };
-    let fmvCents = null;
-    if (l.fair_market_value_cents != null && l.fair_market_value_cents !== '') {
-      fmvCents = Number.parseInt(String(l.fair_market_value_cents), 10);
-      if (!Number.isInteger(fmvCents) || fmvCents < 0 || fmvCents > unitAmountCents) {
-        return { error: `line ${rowNum}: fair_market_value_cents must be between 0 and unit_amount_cents` };
-      }
-    }
-    parsed.push({
-      accountId, programId, unitAmountCents, quantity, fmvCents,
-      description: l.description != null ? String(l.description) : null,
-      lineMemo: l.line_memo != null ? String(l.line_memo) : null,
-    });
-  }
-  return { parsedLines: parsed };
-}
-
 async function invoiceLinePrograms(pool, invoiceId) {
   const r = await pool.query('SELECT program_id FROM org_invoice_lines WHERE invoice_id = $1', [invoiceId]);
   return r.rows.map((row) => row.program_id);
 }
 
-async function replaceLines(client, invoiceId, parsedLines) {
-  await client.query('DELETE FROM org_invoice_lines WHERE invoice_id = $1', [invoiceId]);
-  for (const l of parsedLines) {
-    await client.query(
-      `INSERT INTO org_invoice_lines (invoice_id, account_id, program_id, description, quantity, unit_amount_cents, fair_market_value_cents, line_memo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [invoiceId, l.accountId, l.programId, l.description, l.quantity, l.unitAmountCents, l.fmvCents, l.lineMemo]
-    );
-  }
-}
-
 function registerInvoicesRoutes(app, pool) {
   const orgAuth = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool)];
   const financeWriter = requireAccountingWriter(pool);
-
-  const LINES_SELECT = `
-    SELECT l.id, l.invoice_id, l.account_id, a.code AS account_code, a.name AS account_name,
-           l.program_id, p.name AS program_name, l.description, l.quantity, l.unit_amount_cents,
-           l.fair_market_value_cents, l.line_memo
-    FROM org_invoice_lines l
-    JOIN org_accounts a ON a.id = l.account_id
-    JOIN org_programs p ON p.id = l.program_id
-    WHERE l.invoice_id = $1
-    ORDER BY l.id ASC`;
 
   app.get('/api/organizational/orgs/:slug/invoices', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
     const orgId = req.orgId;
@@ -315,160 +264,14 @@ function registerInvoicesRoutes(app, pool) {
     }
   });
 
-  const INVOICE_FULL_EDIT_STATUSES = new Set(['draft']);
-  const INVOICE_METADATA_ONLY_STATUSES = new Set(['sent', 'partially_paid', 'paid', 'overdue']);
-  const INVOICE_METADATA_ONLY_FIELDS = new Set(['due_date', 'reference', 'lines', 'reason']);
 
   app.patch('/api/organizational/orgs/:slug/invoices/:id', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
-    const invoiceId = Number.parseInt(String(req.params.id), 10);
-    if (!Number.isInteger(invoiceId) || invoiceId < 1) return res.status(400).json({ error: 'Invalid id' });
-    const body = req.body || {};
-
-    const existing = await pool.query('SELECT * FROM org_invoices WHERE id = $1 AND org_id = $2 LIMIT 1', [invoiceId, orgId]);
-    if (!existing.rows.length) return res.status(404).json({ error: 'Invoice not found' });
-    const invoice = existing.rows[0];
-
-    const existingLinePrograms = await invoiceLinePrograms(pool, invoiceId);
-    if (existingLinePrograms.length === 0 && programScopeFor(req) !== null) {
-      return res.status(404).json({ error: 'Invoice not found' });
-    }
-
-    const isFullEdit = INVOICE_FULL_EDIT_STATUSES.has(invoice.status);
-    const isMetadataOnly = INVOICE_METADATA_ONLY_STATUSES.has(invoice.status);
-    if (!isFullEdit && !isMetadataOnly) {
-      return res.status(409).json({ error: `Invoice cannot be edited in status ${invoice.status}`, code: 'not_editable' });
-    }
-    if (isMetadataOnly) {
-      const requestedFields = Object.keys(body);
-      const disallowed = requestedFields.filter((f) => !INVOICE_METADATA_ONLY_FIELDS.has(f));
-      if (disallowed.length > 0) {
-        return res.status(409).json({
-          error: `Once sent, only the due date, reference and each line's account, program and description can be edited here. To change ${disallowed.join(', ')}, revert the invoice to draft or enter a customer credit note.`,
-          code: 'requires_credit_note',
-        });
-      }
-    }
-
-    let parsedLines = null;
-    if (isFullEdit && body.lines !== undefined) {
-      const parsed = parseInvoiceLines(body.lines);
-      if (parsed.error) return res.status(400).json({ error: parsed.error });
-      parsedLines = parsed.parsedLines;
-      if (!headerProgramsInScope(req, parsedLines.map((l) => l.programId))) {
-        return res.status(403).json({ error: 'You do not have access to set lines outside your granted program(s).' });
-      }
-    } else if (!headerProgramsInScope(req, existingLinePrograms)) {
-      return res.status(403).json({ error: 'You do not have access to edit this invoice.' });
-    }
-    const dueDate = body.due_date !== undefined ? (body.due_date ? String(body.due_date) : null) : invoice.due_date;
-    if (dueDate && !DATE_RE.test(dueDate)) return res.status(400).json({ error: 'due_date must be YYYY-MM-DD' });
-
-    const nextConstituentId = isFullEdit && body.constituent_id !== undefined
-      ? Number.parseInt(String(body.constituent_id), 10) : invoice.constituent_id;
-    const nextReference = body.reference !== undefined ? (body.reference ? String(body.reference) : null) : invoice.reference;
-    const nextNumber = isFullEdit && body.invoice_number !== undefined ? (String(body.invoice_number || '').trim() || invoice.invoice_number) : invoice.invoice_number;
-
-    let posted = null;
-    if (isMetadataOnly && Array.isArray(body.lines) && body.lines.length) {
-      const reason = body.reason != null ? String(body.reason).trim() : '';
-      if (!reason) return res.status(400).json({ error: 'A reason is required to change a sent invoice.', code: 'reason_required' });
-      if (!invoice.ledger_transaction_id) return res.status(409).json({ error: 'This invoice has no ledger entry to update.', code: 'not_editable' });
-      const tR = await pool.query('SELECT id, fiscal_year, status FROM org_ledger_transactions WHERE id = $1 AND org_id = $2', [invoice.ledger_transaction_id, orgId]);
-      const txn = tR.rows[0];
-      if (!txn || txn.status !== 'posted') return res.status(409).json({ error: 'This invoice\'s ledger entry is not posted, so it cannot be edited here.', code: 'not_editable' });
-      if (await isFiscalYearLocked(pool, orgId, txn.fiscal_year)) {
-        return res.status(409).json({ error: 'Fiscal year ' + txn.fiscal_year + ' is locked. Enter a customer credit note to correct this invoice.', code: 'fiscal_year_locked' });
-      }
-      const invLines = (await pool.query(LINES_SELECT, [invoiceId])).rows;
-      if (invLines.some((l) => l.fair_market_value_cents != null)) {
-        return res.status(409).json({ error: 'A line with a quid-pro-quo split cannot be edited here. Revert the invoice to draft to change it.', code: 'split_line' });
-      }
-      const ledgerRows = (await pool.query(
-        `SELECT id, account_id, program_id, debit_cents, credit_cents, line_memo, source_line_type, source_line_id FROM org_ledger_lines WHERE transaction_id = $1 ORDER BY id`, [txn.id])).rows;
-      const linkedLedger = new Map(ledgerRows.filter((r) => r.source_line_type === 'org_invoice_lines').map((r) => [r.source_line_id, r]));
-      const matches = ledgerRows.length === invLines.length + 1
-        && invLines.every((il) => linkedLedger.has(il.id)
-          && Number(linkedLedger.get(il.id).credit_cents) === Math.round(Number(il.quantity) * Number(il.unit_amount_cents)));
-      if (!matches) return res.status(409).json({ error: 'This invoice\'s ledger entry no longer matches its lines (it was changed elsewhere), so it cannot be edited here safely.', code: 'ledger_mismatch' });
-
-      const edits = [];
-      for (const raw of body.lines) {
-        const idx = invLines.findIndex((il) => il.id === Number.parseInt(String(raw && raw.id), 10));
-        if (idx < 0) return res.status(400).json({ error: 'line ' + (raw && raw.id) + ' is not on this invoice' });
-        const old = invLines[idx];
-        if (raw.unit_amount_cents !== undefined && Number(raw.unit_amount_cents) !== Number(old.unit_amount_cents)) {
-          return res.status(409).json({ error: 'Amounts cannot change after sending. Revert the invoice to draft or enter a customer credit note.', code: 'requires_credit_note' });
-        }
-        const accountId = raw.account_id !== undefined ? Number.parseInt(String(raw.account_id), 10) : old.account_id;
-        const programId = raw.program_id !== undefined ? Number.parseInt(String(raw.program_id), 10) : old.program_id;
-        if (!(accountId > 0) || !(programId > 0)) return res.status(400).json({ error: 'account and program must be ids' });
-        const description = raw.description !== undefined ? (raw.description == null ? null : String(raw.description).trim() || null) : old.description;
-        edits.push({ idx, old, ledger: linkedLedger.get(old.id), accountId, programId, description });
-      }
-      const finalPrograms = invLines.map((il, i) => (edits.find((e) => e.idx === i) || { programId: il.program_id }).programId);
-      if (!headerProgramsInScope(req, finalPrograms)) return res.status(403).json({ error: 'You do not have access to set lines outside your granted program(s).' });
-
-      const idsOf = (k, k2) => [...new Set(edits.flatMap((e) => [e.old[k], e[k2]]).filter((v) => v != null))];
-      const [aR, prR] = await Promise.all([
-        pool.query(`SELECT id, code || ' ' || name AS label FROM org_accounts WHERE org_id = $1 AND id = ANY($2::int[])`, [orgId, idsOf('account_id', 'accountId')]),
-        pool.query(`SELECT id, name AS label FROM org_programs WHERE org_id = $1 AND id = ANY($2::int[])`, [orgId, idsOf('program_id', 'programId')]),
-      ]);
-      const lab = (r, id) => ((r.rows.find((x) => x.id === id) || {}).label || '#' + id);
-      const fields = [];
-      for (const e of edits) {
-        const n = 'Line ' + (e.idx + 1) + ' ';
-        if (e.accountId !== e.old.account_id) fields.push({ fieldName: n + 'account', oldValue: lab(aR, e.old.account_id), newValue: lab(aR, e.accountId) });
-        if (e.programId !== e.old.program_id) fields.push({ fieldName: n + 'program', oldValue: lab(prR, e.old.program_id), newValue: lab(prR, e.programId) });
-        if ((e.description || null) !== (e.old.description || null)) fields.push({ fieldName: n + 'description', oldValue: e.old.description || '(none)', newValue: e.description || '(none)' });
-      }
-      posted = { txn, edits, fields, reason, arLine: ledgerRows.find((r) => !r.source_line_type && Number(r.debit_cents) > 0), firstProgram: finalPrograms[0] };
-    }
-
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      await client.query(
-        `UPDATE org_invoices SET constituent_id = $1, due_date = $2, reference = $3, invoice_number = $6, updated_at = NOW() WHERE id = $4 AND org_id = $5`,
-        [nextConstituentId, dueDate, nextReference, invoiceId, orgId, nextNumber]
-      );
-      if (parsedLines) await replaceLines(client, invoiceId, parsedLines);
-      if (posted) {
-        for (const e of posted.edits) {
-          await client.query('UPDATE org_invoice_lines SET account_id = $1, program_id = $2, description = $3 WHERE id = $4 AND invoice_id = $5',
-            [e.accountId, e.programId, e.description, e.old.id, invoiceId]);
-          const descChanged = (e.description || null) !== (e.old.description || null);
-          await client.query('UPDATE org_ledger_lines SET account_id = $1, program_id = $2, line_memo = $3 WHERE id = $4 AND transaction_id = $5',
-            [e.accountId, e.programId, descChanged ? (e.description || e.old.line_memo) : e.ledger.line_memo, e.ledger.id, posted.txn.id]);
-        }
-        const first = posted.edits.find((e) => e.idx === 0);
-        if (first && first.programId !== first.old.program_id) {
-          await client.query('UPDATE org_ledger_lines SET program_id = $1 WHERE id = $2 AND transaction_id = $3', [posted.firstProgram, posted.arLine.id, posted.txn.id]);
-        }
-      }
-      await client.query('COMMIT');
-      if (posted && posted.fields.length) {
-        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_invoices', recordId: invoiceId, fields: posted.fields, metadata: { ...reqMeta(req), reason: posted.reason } }).catch(() => {});
-        logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_ledger_transactions', recordId: posted.txn.id, fields: posted.fields, metadata: { reason: posted.reason } }).catch(() => {});
-      }
-
-      if (isMetadataOnly) {
-        const fields = diffFields(invoice, { due_date: dueDate, reference: nextReference }, ['due_date', 'reference']);
-        if (fields.length > 0) {
-          logAudit(pool, { orgId, userId, action: 'update', tableName: 'org_invoices', recordId: invoiceId, fields, metadata: reqMeta(req) }).catch(() => {});
-        }
-      }
-
-      return res.json({ id: invoiceId, status: invoice.status });
+      const out = await runTool('invoice.update', ctxFromReq(pool, req), { ...(req.body || {}), id: req.params.id });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
-      await client.query('ROLLBACK').catch(() => {});
-      const translated = translateInvoiceWriteError(e);
-      if (translated) return res.status(translated.status).json(translated.body);
       console.error('PATCH invoice:', e.message);
       return res.status(500).json({ error: 'Could not update invoice' });
-    } finally {
-      client.release();
     }
   });
 

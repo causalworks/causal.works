@@ -1,5 +1,6 @@
 'use strict';
 
+const { ledgerCashCents } = require('./ledgerCash');
 const { loadPostingPlAccounts } = require('./OrganizationalBudgetByProgram');
 
 function enumerateCalendarMonths(startDate, monthsAhead) {
@@ -98,14 +99,7 @@ async function buildCashflowGrid(pool, opts) {
     const srcR = await pool.query('SELECT actuals_source FROM org_settings WHERE org_id = $1', [orgId]);
     const fromLedger = !srcR.rows[0] || srcR.rows[0].actuals_source === 'ledger';
     if (fromLedger) {
-      const balR = await pool.query(
-        `SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0)::bigint AS balance_cents
-         FROM org_ledger_lines l
-         JOIN org_ledger_transactions t ON t.id = l.transaction_id
-         WHERE t.org_id = $1 AND t.status = 'posted' AND l.account_id = ANY($2::int[]) AND t.transaction_date < $3::date`,
-        [orgId, cashAccountIds, windowStartIso]
-      );
-      openingCents = Number(balR.rows[0].balance_cents);
+      openingCents = await ledgerCashCents(pool, orgId, { before: windowStartIso });
       openingAsOfDate = windowStartIso;
     } else {
     const snapR = await pool.query(

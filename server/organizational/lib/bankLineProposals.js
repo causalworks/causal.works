@@ -88,11 +88,21 @@ async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLine
     if (seat.ctx) {
       for (const line of leftovers.filter((l) => !l.model_tried_at).slice(0, MODEL_LIMIT)) {
         let s;
-        if (modelDelayMs) await new Promise((r) => setTimeout(r, modelDelayMs));
-        try {
-          s = await modelSuggest(pool, orgId, line);
-        } catch (e) {
-          console.warn('bank line model step:', String(e.message).slice(0, 120));
+        let failure = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (modelDelayMs) await new Promise((r) => setTimeout(r, modelDelayMs * (attempt ? 5 * attempt : 1)));
+          try {
+            s = await modelSuggest(pool, orgId, line);
+            failure = null;
+            break;
+          } catch (e) {
+            failure = e;
+            if (!/\b429\b/.test(String(e.message))) break;
+          }
+        }
+        if (failure) {
+          console.warn('bank line model step:', String(failure.message).slice(0, 120));
+          if (/\b429\b/.test(String(failure.message))) break;
           continue;
         }
         await pool.query('UPDATE org_bank_statement_lines SET model_tried_at = now() WHERE id = $1 AND org_id = $2', [line.id, orgId]);

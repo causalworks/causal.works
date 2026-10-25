@@ -174,6 +174,31 @@ test('a line the model has looked at is not sent again, and nothing is sent whil
   assert.equal(calls.length, 1);
 });
 
+test('a rate-limited model call is retried; repeated limits stop the run and leave lines untried', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  await seat(w);
+  await on(w);
+  const line = await addLine(w, 'Retry Payee');
+  let n = 0;
+  const limited = Object.assign(new Error('Mistral HTTP 429'), {});
+  const out = await withModel(w, async (...a) => { n++; if (n < 3) throw limited; return null; });
+  assert.equal(n, 3);
+  assert.equal(out.proposed, 0);
+  const tried = await inOrg(w, () => scoped.query('SELECT model_tried_at FROM org_bank_statement_lines WHERE id = $1', [line]));
+  assert.ok(tried.rows[0].model_tried_at);
+
+  const w2 = await makeWorkspace();
+  await seat(w2);
+  await on(w2);
+  await addLine(w2, 'First Payee');
+  await addLine(w2, 'Second Payee');
+  let m = 0;
+  await withModel(w2, async () => { m++; throw limited; });
+  assert.equal(m, 3);
+  const untried = await inOrg(w2, () => scoped.query('SELECT count(*)::int AS c FROM org_bank_statement_lines WHERE org_id = $1 AND model_tried_at IS NULL', [w2.orgId]));
+  assert.equal(untried.rows[0].c, 2);
+});
+
 test('text sent to the model drops long numbers, emails and links', () => {
   assert.equal(clean('PAYMENT 1234567890 to bob@example.org https://x.test/y ref'), 'PAYMENT to ref');
 });

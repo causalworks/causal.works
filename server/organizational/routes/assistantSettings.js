@@ -25,8 +25,10 @@ function registerAssistantSettingsRoutes(app, pool) {
     try {
       const live = await seat.liveSeat(pool, req.orgId);
       const s = await pool.query('SELECT assistant_mode FROM org_settings WHERE org_id = $1', [req.orgId]);
+      const mine = await pool.query('SELECT assistant_mode FROM org_users WHERE org_id = $1 AND user_id = $2', [req.orgId, uid(req)]);
       res.json({
         workspace_mode: s.rows[0] ? s.rows[0].assistant_mode : 'off',
+        my_setting: mine.rows[0] ? mine.rows[0].assistant_mode : null,
         my_mode: await seat.effectiveMode(pool, req.orgId, uid(req)),
         seat: live ? { ends_at: live.ends_at, reason: live.reason, can: 'propose', cannot: 'post' } : null,
       });

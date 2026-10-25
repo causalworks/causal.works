@@ -190,3 +190,25 @@ test('the scheduled job prepares proposals for workspaces whose assistant is on 
   assert.equal((await inOrg(on1, () => proposals.listProposals(scoped, on1.orgId))).length, 1);
   assert.equal((await inOrg(off1, () => proposals.listProposals(scoped, off1.orgId))).length, 0);
 });
+
+test('measurement counts accepted, hand-coded the same, hand-coded differently and dismissed, by month, payee and account', { skip: SKIP }, async () => {
+  const { measure } = require('../../server/organizational/lib/proposalMeasurement');
+  const w = await makeWorkspace();
+  await on(w);
+  await code(w, await addLine(w, 'Acme Supplies'), w.expense);
+  const lines = [await addLine(w, 'Acme Supplies'), await addLine(w, 'Acme Supplies'), await addLine(w, 'Acme Supplies'), await addLine(w, 'Acme Supplies')];
+  await prepare(w);
+  const open = await inOrg(w, () => proposals.listProposals(scoped, w.orgId));
+  const forLine = (id) => open.find((p) => p.input.line_id === id);
+  await inOrg(w, () => proposals.acceptProposal(ctx(w), forLine(lines[0]).id));
+  await code(w, lines[1], w.expense);
+  await code(w, lines[2], w.expense2);
+  await inOrg(w, () => proposals.dismissProposal(ctx(w), forLine(lines[3]).id));
+  await prepare(w);
+  const m = await inOrg(w, () => measure(scoped, w.orgId));
+  assert.equal(m.by_month.length, 1);
+  assert.deepEqual([m.by_month[0].agreed, m.by_month[0].changed, m.by_month[0].dismissed], [2, 1, 1]);
+  assert.equal(m.by_payee[0].key, 'acme supplies');
+  assert.equal(m.by_payee[0].override_rate, 0.5);
+  assert.equal(m.open, 0);
+});

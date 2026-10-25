@@ -1,5 +1,5 @@
 /* accounting-settings.js — the Accounting settings page (the gear in the Accounting tab row).
-   Groups: Periods and closing, Controls, Vendors and 1099, Banking, Where your books live.
+   Groups: Periods and closing, Controls, Vendors and 1099, Banking, Assistant, Where your books live.
    People who cannot change a setting still see it, greyed, with who can (see docs/public/Settings_and_Permissions.md).
    The approval policy form is drawn by ledger.js and the 1099 card by settings-1099.js; this file draws the rest. */
 (function () {
@@ -337,6 +337,81 @@
     }));
   }
 
+  const MODE_LABELS = { off: 'Off', background: 'Background suggestions', assistant: 'Assistant' };
+
+  function modeOptions(current, withFollow) {
+    const keys = ['off', 'background'];
+    if (current === 'assistant') keys.push('assistant');
+    return (withFollow ? '<option value=""' + (current ? '' : ' selected') + '>Follow the workspace</option>' : '')
+      + keys.map((k) => '<option value="' + k + '"' + (k === current ? ' selected' : '') + '>' + MODE_LABELS[k] + '</option>').join('');
+  }
+
+  function assistantError(msg) { const el = $('organizational-acctset-assistant-error'); if (el) { el.textContent = msg || ''; el.hidden = !msg; } }
+
+  function resultsTable(title, firstCol, rows) {
+    if (!rows.length) return '';
+    const pct = (r) => Math.round(r.override_rate * 100) + '%';
+    return '<p style="margin:12px 0 4px;"><b>' + esc(title) + '</b></p><table class="organizational-table"><thead><tr><th>' + esc(firstCol) + '</th><th style="text-align:right;">Agreed</th><th style="text-align:right;">Changed</th><th style="text-align:right;">Dismissed</th><th style="text-align:right;">Overridden</th></tr></thead><tbody>'
+      + rows.map((r) => '<tr><td>' + esc(r.key) + '</td><td style="text-align:right;">' + r.agreed + '</td><td style="text-align:right;">' + r.changed + '</td><td style="text-align:right;">' + r.dismissed + '</td><td style="text-align:right;">' + pct(r) + '</td></tr>').join('')
+      + '</tbody></table>';
+  }
+
+  async function loadAssistantResults(body) {
+    const out = await apiJson(base() + '/tool-proposals/measurement');
+    if (!out || !out.res.ok) return;
+    const d = out.data;
+    const holder = document.createElement('div');
+    holder.innerHTML = '<hr style="border:0;border-top:1px solid var(--border);margin:14px 0;"><p style="margin:0;"><b>How suggestions did</b></p>'
+      + (d.by_month.length
+        ? '<p class="organizational-hint" style="margin:2px 0 0;">Agreed counts suggestions you accepted, plus lines you coded yourself the same way. ' + d.open + ' waiting.</p>'
+          + resultsTable('By month', 'Month', d.by_month) + resultsTable('Payees overridden most', 'Payee', d.by_payee) + resultsTable('Accounts overridden most', 'Account', d.by_category)
+        : '<p class="organizational-hint" style="margin:2px 0 0;">No suggestions have been decided yet.</p>');
+    body.appendChild(holder);
+  }
+
+  async function loadAssistant() {
+    const body = $('organizational-acctset-assistant-body');
+    if (!body) return;
+    const url = base() + '/assistant';
+    const out = await apiJson(url);
+    if (!out || !out.res.ok) { body.textContent = 'Assistant settings could not be loaded.'; return; }
+    const d = out.data;
+    const admin = orgRole() === 'admin';
+    const seat = d.seat;
+    const seatLine = seat
+      ? 'The assistant has a seat: it can propose, it cannot post, until ' + esc(fmtDate(seat.ends_at)) + '. Reason: ' + esc(seat.reason)
+      : 'The assistant has no seat. Without one, it only uses your bank rules and earlier coding, and nothing goes to a language model.';
+    const small = 'height:30px;font-size:0.8125rem;padding:0 12px;';
+    body.innerHTML = '<div style="display:grid;grid-template-columns:200px 1fr;gap:10px 14px;align-items:center;max-width:620px;">'
+      + '<label for="acctset-assistant-ws"><b>This workspace</b></label>'
+      + '<select id="acctset-assistant-ws" class="organizational-select" style="max-width:260px;"' + (admin ? '' : ' disabled') + '>' + modeOptions(d.workspace_mode, false) + '</select>'
+      + '<label for="acctset-assistant-me"><b>Just for me</b></label>'
+      + '<select id="acctset-assistant-me" class="organizational-select" style="max-width:260px;">' + modeOptions(d.my_setting || '', true) + '</select>'
+      + '</div>'
+      + (admin ? '' : '<p class="organizational-hint" style="margin:8px 0 0;">The workspace setting and the seat are changed by an admin.</p>')
+      + '<hr style="border:0;border-top:1px solid var(--border);margin:14px 0;">'
+      + '<p style="margin:0 0 8px;">' + seatLine + '</p>'
+      + (admin ? (seat
+        ? '<div style="display:flex;gap:8px;"><button type="button" class="organizational-btn organizational-btn-outline" id="acctset-assistant-renew" style="' + small + '">Renew for 30 days</button>'
+          + '<button type="button" class="organizational-btn organizational-btn-outline" id="acctset-assistant-revoke" style="' + small + '">Revoke</button></div>'
+        : '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><input type="text" id="acctset-assistant-reason" class="organizational-input" maxlength="200" placeholder="Why (for example: try bank line suggestions)" aria-label="Reason" style="width:300px;">'
+          + '<select id="acctset-assistant-days" class="organizational-select" aria-label="Length" style="width:110px;"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select>'
+          + '<button type="button" class="organizational-btn organizational-btn-primary" id="acctset-assistant-grant" style="' + small + '">Give a seat</button></div>') : '');
+    loadAssistantResults(body);
+    const send = async (path, method, payload) => {
+      assistantError('');
+      const r = await apiJson(url + path, { method, body: payload ? JSON.stringify(payload) : undefined });
+      if (!r || !r.res.ok) { assistantError((r && r.data && r.data.error) || 'Could not save.'); return false; }
+      return true;
+    };
+    $('acctset-assistant-ws').addEventListener('change', async (e) => { if (await send('/mode', 'PUT', { mode: e.target.value })) loadAssistant(); else loadAssistant(); });
+    $('acctset-assistant-me').addEventListener('change', async (e) => { await send('/my-mode', 'PUT', { mode: e.target.value || null }); loadAssistant(); });
+    const on = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
+    on('acctset-assistant-grant', async () => { if (await send('/seat', 'POST', { reason: $('acctset-assistant-reason').value, days: Number($('acctset-assistant-days').value) })) loadAssistant(); });
+    on('acctset-assistant-renew', async () => { if (await send('/seat/renew', 'POST', { days: 30 })) loadAssistant(); });
+    on('acctset-assistant-revoke', async () => { if (await send('/seat', 'DELETE')) loadAssistant(); });
+  }
+
   async function init(s) {
     slug = s;
     const contacts = document.querySelector('[data-acctset-contacts]');
@@ -349,7 +424,7 @@
     if (structure) structure.href = '/organizational/o/' + encodeURIComponent(slug) + '/structure';
     wire();
     if (window.OrganizationalStateRules) window.OrganizationalStateRules.renderAccountingCard($('organizational-acctset-state'), slug);
-    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering(), loadConversion()]);
+    await Promise.all([loadYears(), loadEntryLine(), loadBooksLine(), loadThreshold(), loadExport(), loadDefaults(), loadNumbering(), loadConversion(), loadAssistant()]);
     const idx = $('organizational-acctset-index');
     if (idx && window.OrganizationalSettingsIndex) {
       const r = await window.OrganizationalSettingsIndex.load(slug);

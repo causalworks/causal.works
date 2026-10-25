@@ -10,6 +10,7 @@ const { programScopeFor } = require('../lib/programScope');
 const { logAudit, reqMeta } = require('../lib/auditLog');
 
 const { proposeForUnconfirmedLines } = require('../lib/bankLineProposals');
+const { measure } = require('../lib/proposalMeasurement');
 
 const STATUSES = ['open', 'accepted', 'changed', 'dismissed', 'expired'];
 
@@ -27,6 +28,16 @@ function registerToolProposalRoutes(app, pool) {
     } catch (e) {
       console.error('GET tool-proposals:', e.message);
       res.status(500).json({ error: 'Could not load proposals' });
+    }
+  });
+
+  app.get('/api/organizational/orgs/:slug/tool-proposals/measurement', ...orgAuth, deciders, async (req, res) => {
+    try {
+      if (programScopeFor(req) !== null) return res.json({ by_month: [], by_payee: [], by_category: [], open: 0 });
+      res.json(await measure(pool, req.orgId));
+    } catch (e) {
+      console.error('GET tool-proposals measurement:', e.message);
+      res.status(500).json({ error: 'Could not load the results' });
     }
   });
 

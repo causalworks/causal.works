@@ -71,7 +71,7 @@ async function proposeForUnconfirmedLines(pool, orgId, { modelSuggest = bankLine
   const lines = await pool.query(
     `SELECT s.* FROM org_bank_statement_lines s
       WHERE s.org_id = $1 AND s.status = 'unconfirmed' AND s.is_internal_transfer = false AND s.pending = false
-        AND NOT EXISTS (SELECT 1 FROM org_tool_proposals p WHERE p.org_id = s.org_id AND p.tool_name = 'bank_line.code' AND p.status = 'open' AND (p.input->>'line_id')::int = s.id)
+        AND NOT EXISTS (SELECT 1 FROM org_tool_proposals p WHERE p.org_id = s.org_id AND p.tool_name = 'bank_line.code' AND p.status IN ('open', 'dismissed') AND (p.input->>'line_id')::int = s.id)
       ORDER BY s.statement_date, s.id LIMIT ${BATCH_LIMIT}`, [orgId]);
 
   let proposed = 0;

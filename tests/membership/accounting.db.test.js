@@ -169,3 +169,30 @@ test('a bank-line match in Banking posts through the same split; only Accounting
     assert.equal((await s.d('GET', '', 'fundraising')).body.code, 'no_access');
   });
 });
+
+test('revenue by tier ties to the ledger: contribution, dues revenue and the deferred balance add to the net received', opts, async () => {
+  await h.withDb(async ({ pool, asApp, asOwner }) => {
+    const s = await setup(pool, asApp, asOwner);
+    const { runReport } = require('../../server/organizational/lib/membershipReports');
+    const j1 = await s.join(s.tier, '2025-07-01');
+    const p1 = await s.pay(j1.term_id, '365', '2025-06-20');
+    await s.d('POST', '/:id/post', 'finance', { params: { id: String(p1) }, body: { posting_date: '2025-06-20', deposit_account_id: s.accounts.bank } }, 200);
+    const j2 = await s.join(s.pwyc, '2026-07-01', { price: '500' });
+    const p2 = await s.pay(j2.term_id, '500', '2026-07-03');
+    await s.d('POST', '/:id/post', 'finance', { params: { id: String(p2) }, body: { posting_date: '2026-07-03', deposit_account_id: s.accounts.bank } }, 200);
+    const rf = await s.m('POST', '/payments/:id/refund', 'finance', { params: { id: String(p2) }, body: { amount: '100', reason: 'Changed level', payment_date: '2026-07-10' } }, 201);
+    await s.d('POST', '/:id/post', 'finance', { params: { id: String(rf.body.payment_id) }, body: { posting_date: '2026-07-10', deposit_account_id: s.accounts.bank } }, 200);
+    for (const month of ['2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01', '2026-02', '2026-03']) {
+      await s.d('POST', '/recognition', 'finance', { body: { month } }, 200);
+    }
+    const rep = await runReport(pool, s.org.id, 'revenue', { from: '2025-01-01', to: '2026-12-31' });
+    assert.equal(rep.error, undefined);
+    const sum = (k) => rep.rows.reduce((n, r) => n + r[k], 0);
+    const bal = async (id) => Number((await h.one(pool, `SELECT COALESCE(SUM(l.credit_cents - l.debit_cents), 0) AS b FROM org_ledger_lines l JOIN org_ledger_transactions t ON t.id = l.transaction_id WHERE t.org_id = $1 AND t.status = 'posted' AND l.account_id = $2`, [s.org.id, id])).b);
+    const bank = Number((await h.one(pool, `SELECT COALESCE(SUM(l.debit_cents - l.credit_cents), 0) AS b FROM org_ledger_lines l JOIN org_ledger_transactions t ON t.id = l.transaction_id WHERE t.org_id = $1 AND t.status = 'posted' AND l.account_id = $2`, [s.org.id, s.accounts.bank])).b);
+    assert.equal(sum('received_cents'), bank);
+    assert.equal(sum('contribution_cents'), await bal(s.accounts.contrib));
+    assert.equal(sum('dues_revenue_cents'), await bal(s.accounts.dues));
+    assert.equal(sum('contribution_cents') + sum('dues_revenue_cents') + await bal(s.accounts.deferred), sum('received_cents'));
+  });
+});

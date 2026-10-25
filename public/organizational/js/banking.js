@@ -313,6 +313,7 @@
   const cashCodingTransfers = new Map();
   const cashCodingMatchRows = new Map();
   const cashCodingChecked = new Set();
+  const cashCodingPrefilled = new Set();
   const cashCodingRuleApplied = new Map();
   let cashCodingLines = [];
   let cashCodingEdit = null;
@@ -325,7 +326,7 @@
     const token = ++cashCodingLoadToken;
     const bankAccountId = acctSelect && acctSelect.value;
     cashCodingSplits.clear(); cashCodingTransfers.clear(); cashCodingMatchRows.clear();
-    cashCodingChecked.clear(); cashCodingRuleApplied.clear(); cashCodingEdit = null;
+    cashCodingChecked.clear(); cashCodingRuleApplied.clear(); cashCodingPrefilled.clear(); cashCodingEdit = null;
     setCashCodingStatus('');
     if (!bankAccountId) { cashCodingLines = []; renderCashCodingGrid(); return; }
     const params = new URLSearchParams({ status: 'unconfirmed', bank_account_id: bankAccountId });
@@ -381,20 +382,14 @@
       + (proposalWhyOpen.has(line.id) ? '<div style="font-size:0.75rem;color:var(--text-secondary);">' + esc(p.reason || '') + (p.warnings && p.warnings.length ? ' ' + esc(p.warnings.join(' ')) : '') + '</div>' : '');
   }
 
-  async function useSuggestionsOnTicked() {
-    const ticked = cashCodingLines.filter((l) => cashCodingChecked.has(l.id));
-    if (!ticked.length) { showError('Tick the lines to use suggestions on first.'); return; }
-    showError('');
-    let n = 0;
-    for (const l of ticked) {
+  function prefillSuggestions() {
+    cashCodingLines.forEach((l) => {
       const p = lineProposals.get(l.id);
       const first = (cashCodingSplits.get(l.id) || [])[0];
-      if (!p || cashCodingTransfers.has(l.id) || (cashCodingMatchRows.get(l.id) || []).length || (first && first.accountId)) continue;
-      cashCodingSplits.set(l.id, [{ accountId: p.input.account_id, programId: p.input.program_id, grantId: p.input.grant_id || '', restrictionClass: p.input.donor_restriction_class || '', amountCents: null }]);
-      n += 1;
-    }
-    renderCashCodingGrid();
-    setCashCodingStatus(n ? n + ' of ' + ticked.length + ' ticked lines filled from suggestions. Check them, then Save & reconcile all.' : 'None of the ticked lines have a suggestion that can be used (already coded, transfers and lines with a possible match are skipped).');
+      if (!p || cashCodingPrefilled.has(l.id) || !cashCodingMatchRows.has(l.id) || cashCodingMatchRows.get(l.id).length || cashCodingTransfers.has(l.id) || !first || first.accountId) return;
+      cashCodingPrefilled.add(l.id);
+      cashCodingSplits.set(l.id, [{ accountId: p.input.account_id, programId: p.input.program_id, grantId: p.input.grant_id || '', restrictionClass: p.input.donor_restriction_class || '', amountCents: null, suggested: true, why: p.reason }]);
+    });
   }
 
   async function loadCashCodingMatchFlags(queue, token) {
@@ -444,7 +439,6 @@
       { key: 'date', type: 'date', get: (l) => l.statement_date },
       { key: 'payee', type: 'text', get: (l) => l.payee_raw },
       { key: 'description', type: 'text', get: (l) => l.description_raw },
-      { key: 'suggested', type: 'text', get: (l) => { const p = lineProposals.get(l.id); return p ? accountLabelFor(p.input.account_id) : ''; } },
       { key: 'account', type: 'text', get: (l) => accountLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].accountId) },
       { key: 'program', type: 'text', get: (l) => programLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].programId) },
       { key: 'grant', type: 'text', get: (l) => grantLabelFor((cashCodingSplits.get(l.id) || [])[0] && cashCodingSplits.get(l.id)[0].grantId) },
@@ -474,7 +468,9 @@
     if (editing) {
       return '<td class="cc-cell" style="padding:0 2px;"><input type="text" class="organizational-input cc-combo" autocomplete="off" data-line="' + line.id + '" data-idx="' + idx + '" data-field="' + field + '" placeholder="' + esc(text || 'Type to search') + '" style="width:100%;"></td>';
     }
-    return '<td class="cc-cell" data-line="' + line.id + '" data-idx="' + idx + '" data-field="' + field + '" title="' + esc(text || 'Click to choose') + '" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(text) + '</td>';
+    const sp = (cashCodingSplits.get(line.id) || [])[idx];
+    const sug = sp && sp.suggested && text;
+    return '<td class="cc-cell" data-line="' + line.id + '" data-idx="' + idx + '" data-field="' + field + '" title="' + esc(sug ? 'Suggested: ' + (sp.why || '') + ' Click to change.' : (text || 'Click to choose')) + '" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' + (sug ? 'color:var(--text-secondary);font-style:italic;' : '') + '">' + esc(text) + '</td>';
   }
 
   function ccChoices(lineId, idx, field) {
@@ -546,16 +542,10 @@
       else if (field === 'grant') sp.grantId = value;
       else sp.restrictionClass = value;
     }
+    (cashCodingSplits.get(lineId) || []).forEach((x) => { x.suggested = false; });
     if (field !== 'transfer' || value) cashCodingChecked.add(lineId);
     cashCodingEdit = null;
     renderCashCodingGrid();
-  }
-
-  function suggestionCell(l) {
-    const p = lineProposals.get(l.id);
-    if (!p) return '<td></td>';
-    const text = accountLabelFor(p.input.account_id);
-    return '<td title="' + esc(text + ', ' + programLabelFor(p.input.program_id) + '. ' + (p.reason || '')) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);">' + esc(text) + '</td>';
   }
 
   function cashCodingRowsHtml(l) {
@@ -572,8 +562,7 @@
           + '<td style="white-space:nowrap;">' + esc(String(l.statement_date || '').slice(0, 10)) + '</td>'
           + '<td title="' + esc(l.payee_raw || '') + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(l.payee_raw || '') + '</td>'
           + '<td title="' + esc(l.description_raw || '') + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(l.description_raw || '') + (multi ? ' <span style="color:var(--text-secondary);">(total ' + fmtMoney(magnitude) + ')</span>' : '') + '</td>'
-          + suggestionCell(l)
-        : '<td></td><td colspan="4" style="text-align:right;color:var(--text-secondary);">split ' + (i + 1) + '</td>';
+        : '<td></td><td colspan="3" style="text-align:right;color:var(--text-secondary);">split ' + (i + 1) + '</td>';
       let coding;
       if (suggested.length && first) {
         coding = '<td colspan="4" style="color:var(--text-secondary);">Possible match: ' + esc(suggested[0].label) + (suggested.length > 1 ? ' (+' + (suggested.length - 1) + ')' : '') + '</td>';
@@ -604,12 +593,11 @@
     if (!tbody) return;
     const visible = cashCodingLines.filter((l) => cashCodingShowMatches || !(cashCodingMatchRows.get(l.id) || []).length);
     const hidden = cashCodingLines.length - visible.length;
-    const useBtn = document.getElementById('organizational-cashcoding-use-suggestions');
-    if (useBtn) useBtn.hidden = lineProposals.size === 0;
+    prefillSuggestions();
     const showLbl = document.getElementById('organizational-cashcoding-show-label');
     if (showLbl) showLbl.textContent = 'Show lines with suggested matches' + (hidden ? ' (' + hidden + ')' : '');
     if (!visible.length) {
-      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="13">' + (cashCodingLines.length ? 'No lines without a suggested match.' : 'No unconfirmed lines.') + '</td></tr>';
+      tbody.innerHTML = '<tr class="organizational-table-empty"><td colspan="12">' + (cashCodingLines.length ? 'No lines without a suggested match.' : 'No unconfirmed lines.') + '</td></tr>';
       return;
     }
     tbody.innerHTML = sortedCashCodingLines(visible).map(cashCodingRowsHtml).join('');
@@ -753,6 +741,7 @@
   const discardBtn = document.getElementById('organizational-cashcoding-discard');
   if (discardBtn) discardBtn.addEventListener('click', () => {
     cashCodingLines.forEach((l) => cashCodingSplits.set(l.id, [blankSplit()]));
+    cashCodingPrefilled.clear();
     cashCodingTransfers.clear(); cashCodingRuleApplied.clear(); cashCodingChecked.clear(); cashCodingEdit = null;
     setCashCodingStatus('');
     renderCashCodingGrid();
@@ -822,9 +811,6 @@
     if (!failed.length) setCashCodingStatus(codings.length + ' reconciled.');
     await loadLines();
   });
-
-  const useSuggestionsBtn = document.getElementById('organizational-cashcoding-use-suggestions');
-  if (useSuggestionsBtn) useSuggestionsBtn.addEventListener('click', useSuggestionsOnTicked);
 
   const applyRulesBtn = document.getElementById('organizational-cashcoding-apply-rules');
 

@@ -8,6 +8,7 @@ const { requireOrganizationalAccess } = require('../middleware/requireOrganizati
 const { requireOrgMembership } = require('../middleware/requireOrgMembership');
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const A = require('../lib/membershipAccounting');
+const { runTool, ctxFromReq } = require('../tools');
 const M = require('../lib/membership');
 const S = require('../lib/membershipStatus');
 
@@ -15,8 +16,6 @@ function registerDuesPostingRoutes(app, pool) {
   const base = [requireAuth(pool), requireOrganizationalAccess, requireOrgMembership(pool), requireAccountingAccess(pool, 'accounting_read')];
   const writer = [...base, requireAccountingWriter(pool)];
   const P = '/api/organizational/orgs/:slug/dues-postings';
-  const uid = (req) => req.user && (req.user.user_id ?? req.user.id);
-  const posInt = (v) => { const n = Number.parseInt(String(v), 10); return Number.isInteger(n) && n > 0 ? n : null; };
 
   app.get(P, ...base, async (req, res) => {
     try {
@@ -56,7 +55,7 @@ function registerDuesPostingRoutes(app, pool) {
   app.post(`${P}/:id/post`, ...writer, async (req, res) => {
     try {
       const b = req.body || {};
-      const out = await A.postDuesPayment(pool, { orgId: req.orgId, userId: uid(req), paymentId: posInt(req.params.id), postingDate: b.posting_date, depositAccountId: posInt(b.deposit_account_id) });
+      const out = await runTool('dues_payment.post', ctxFromReq(pool, req), { ...b, id: req.params.id });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST dues-postings/:id/post:', e.message);
@@ -66,7 +65,7 @@ function registerDuesPostingRoutes(app, pool) {
 
   app.post(`${P}/:id/reverse`, ...writer, async (req, res) => {
     try {
-      const out = await A.reverseDuesPosting(pool, { orgId: req.orgId, userId: uid(req), paymentId: posInt(req.params.id), reason: (req.body || {}).reason });
+      const out = await runTool('dues_payment.reverse', ctxFromReq(pool, req), { id: req.params.id, reason: (req.body || {}).reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST dues-postings/:id/reverse:', e.message);
@@ -76,7 +75,7 @@ function registerDuesPostingRoutes(app, pool) {
 
   app.post(`${P}/recognition`, ...writer, async (req, res) => {
     try {
-      const out = await A.postRecognition(pool, { orgId: req.orgId, userId: uid(req), month: (req.body || {}).month });
+      const out = await runTool('dues_recognition.post', ctxFromReq(pool, req), { month: (req.body || {}).month });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST dues-postings/recognition:', e.message);
@@ -87,7 +86,7 @@ function registerDuesPostingRoutes(app, pool) {
   app.post(`${P}/recognition/reverse`, ...writer, async (req, res) => {
     try {
       const b = req.body || {};
-      const out = await A.reverseRecognition(pool, { orgId: req.orgId, userId: uid(req), month: b.month, reason: b.reason });
+      const out = await runTool('dues_recognition.reverse', ctxFromReq(pool, req), { month: b.month, reason: b.reason });
       return res.status(out.httpStatus).json(out.body);
     } catch (e) {
       console.error('POST dues-postings/recognition/reverse:', e.message);

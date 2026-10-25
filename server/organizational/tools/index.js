@@ -11,6 +11,7 @@ require('./recode');
 require('./giftPostings');
 require('./creditNotes');
 require('./billInvoiceDocuments');
+require('./dues');
 const { runTool, listTools } = require('./registry');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');

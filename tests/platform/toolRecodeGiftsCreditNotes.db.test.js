@@ -1,5 +1,5 @@
 'use strict';
-// Recode, gift posting and credit note tools under simultaneous requests. Needs SMOKE_DATABASE_URL (see ledgerRules.db.test.js).
+// Recode, gift posting, credit note, bill approval, invoice send and write-off tools under simultaneous requests. Needs SMOKE_DATABASE_URL (see ledgerRules.db.test.js).
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -116,3 +116,25 @@ for (const [kind, key] of [['bill', 'bill'], ['invoice', 'invoice']]) {
     assert.equal(status, 'void');
   });
 }
+
+test('five simultaneous approvals of one bill post once', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  await q(w, `UPDATE org_bills SET status = 'pending_approval' WHERE id = $1`, [w.bill]);
+  assert.equal((await run(w, 'bill.approve', { id: w.bill }, 'assistant')).httpStatus, 202);
+  const results = await Promise.all(Array.from({ length: 5 }, () => run(w, 'bill.approve', { id: w.bill })));
+  assert.equal(results.filter((r) => r.httpStatus === 200).length, 1, statuses(results));
+  assert.equal(await count(w, 'bill_approval'), 1);
+});
+
+test('five simultaneous sends of one invoice post once, then simultaneous write-offs post once', { skip: SKIP }, async () => {
+  const w = await makeWorkspace();
+  await q(w, `UPDATE org_invoices SET status = 'draft' WHERE id = $1`, [w.invoice]);
+  assert.equal((await run(w, 'invoice.send', { id: w.invoice, email: false }, 'assistant')).httpStatus, 202);
+  const sent = await Promise.all(Array.from({ length: 5 }, () => run(w, 'invoice.send', { id: w.invoice, email: false })));
+  assert.equal(sent.filter((r) => r.httpStatus === 200).length, 1, statuses(sent));
+  assert.equal(await count(w, 'invoice'), 1);
+  const input = { id: w.invoice, bad_debt_expense_account_id: w.expense, reason: 'customer closed', date: '2026-04-01' };
+  const off = await Promise.all(Array.from({ length: 5 }, () => run(w, 'invoice.write_off', input)));
+  assert.equal(off.filter((r) => r.httpStatus === 200).length, 1, statuses(off));
+  assert.equal(await count(w, 'invoice'), 2);
+});

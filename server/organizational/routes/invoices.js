@@ -9,38 +9,18 @@ const { requireOrgMembership, requireOrgRole } = require('../middleware/requireO
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
-const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
-const { postLedgerTransaction, isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
-const { acquireDocumentLock } = require('../lib/documentLock');
+const { isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { runTool, ctxFromReq } = require('../tools');
 const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
+const { translateInvoiceWriteError } = require('../lib/documentWriteErrors');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
 const { sendInvoiceEmail } = require('../lib/sendInvoiceEmail');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function translateInvoiceWriteError(e) {
-  if (isFiscalYearLockedError(e)) {
-    return { status: 409, body: { error: e.message, code: 'fiscal_year_locked', message: e.message } };
-  }
-  if (e.code === 'CA003') {
-    return { status: 422, body: { error: e.message, code: 'non_posting_account', message: 'One of these lines references an account that is a rollup/header account, not a postable account.' } };
-  }
-  if (e.code === '23505' && /number_unique/.test(String(e.constraint || e.message))) {
-    return { status: 409, body: { error: 'That number is already used by another invoice. Pick a different number.', code: 'duplicate_number' } };
-  }
-  if (e.code === 'CA004') {
-    return { status: 422, body: { error: e.message, code: 'cross_org_reference', message: 'This invoice references an account, program, or constituent that belongs to a different organization, or a constituent that is not marked as a customer.' } };
-  }
-  if (e.code === '23514' || e.code === '23503') {
-    return { status: 422, body: { error: e.message, code: 'validation_failed', message: e.message } };
-  }
-  return null;
-}
 
 function rowToInvoice(row) {
   return {
@@ -504,97 +484,15 @@ function registerInvoicesRoutes(app, pool) {
   }
 
   app.post('/api/organizational/orgs/:slug/invoices/:id/send', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
     const invoiceId = Number.parseInt(String(req.params.id), 10);
     if (!Number.isInteger(invoiceId) || invoiceId < 1) return res.status(400).json({ error: 'Invalid id' });
-
-    const docLock = await acquireDocumentLock(pool, 'invoice:' + invoiceId);
     try {
-    try {
-      const r = await pool.query('SELECT * FROM org_invoices WHERE id = $1 AND org_id = $2 LIMIT 1', [invoiceId, orgId]);
-      if (!r.rows.length) return res.status(404).json({ error: 'Invoice not found' });
-      const invoice = r.rows[0];
-      if (!headerProgramsInScope(req, await invoiceLinePrograms(pool, invoiceId))) {
-        return res.status(404).json({ error: 'Invoice not found' });
-      }
-      if (invoice.status !== 'draft') return res.status(409).json({ error: `Invoice is not in draft status (status: ${invoice.status})`, code: 'not_draft' });
-
-      const linesR = await pool.query(LINES_SELECT, [invoiceId]);
-      if (!linesR.rows.length) return res.status(400).json({ error: 'Invoice has no lines' });
-      if (!invoice.invoice_number) {
-        invoice.invoice_number = (await pool.query(
-          `UPDATE org_invoices SET invoice_number = org_take_document_number($2, 'invoice') WHERE id = $1 AND org_id = $2 AND invoice_number IS NULL RETURNING invoice_number`, [invoiceId, orgId])).rows[0].invoice_number;
-      }
-      const newEmail = req.body && typeof req.body.customer_email === 'string' ? req.body.customer_email.trim() : '';
-      if (newEmail && !EMAIL_RE.test(newEmail)) return res.status(400).json({ error: 'That email address is not valid.' });
-      if (newEmail) await saveCustomerEmail(pool, { orgId, userId, req, constituentId: invoice.constituent_id, email: newEmail });
-      const customerR = await pool.query('SELECT display_name, email FROM org_constituents WHERE id = $1', [invoice.constituent_id]);
-      const arAccountR = await pool.query('SELECT org_get_or_create_ar_account($1) AS id', [orgId]);
-      const arAccountId = arAccountR.rows[0].id;
-
-      let totalCents = 0;
-      const ledgerLines = [];
-      let contribAccountId = null;
-      for (const l of linesR.rows) {
-        const lineTotal = Math.round(Number(l.quantity) * Number(l.unit_amount_cents));
-        totalCents += lineTotal;
-        if (l.fair_market_value_cents != null) {
-          const fmvTotal = Math.round(Number(l.quantity) * Number(l.fair_market_value_cents));
-          const contribTotal = lineTotal - fmvTotal;
-          if (fmvTotal > 0) {
-            ledgerLines.push({ account_id: l.account_id, program_id: l.program_id, debit_cents: 0, credit_cents: fmvTotal, line_memo: l.description || l.line_memo });
-          }
-          if (contribTotal > 0) {
-            if (contribAccountId == null) {
-              const contribR = await pool.query('SELECT org_get_or_create_contribution_revenue_account($1) AS id', [orgId]);
-              contribAccountId = contribR.rows[0].id;
-            }
-            ledgerLines.push({ account_id: contribAccountId, program_id: l.program_id, debit_cents: 0, credit_cents: contribTotal, line_memo: `Quid pro quo split -- contribution portion of: ${l.description || 'invoice line'}` });
-          }
-        } else {
-          ledgerLines.push({ account_id: l.account_id, program_id: l.program_id, debit_cents: 0, credit_cents: lineTotal, line_memo: l.description || l.line_memo, source_line_type: 'org_invoice_lines', source_line_id: l.id });
-        }
-      }
-      ledgerLines.unshift({ account_id: arAccountId, program_id: linesR.rows[0].program_id, debit_cents: totalCents, credit_cents: 0, line_memo: `AR for invoice #${invoiceId}` });
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId,
-        userId,
-        transactionDate: invoice.invoice_date,
-        memo: `Invoice ${invoice.invoice_number || '#' + invoiceId}${invoice.reference ? ' (' + invoice.reference + ')' : ''}`,
-        payee: customerR.rows[0] ? customerR.rows[0].display_name : null,
-        referenceNumber: invoice.reference,
-        lines: ledgerLines,
-        source: 'invoice',
-        constituentId: invoice.constituent_id,
-      });
-      if (postResult.httpStatus >= 400) return res.status(postResult.httpStatus).json(postResult.body);
-
-      await pool.query(
-        `UPDATE org_invoices SET status = 'sent', ledger_transaction_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-        [postResult.body.id, invoiceId, orgId]
-      );
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_invoices', recordId: invoiceId,
-        fields: [{ fieldName: 'status', oldValue: invoice.status, newValue: 'sent' }],
-        metadata: { ...reqMeta(req), ledger_transaction_id: postResult.body.id },
-      }).catch(() => {});
-      let emailed = 'skipped';
-      if (!(req.body && req.body.email === false)) {
-        try {
-          emailed = await sendInvoiceEmail(pool, { orgId, invoice, customerName: customerR.rows[0] && customerR.rows[0].display_name,
-            customerEmail: customerR.rows[0] && customerR.rows[0].email, lines: linesR.rows, totalCents });
-        } catch (mailErr) { console.error('invoice email:', mailErr.message); emailed = 'failed'; }
-      }
-      return res.json({ id: invoiceId, status: 'sent', ledger_transaction_id: postResult.body.id, emailed });
+      const out = await runTool('invoice.send', ctxFromReq(pool, req), { ...(req.body || {}), id: invoiceId });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
-      const translated = translateInvoiceWriteError(e);
-      if (translated) return res.status(translated.status).json(translated.body);
       console.error('POST invoice send:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not send invoice' });
     }
-    } finally { await docLock.release(); }
   });
 
   app.get('/api/organizational/orgs/:slug/invoices/:id/payments', ...orgAuth, requireAccountingAccess(pool, 'accounting_read'), async (req, res) => {
@@ -743,65 +641,16 @@ function registerInvoicesRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/invoices/:id/write-off', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
     const invoiceId = Number.parseInt(String(req.params.id), 10);
     if (!Number.isInteger(invoiceId) || invoiceId < 1) return res.status(400).json({ error: 'Invalid id' });
-    const body = req.body || {};
-    const badDebtAccountId = Number.parseInt(String(body.bad_debt_expense_account_id), 10);
-    if (!Number.isInteger(badDebtAccountId) || badDebtAccountId < 1) {
-      return res.status(400).json({ error: 'bad_debt_expense_account_id is required' });
-    }
-    const reason = body.reason != null ? String(body.reason).trim() : '';
-    if (!reason) return res.status(400).json({ error: 'A reason for the write-off is required.' });
-    const writeOffDate = body.date != null && body.date !== '' ? String(body.date) : new Date().toISOString().slice(0, 10);
-    if (!DATE_RE.test(writeOffDate)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
-
     try {
-      const r = await pool.query('SELECT * FROM org_invoices WHERE id = $1 AND org_id = $2 LIMIT 1', [invoiceId, orgId]);
-      if (!r.rows.length) return res.status(404).json({ error: 'Invoice not found' });
-      const invoice = r.rows[0];
-      if (!headerProgramsInScope(req, await invoiceLinePrograms(pool, invoiceId))) {
-        return res.status(404).json({ error: 'Invoice not found' });
-      }
-      if (!['sent', 'partially_paid', 'overdue'].includes(invoice.status)) {
-        return res.status(409).json({ error: `Invoice cannot be written off from status ${invoice.status}`, code: 'not_writeoffable' });
-      }
-      const { remainingCents } = await invoiceRemainingBalanceCents(pool, invoiceId);
-      if (remainingCents <= 0) return res.status(409).json({ error: 'Invoice has no remaining balance to write off', code: 'nothing_to_write_off' });
-      const programR = await pool.query('SELECT MIN(program_id) AS program_id FROM org_invoice_lines WHERE invoice_id = $1', [invoiceId]);
-      const arAccountR = await pool.query('SELECT org_get_or_create_ar_account($1) AS id', [orgId]);
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId,
-        userId,
-        transactionDate: writeOffDate,
-        memo: `Write-off for invoice #${invoiceId}`,
-        payee: null,
-        constituentId: invoice.constituent_id,
-        referenceNumber: invoice.reference,
-        lines: [
-          { account_id: badDebtAccountId, program_id: programR.rows[0].program_id, debit_cents: remainingCents, credit_cents: 0, line_memo: `Bad debt write-off, invoice #${invoiceId}: ${reason}` },
-          { account_id: arAccountR.rows[0].id, program_id: programR.rows[0].program_id, debit_cents: 0, credit_cents: remainingCents, line_memo: `Write-off, invoice #${invoiceId}` },
-        ],
-        source: 'invoice',
-      });
-      if (postResult.httpStatus >= 400) return res.status(postResult.httpStatus).json(postResult.body);
-
-      await pool.query(`UPDATE org_invoices SET status = 'written_off', updated_at = NOW() WHERE id = $1 AND org_id = $2`, [invoiceId, orgId]);
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_invoices', recordId: invoiceId,
-        fields: [{ fieldName: 'status', oldValue: invoice.status, newValue: 'written_off' }],
-        metadata: { ...reqMeta(req), reason, remaining_cents: remainingCents, bad_debt_expense_account_id: badDebtAccountId, date: writeOffDate },
-      }).catch(() => {});
-      return res.json({ id: invoiceId, status: 'written_off', ledger_transaction_id: postResult.body.id });
+      const out = await runTool('invoice.write_off', ctxFromReq(pool, req), { ...(req.body || {}), id: invoiceId });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
-      const translated = translateInvoiceWriteError(e);
-      if (translated) return res.status(translated.status).json(translated.body);
       console.error('POST invoice write-off:', e.message);
       return res.status(500).json({ error: 'Could not write off invoice' });
     }
   });
 }
 
-module.exports = { registerInvoicesRoutes, translateInvoiceWriteError };
+module.exports = { registerInvoicesRoutes };

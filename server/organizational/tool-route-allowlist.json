@@ -1,12 +1,9 @@
 {
- "POST /api/organizational/orgs/:slug/bills/:id/approve": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/dues-postings/:id/post": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/dues-postings/:id/reverse": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/dues-postings/recognition": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/dues-postings/recognition/reverse": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/indirect-cost-recovery/run": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/invoices/:id/send": "Posts to the ledger directly; not yet moved to the tool registry.",
- "POST /api/organizational/orgs/:slug/invoices/:id/write-off": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/disbursements": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/disbursements/:disbId/approve": "Posts to the ledger directly; not yet moved to the tool registry.",
  "POST /api/organizational/orgs/:slug/sponsored-projects/:id/payment-requests": "Posts to the ledger directly; not yet moved to the tool registry.",

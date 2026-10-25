@@ -8,15 +8,14 @@ const { requireOrgMembership, requireOrgRole } = require('../middleware/requireO
 const { requireAccountingAccess, requireAccountingWriter } = require('../middleware/requireAccountingAccess');
 const { FINANCE_ROLES } = require('../lib/orgRoles');
 const { getFiscalYearEndMonth, fiscalYearForDate } = require('../lib/fiscalYear');
-const { isFiscalYearLockedError } = require('../lib/fiscalYearLockError');
-const { postLedgerTransaction, isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
-const { acquireDocumentLock } = require('../lib/documentLock');
+const { isFiscalYearLocked, voidLedgerTransaction } = require('../lib/ledgerPosting');
 const { runTool, ctxFromReq } = require('../tools');
 const { billCreditSql, invoiceCreditSql } = require('../lib/billInvoicePayments');
 const { displayCents } = require('../lib/voidedDisplay');
 const { logAudit, reqMeta, diffFields } = require('../lib/auditLog');
 const { extractBillOrInvoiceFields } = require('../lib/billInvoiceOcr');
 const { suggestBillCoding } = require('../lib/billLineSuggestions');
+const { translateBillWriteError } = require('../lib/documentWriteErrors');
 const { programScopeFor, appendProgramScopeExistsClause, headerProgramsInScope } = require('../lib/programScope');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -25,28 +24,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MICRO_PURCHASE_THRESHOLD_CENTS = 1500000;
 const SIMPLIFIED_ACQUISITION_THRESHOLD_CENTS = 35000000;
 const ADEQUATE_QUOTE_COUNT = 3;
-
-function translateBillWriteError(e) {
-  if (isFiscalYearLockedError(e)) {
-    return { status: 409, body: { error: e.message, code: 'fiscal_year_locked', message: e.message } };
-  }
-  if (e.code === 'CA003') {
-    return { status: 422, body: { error: e.message, code: 'non_posting_account', message: 'One of these lines references an account that is a rollup/header account, not a postable account.' } };
-  }
-  if (e.code === '23505' && /number_unique/.test(String(e.constraint || e.message))) {
-    return { status: 409, body: { error: 'That number is already used by another bill. Pick a different number.', code: 'duplicate_number' } };
-  }
-  if (e.code === 'CA004') {
-    return { status: 422, body: { error: e.message, code: 'cross_org_reference', message: 'This bill references an account, program, grant, or vendor that belongs to a different organization, or a constituent that is not marked as a vendor.' } };
-  }
-  if (e.code === 'CA008') {
-    return { status: 422, body: { error: e.message, code: 'self_approval_not_allowed', message: 'This bill touches a federal-award grant and needs sign-off from a different user than whoever created it.' } };
-  }
-  if (e.code === '23514' || e.code === '23503') {
-    return { status: 422, body: { error: e.message, code: 'validation_failed', message: e.message } };
-  }
-  return null;
-}
 
 function rowToBill(row) {
   return {
@@ -604,87 +581,15 @@ function registerBillsRoutes(app, pool) {
   });
 
   app.post('/api/organizational/orgs/:slug/bills/:id/approve', ...orgAuth, financeWriter, async (req, res) => {
-    const orgId = req.orgId;
-    const userId = req.user.user_id ?? req.user.id;
     const billId = Number.parseInt(String(req.params.id), 10);
     if (!Number.isInteger(billId) || billId < 1) return res.status(400).json({ error: 'Invalid id' });
-
-    const docLock = await acquireDocumentLock(pool, 'bill:' + billId);
     try {
-    try {
-      const r = await pool.query('SELECT * FROM org_bills WHERE id = $1 AND org_id = $2 LIMIT 1', [billId, orgId]);
-      if (!r.rows.length) return res.status(404).json({ error: 'Bill not found' });
-      const bill = r.rows[0];
-      if (!headerProgramsInScope(req, await billLinePrograms(pool, billId))) {
-        return res.status(404).json({ error: 'Bill not found' });
-      }
-      if (bill.status !== 'pending_approval') {
-        return res.status(409).json({ error: `Bill is not awaiting approval (status: ${bill.status})`, code: 'not_pending_approval' });
-      }
-
-      if (!bill.bill_number) {
-        bill.bill_number = (await pool.query(
-          `UPDATE org_bills SET bill_number = org_take_document_number($2, 'bill') WHERE id = $1 AND org_id = $2 AND bill_number IS NULL RETURNING bill_number`, [billId, orgId])).rows[0].bill_number;
-      }
-
-      const approveR = await pool.query(
-        `UPDATE org_bills SET approved_by = $1, approved_at = NOW(), updated_at = NOW()
-         WHERE id = $2 AND org_id = $3 RETURNING approved_at`,
-        [userId, billId, orgId]
-      );
-      const approvedAt = approveR.rows[0].approved_at;
-
-      const linesR = await pool.query(LINES_SELECT, [billId]);
-      const vendorR = await pool.query('SELECT display_name FROM org_constituents WHERE id = $1', [bill.constituent_id]);
-      const apAccountR = await pool.query('SELECT org_get_or_create_ap_account($1) AS id', [orgId]);
-      const apAccountId = apAccountR.rows[0].id;
-      const totalCents = linesR.rows.reduce((s, l) => s + Number(l.amount_cents), 0);
-
-      const ledgerLines = linesR.rows.map((l) => ({
-        account_id: l.account_id, program_id: l.program_id, grant_id: l.grant_id,
-        debit_cents: Number(l.amount_cents), credit_cents: 0,
-        line_memo: l.line_memo, source_line_type: 'org_bill_lines', source_line_id: l.id,
-      }));
-      ledgerLines.push({
-        account_id: apAccountId, program_id: linesR.rows[0].program_id, grant_id: null,
-        debit_cents: 0, credit_cents: totalCents,
-        line_memo: `AP liability for bill #${billId}`,
-      });
-
-      const postResult = await postLedgerTransaction(pool, {
-        orgId,
-        userId,
-        transactionDate: bill.bill_date,
-        memo: `Bill ${bill.bill_number || '#' + billId}${bill.reference ? ' (' + bill.reference + ')' : ''}`,
-        payee: vendorR.rows[0] ? vendorR.rows[0].display_name : null,
-        referenceNumber: bill.reference,
-        lines: ledgerLines,
-        source: 'bill_approval',
-        constituentId: bill.constituent_id,
-        internalApproval: { approvedBy: userId, approvedAt, sourceRefId: billId, sourceRefType: 'bill' },
-      });
-      if (postResult.httpStatus >= 400) {
-        await pool.query(`UPDATE org_bills SET approved_by = NULL, approved_at = NULL WHERE id = $1 AND org_id = $2`, [billId, orgId]);
-        return res.status(postResult.httpStatus).json(postResult.body);
-      }
-
-      await pool.query(
-        `UPDATE org_bills SET status = 'approved', ledger_transaction_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-        [postResult.body.id, billId, orgId]
-      );
-      logAudit(pool, {
-        orgId, userId, action: 'update', tableName: 'org_bills', recordId: billId,
-        fields: [{ fieldName: 'status', oldValue: bill.status, newValue: 'approved' }],
-        metadata: { ...reqMeta(req), ledger_transaction_id: postResult.body.id },
-      }).catch(() => {});
-      return res.json({ id: billId, status: 'approved', ledger_transaction_id: postResult.body.id });
+      const out = await runTool('bill.approve', ctxFromReq(pool, req), { id: billId });
+      return res.status(out.httpStatus).json(out.body);
     } catch (e) {
-      const translated = translateBillWriteError(e);
-      if (translated) return res.status(translated.status).json(translated.body);
       console.error('POST bill approve:', e.message, e.stack);
       return res.status(500).json({ error: 'Could not approve bill' });
     }
-    } finally { await docLock.release(); }
   });
 
   app.post('/api/organizational/orgs/:slug/bills/:id/schedule', ...orgAuth, financeWriter, async (req, res) => {
@@ -863,4 +768,4 @@ function registerBillsRoutes(app, pool) {
   });
 }
 
-module.exports = { registerBillsRoutes, translateBillWriteError, MICRO_PURCHASE_THRESHOLD_CENTS };
+module.exports = { registerBillsRoutes, MICRO_PURCHASE_THRESHOLD_CENTS };

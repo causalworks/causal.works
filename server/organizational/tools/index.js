@@ -10,6 +10,7 @@ require('./ledgerSetup');
 require('./recode');
 require('./giftPostings');
 require('./creditNotes');
+require('./billInvoiceDocuments');
 const { runTool, listTools } = require('./registry');
 const { programScopeFor } = require('../lib/programScope');
 const { reqMeta } = require('../lib/auditLog');

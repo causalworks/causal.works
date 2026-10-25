@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { wrapPoolWithOrgScoping } = require('../../server/organizational/lib/scopedPool');
 const { requestContextMiddleware, enterOrgContext, enterUserContext } = require('../../server/organizational/lib/orgContext');
-const { postLedgerTransaction } = require('../../server/organizational/lib/ledgerPosting');
+const { postLedgerTransaction, voidLedgerTransaction } = require('../../server/organizational/lib/ledgerPosting');
 const { runTool } = require('../../server/organizational/tools');
 
 const URL = process.env.SMOKE_DATABASE_URL || '';
@@ -75,7 +75,7 @@ test.before(() => {
 });
 test.after(async () => { if (pool) await pool.end(); });
 
-test('five simultaneous recodes of one line post one correcting journal', { skip: SKIP, todo: 'A repeat of the same recode is accepted: nothing marks a line as already recoded.' }, async () => {
+test('five simultaneous recodes of one line post one correcting journal', { skip: SKIP }, async () => {
   const w = await makeWorkspace();
   const input = { line_ids: [w.expenseLine], changes: { account_id: w.expense2 }, transaction_date: '2026-03-20' };
   assert.equal((await run(w, 'ledger.recode', input, 'assistant')).httpStatus, 202);
@@ -83,6 +83,14 @@ test('five simultaneous recodes of one line post one correcting journal', { skip
   const results = await Promise.all(Array.from({ length: 5 }, () => run(w, 'ledger.recode', input)));
   assert.equal(results.filter((r) => r.httpStatus === 201).length, 1, statuses(results));
   assert.equal(await count(w, 'recode'), 1);
+  const again = await run(w, 'ledger.recode', { ...input, changes: { account_id: w.income } });
+  assert.equal(again.httpStatus, 409);
+  assert.equal(again.body.alreadyRecodedIds.length, 1);
+  const journal = results.find((r) => r.httpStatus === 201).body.correcting_journal_id;
+  const voided = await inOrg(w, () => voidLedgerTransaction(scoped, { orgId: w.orgId, userId: w.userId, transactionId: journal, voidReason: 'wrong account' }));
+  assert.ok(voided.httpStatus < 300, JSON.stringify(voided.body));
+  const redo = await run(w, 'ledger.recode', { ...input, changes: { account_id: w.income } });
+  assert.equal(redo.httpStatus, 201, JSON.stringify(redo.body));
 });
 
 test('five simultaneous postings of one in-kind gift post once; an assistant only proposes', { skip: SKIP }, async () => {

@@ -43,7 +43,9 @@ defineTool({
       if (preview.hasConflicts) {
         const error = preview.targetIsSystemAccount
           ? 'System accounts (AR, AP, Bank, Clearing, Contribution Revenue, Expense Claims Payable) cannot be a recode target.'
-          : 'Some selected lines are not posted, or nothing was found for the given selection.';
+          : preview.alreadyRecodedIds.length
+            ? 'Some selected lines were already recoded. Recode the corrected lines instead, or void the earlier recode first.'
+            : 'Some selected lines are not posted, or nothing was found for the given selection.';
         return { httpStatus: 409, body: { error, code: 'recode_conflicts', ...preview } };
       }
       const result = await executeLedgerRecode(ctx.pool, ctx.orgId, ctx.userId, v.lineIds, v.changes, v.date);

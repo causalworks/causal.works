@@ -51,6 +51,12 @@ async function previewLedgerRecode(pool, orgId, lineIds, changes) {
     targetIsSystemAccount = await isSystemAccount(pool, orgId, norm.account_id);
   }
 
+  const recodedR = await pool.query(
+    `SELECT m.line_id FROM org_ledger_recoded_lines m
+       JOIN org_ledger_transactions rt ON rt.id = m.recode_transaction_id AND rt.status = 'posted'
+      WHERE m.org_id = $1 AND m.line_id = ANY($2::int[])`, [orgId, lineIds]);
+  const alreadyRecodedIds = recodedR.rows.map((row) => row.line_id);
+
   const totalCents = rows.reduce((s, row) => s + Number(row.debit_cents || 0) + Number(row.credit_cents || 0), 0);
   return {
     rows,
@@ -59,7 +65,8 @@ async function previewLedgerRecode(pool, orgId, lineIds, changes) {
     notPostedCount: notPosted.length,
     notPostedIds: notPosted.map((row) => row.id),
     targetIsSystemAccount,
-    hasConflicts: notPosted.length > 0 || rows.length === 0 || targetIsSystemAccount,
+    alreadyRecodedIds,
+    hasConflicts: notPosted.length > 0 || alreadyRecodedIds.length > 0 || rows.length === 0 || targetIsSystemAccount,
     fieldsChanged: Object.keys(norm),
   };
 }
@@ -109,6 +116,13 @@ async function executeLedgerRecode(pool, orgId, userId, lineIds, changes, transa
     source: 'recode',
     lines: reversingLines.concat(applyingLines),
   });
+  if (result.httpStatus === 201) {
+    await pool.query(
+      `INSERT INTO org_ledger_recoded_lines (line_id, org_id, recode_transaction_id)
+       SELECT unnest($1::int[]), $2, $3
+       ON CONFLICT (line_id) DO UPDATE SET recode_transaction_id = EXCLUDED.recode_transaction_id, created_at = now()`,
+      [originalLines.map((l) => l.id), orgId, result.body.id]);
+  }
   return result;
 }
 

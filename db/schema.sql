@@ -1,9 +1,9 @@
--- Includes migrations through 374
+-- Includes migrations through 375
 --
 -- PostgreSQL database dump
 --
 
-\restrict 3JqqRjTUdvDEBWCAIr5T9tL5g9raRnjcJCe1vbyWXjtuRVE3Zaj7FqK4PPhrYBO
+\restrict 66yswvLmn6Uv0v7c1898Gl9wJnbsyAUzXY9jWvlUtBO7LNYsGn2ysb5GPhp2JrH
 
 -- Dumped from database version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)
@@ -6659,6 +6659,20 @@ ALTER SEQUENCE public.org_ledger_lines_id_seq OWNED BY public.org_ledger_lines.i
 
 
 --
+-- Name: org_ledger_recoded_lines; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.org_ledger_recoded_lines (
+    line_id integer NOT NULL,
+    org_id integer NOT NULL,
+    recode_transaction_id integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY public.org_ledger_recoded_lines FORCE ROW LEVEL SECURITY;
+
+
+--
 -- Name: org_ledger_transactions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -12655,6 +12669,14 @@ ALTER TABLE ONLY public.org_ledger_lines
 
 
 --
+-- Name: org_ledger_recoded_lines org_ledger_recoded_lines_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_ledger_recoded_lines
+    ADD CONSTRAINT org_ledger_recoded_lines_pkey PRIMARY KEY (line_id);
+
+
+--
 -- Name: org_ledger_transactions org_ledger_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15428,6 +15450,20 @@ CREATE INDEX org_gifts_sponsored_project_idx ON public.org_gifts USING btree (or
 --
 
 CREATE UNIQUE INDEX org_invoices_number_unique ON public.org_invoices USING btree (org_id, invoice_number) WHERE (invoice_number IS NOT NULL);
+
+
+--
+-- Name: org_ledger_recoded_lines_org_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_ledger_recoded_lines_org_idx ON public.org_ledger_recoded_lines USING btree (org_id);
+
+
+--
+-- Name: org_ledger_recoded_lines_txn_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX org_ledger_recoded_lines_txn_idx ON public.org_ledger_recoded_lines USING btree (recode_transaction_id);
 
 
 --
@@ -18477,6 +18513,30 @@ ALTER TABLE ONLY public.org_ledger_lines
 
 
 --
+-- Name: org_ledger_recoded_lines org_ledger_recoded_lines_line_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_ledger_recoded_lines
+    ADD CONSTRAINT org_ledger_recoded_lines_line_id_fkey FOREIGN KEY (line_id) REFERENCES public.org_ledger_lines(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_ledger_recoded_lines org_ledger_recoded_lines_org_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_ledger_recoded_lines
+    ADD CONSTRAINT org_ledger_recoded_lines_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.coop_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: org_ledger_recoded_lines org_ledger_recoded_lines_recode_transaction_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.org_ledger_recoded_lines
+    ADD CONSTRAINT org_ledger_recoded_lines_recode_transaction_id_fkey FOREIGN KEY (recode_transaction_id) REFERENCES public.org_ledger_transactions(id) ON DELETE CASCADE;
+
+
+--
 -- Name: org_ledger_transactions org_ledger_transactions_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -21359,6 +21419,19 @@ CREATE POLICY org_ledger_lines_program_scope ON public.org_ledger_lines AS RESTR
 
 
 --
+-- Name: org_ledger_recoded_lines; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.org_ledger_recoded_lines ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: org_ledger_recoded_lines org_ledger_recoded_lines_org_isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY org_ledger_recoded_lines_org_isolation ON public.org_ledger_recoded_lines USING ((org_id = (NULLIF(current_setting('app.current_org_id'::text, true), ''::text))::integer));
+
+
+--
 -- Name: org_ledger_transactions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -23673,6 +23746,13 @@ GRANT SELECT,USAGE ON SEQUENCE public.org_ledger_lines_id_seq TO causal_app;
 
 
 --
+-- Name: TABLE org_ledger_recoded_lines; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.org_ledger_recoded_lines TO causal_app;
+
+
+--
 -- Name: TABLE org_ledger_transactions; Type: ACL; Schema: public; Owner: -
 --
 
@@ -24922,5 +25002,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3JqqRjTUdvDEBWCAIr5T9tL5g9raRnjcJCe1vbyWXjtuRVE3Zaj7FqK4PPhrYBO
+\unrestrict 66yswvLmn6Uv0v7c1898Gl9wJnbsyAUzXY9jWvlUtBO7LNYsGn2ysb5GPhp2JrH
 

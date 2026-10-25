@@ -71,7 +71,7 @@ function boardReportHtml(data, executiveSummary) {
 <table><thead><tr><th>Grant</th><th>Funder</th><th class="num">Amount</th><th>Status</th><th>Period</th></tr></thead><tbody>
 ${grantRows || '<tr><td colspan="5">No grants recorded.</td></tr>'}
 </tbody></table>
-<h2>Budget vs actual by program</h2>
+<h2>Expenses: budget vs actual by program</h2>
 <p style="font-size:9pt;color:#555;margin:0 0 8px 0;">Unrestricted budget lines vs confirmed actuals (same fiscal year).</p>
 <table><thead><tr><th>Program</th><th class="num">Budget</th><th class="num">Actual</th><th class="num">Variance</th></tr></thead><tbody>
 ${bvaRows || '<tr><td colspan="4">No budget or actual data by program.</td></tr>'}

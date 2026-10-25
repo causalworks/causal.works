@@ -2407,7 +2407,7 @@
       var accts = d.ledger.accounts.map(function (a) { return escapeHtml(a.code + ' ' + a.name) + ' ' + escapeHtml(money2(a.balance_cents)); }).join(' · ');
       var diff = Number(d.ledger.difference_cents);
       ledgerEl.innerHTML = '<strong>' + escapeHtml(cfg.ledgerLabel) + ': ' + escapeHtml(money2(d.ledger.balance_cents)) + '</strong> (' + accts + '). ' +
-        (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + escapeHtml(money2(diff)) + '. See Ledger entries by account for the entries made directly.');
+        (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + escapeHtml(money2(diff)) + '. ' + (d.ledger.reconciling || []).map(function (r) { return escapeHtml(r.label) + ' ' + escapeHtml(money2(r.amount_cents)) + '. '; }).join('') + (Number(d.ledger.unexplained_cents) ? 'Remaining ' + escapeHtml(money2(d.ledger.unexplained_cents)) + ' is in the ledger with no record in this schedule, for example entries made directly. See Ledger entries by account.' : ''));
     }
   }
 

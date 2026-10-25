@@ -29,7 +29,7 @@ function scheduleReportHtml({ title, orgName, asOf, out, labels, ledgerLabel }) 
     + '<table><thead><tr><th>Contact</th><th>Type</th><th>Reference</th><th>Date</th><th>Due</th><th class="r">Balance</th><th class="r">Days past due</th><th>Age</th></tr></thead><tbody>'
     + rows + '<tr class="tot"><td colspan="5">Total</td><td class="r">' + esc(money(out.totals.total)) + '</td><td></td><td></td></tr></tbody></table>'
     + '<p class="note"><strong>' + esc(ledgerLabel) + ': ' + esc(money(out.ledger.balance_cents)) + '</strong> (' + accounts + '). '
-    + (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + esc(money(diff)) + ', from entries made directly in the ledger.') + '</p>'
+    + (diff === 0 ? 'It matches this schedule.' : 'Difference from the schedule: ' + esc(money(diff)) + '. ' + (out.ledger.reconciling || []).map((r) => esc(r.label) + ' ' + esc(money(r.amount_cents)) + '. ').join('') + (Number(out.ledger.unexplained_cents) ? 'Remaining ' + esc(money(out.ledger.unexplained_cents)) + ' is in the ledger with no record in this schedule, for example entries made directly.' : '')) + '</p>'
     + '</body></html>';
 }
 

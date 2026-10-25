@@ -182,18 +182,25 @@ function registerLedgerReportRoutes(app, pool) {
         `SELECT id, code, name, type::text AS type FROM org_accounts WHERE org_id = $1 AND is_statistical IS NOT TRUE ${accountId ? 'AND id = $2' : ''}`,
         accountId ? [orgId, accountId] : [orgId]);
       const metaById = new Map(meta.rows.map((m) => [m.id, m]));
-      function ensure(id) {
-        if (!accounts.has(id)) {
-          const m = metaById.get(id);
-          accounts.set(id, { account_id: id, code: m.code, name: m.name, type: m.type,
-            natural_side: DEBIT_NORMAL.has(m.type) ? 'debit' : 'credit',
-            open: opening.get(id) || 0n, running: opening.get(id) || 0n, debit: 0n, credit: 0n, lines: [] });
+      const isPeriodAccount = (type) => type === 'income' || type === 'expense';
+      const fyOfDate = (iso) => fiscalYearForDate(new Date(iso + 'T00:00:00Z'), endMonth);
+      const spansYears = fyOfDate(from) !== fyOfDate(to);
+      // Income and expense balances restart each fiscal year, so a range over several years is shown as one section per year.
+      function ensure(id, fy) {
+        const m = metaById.get(id);
+        const period = isPeriodAccount(m.type);
+        const key = period ? id + ':' + fy : String(id);
+        if (!accounts.has(key)) {
+          const start = !period || fy === fromFy.fy ? (opening.get(id) || 0n) : 0n;
+          accounts.set(key, { account_id: id, code: m.code, name: period && spansYears ? m.name + ' (FY' + fy + ')' : m.name, type: m.type,
+            natural_side: DEBIT_NORMAL.has(m.type) ? 'debit' : 'credit', fiscal_year: period ? fy : null,
+            open: start, running: start, debit: 0n, credit: 0n, lines: [] });
         }
-        return accounts.get(id);
+        return accounts.get(key);
       }
-      for (const id of opening.keys()) if (metaById.has(id) && opening.get(id) !== 0n) ensure(id);
+      for (const id of opening.keys()) if (metaById.has(id) && opening.get(id) !== 0n) ensure(id, fromFy.fy);
       for (const row of rows) {
-        const acc = ensure(row.account_id);
+        const acc = ensure(row.account_id, fyOfDate(String(row.transaction_date).slice(0, 10)));
         const d = BigInt(row.debit_cents), c = BigInt(row.credit_cents);
         acc.running += d - c; acc.debit += d; acc.credit += c;
         const sign = acc.natural_side === 'debit' ? 1n : -1n;
@@ -206,10 +213,10 @@ function registerLedgerReportRoutes(app, pool) {
           debit_cents: String(d), credit_cents: String(c), balance_cents: String(acc.running * sign),
         });
       }
-      const sorted = [...accounts.values()].sort((x, y) => String(x.code).localeCompare(String(y.code), undefined, { numeric: true }));
+      const sorted = [...accounts.values()].sort((x, y) => String(x.code).localeCompare(String(y.code), undefined, { numeric: true }) || (x.fiscal_year || 0) - (y.fiscal_year || 0));
       const out = sorted.map((a) => {
         const sign = a.natural_side === 'debit' ? 1n : -1n;
-        return { account_id: a.account_id, code: a.code, name: a.name, type: a.type, natural_side: a.natural_side,
+        return { account_id: a.account_id, code: a.code, name: a.name, type: a.type, natural_side: a.natural_side, fiscal_year: a.fiscal_year,
           opening_cents: String(a.open * sign), total_debit_cents: String(a.debit), total_credit_cents: String(a.credit),
           closing_cents: String(a.running * sign), lines: a.lines };
       });

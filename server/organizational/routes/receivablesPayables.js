@@ -75,7 +75,10 @@ function registerReceivablesPayablesRoutes(app, pool) {
       totals.total += it.balance_cents;
     }
     items.sort((a, b) => b.days_past_due - a.days_past_due || String(a.contact_name).localeCompare(String(b.contact_name)));
-    return { items, totals, ledger: { ...ledger, difference_cents: ledger.balance_cents - totals.total } };
+    const difference = ledger.balance_cents - totals.total;
+    const reconciling = (ledger.reconciling || []).filter((r) => r.amount_cents !== 0);
+    const explained = reconciling.reduce((n, r) => n + r.amount_cents, 0);
+    return { items, totals, ledger: { ...ledger, difference_cents: difference, reconciling, unexplained_cents: difference - explained } };
   }
 
   function asOfOf(req, res) {
@@ -91,6 +94,9 @@ function registerReceivablesPayablesRoutes(app, pool) {
         (it.balance_cents / 100).toFixed(2), it.days_past_due, it.bucket].map(csvCell).join(','));
     }
     rows.push(['Total', '', '', '', '', (out.totals.total / 100).toFixed(2)].map(csvCell).join(','));
+    rows.push(['Ledger balance', '', '', '', '', (out.ledger.balance_cents / 100).toFixed(2)].map(csvCell).join(','));
+    for (const r of out.ledger.reconciling || []) rows.push([r.label, '', '', '', '', (r.amount_cents / 100).toFixed(2)].map(csvCell).join(','));
+    if (Number(out.ledger.unexplained_cents)) rows.push(['In the ledger with no record in this schedule', '', '', '', '', (out.ledger.unexplained_cents / 100).toFixed(2)].map(csvCell).join(','));
     res.set('Content-Type', 'text/csv; charset=utf-8');
     res.set('Content-Disposition', 'attachment; filename="' + name + '-' + asOf + '.csv"');
     return res.send(rows.join('\r\n') + '\r\n');
@@ -103,6 +109,20 @@ function registerReceivablesPayablesRoutes(app, pool) {
       items: payableItems, filter: `a.type = 'liability' AND (a.is_system_ap_account OR a.is_system_expense_claims_payable_account)`, sign: -1 },
   };
 
+  // Pledges are listed at face value; the ledger holds them at present value until the discount is accreted.
+  async function pledgeDiscountReconciling(orgId) {
+    const r = await pool.query(
+      `SELECT COALESCE(SUM(g.total_pledged_cents - g.discounted_present_value_cents
+                - COALESCE((SELECT SUM(a.amount_cents) FROM org_pledge_accretion_entries a
+                              JOIN org_ledger_transactions t ON t.id = a.ledger_transaction_id AND t.status = 'posted'
+                             WHERE a.gift_id = g.id), 0)), 0)::bigint AS discount_cents
+         FROM org_gifts g
+        WHERE g.org_id = $1 AND g.gift_type = 'pledge' AND g.posting_status = 'posted' AND g.discounted_present_value_cents IS NOT NULL
+          AND EXISTS (SELECT 1 FROM org_gift_pledge_installments i WHERE i.gift_id = g.id AND i.status = 'expected')`, [orgId]);
+    const cents = Number(r.rows[0].discount_cents);
+    return cents ? [{ label: 'Unamortized discount on pledges (listed here at face value, held in the ledger at present value)', amount_cents: -cents }] : [];
+  }
+
   async function buildSchedule(orgId, kind, asOf) {
     const cfg = KINDS[kind];
     const items = await cfg.items(pool, orgId);
@@ -110,6 +130,7 @@ function registerReceivablesPayablesRoutes(app, pool) {
       await addFileInfo(pool, orgId, items.filter((it) => it.kind === kind), type);
     }
     const ledger = await ledgerBalance(orgId, asOf, cfg.filter, cfg.sign);
+    ledger.reconciling = kind === 'receivables' ? await pledgeDiscountReconciling(orgId) : [];
     return summarize(items, asOf, ledger);
   }
 

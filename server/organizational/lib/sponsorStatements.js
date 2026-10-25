@@ -224,7 +224,7 @@ async function yearEndSheet(pool, orgId, fiscalYear) {
   const rows = [];
   for (const { project, figures, after, before } of per.values()) {
     const ledgerYear = after.tie_out.ledger_net_cents == null ? null : after.tie_out.ledger_net_cents - before.tie_out.ledger_net_cents;
-    const expected = (after.tie_out.expected_cents - before.tie_out.expected_cents);
+    const expected = (after.tie_out.expected_cents - before.tie_out.expected_cents) + (noncash.get(Number(project.id)) || 0);
     rows.push({
       project_id: Number(project.id), project_name: project.name, program_id: project.program_id,
       opening_cents: figures.opening_cents, income_cents: figures.income_cents, noncash_cents: noncash.get(Number(project.id)) || 0,

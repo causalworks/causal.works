@@ -75,14 +75,14 @@ async function fetchBoardReportData(pool, orgId, fiscalYear) {
     `WITH budget AS (
        SELECT bl.program_id, SUM(bl.amount_cents)::bigint AS budget_cents
        FROM org_budget_lines bl
-       JOIN org_accounts acc ON acc.id = bl.account_id AND acc.is_statistical = false
+       JOIN org_accounts acc ON acc.id = bl.account_id AND acc.is_statistical = false AND acc.type::text = 'expense'
        WHERE bl.org_id = $1 AND bl.fiscal_year = $2 AND bl.grant_id IS NULL
        GROUP BY bl.program_id
      ),
      actual AS (
        SELECT a.org_program_id AS program_id, SUM(a.amount_cents)::bigint AS actual_cents
        FROM org_actuals a
-       JOIN org_accounts acc ON acc.id = a.org_account_id AND acc.is_statistical = false
+       JOIN org_accounts acc ON acc.id = a.org_account_id AND acc.is_statistical = false AND acc.type::text = 'expense'
        WHERE a.org_id = $1 AND a.period_year = $2::smallint AND a.status = 'confirmed'::org_actual_status
          AND a.org_account_id IS NOT NULL AND a.org_program_id IS NOT NULL
        GROUP BY a.org_program_id

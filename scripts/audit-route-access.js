@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+process.env.PUBLIC_FORM_SECRET = process.env.PUBLIC_FORM_SECRET || 'audit-only';
 const fs = require('fs');
 const path = require('path');
 const Module = require('module');
